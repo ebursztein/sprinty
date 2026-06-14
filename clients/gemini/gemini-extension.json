@@ -1,0 +1,9 @@
+{
+  "name": "sprinty",
+  "version": "0.1.0",
+  "description": "Disciplined sprint discipline with an immutable git-anchored ledger and live dashboard.",
+  "contextFileName": "GEMINI.md",
+  "mcpServers": {
+    "sprinty": { "command": "npx", "args": ["-y", "sprinty"] }
+  }
+}
