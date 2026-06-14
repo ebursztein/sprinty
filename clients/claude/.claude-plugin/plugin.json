@@ -8,6 +8,6 @@
   "license": "Apache-2.0",
   "keywords": ["sprint", "discipline", "ledger", "mcp"],
   "mcpServers": {
-    "sprinty": { "command": "npx", "args": ["-y", "sprinty"] }
+    "sprinty": { "command": "npx", "args": ["-y", "sprinty-mcp"] }
   }
 }

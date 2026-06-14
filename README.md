@@ -13,13 +13,14 @@ to close while anything is unresolved or a gate fails.
 
 ## Install
 
-Sprinty ships as a native plugin for each agent. The MCP server itself runs via `npx -y sprinty`.
+Sprinty ships as a native plugin for each agent. The MCP server itself runs via `npx -y sprinty-mcp`
+(the npm package is `sprinty-mcp`; the server, tools, and plugins are all named `sprinty`).
 
 **Claude Code** — `clients/claude/` is a plugin (`.claude-plugin/plugin.json`) bundling the MCP
 server and skills. Add the MCP directly:
 
 ```bash
-claude mcp add sprinty -- npx -y sprinty
+claude mcp add sprinty -- npx -y sprinty-mcp
 ```
 
 **Codex** — `clients/codex/` is a plugin (`.codex-plugin/plugin.json` + `.mcp.json` + skills),
@@ -29,7 +30,7 @@ installed through a marketplace (`clients/codex/marketplace.json`). Or add the s
 ```toml
 [mcp_servers.sprinty]
 command = "npx"
-args = ["-y", "sprinty"]
+args = ["-y", "sprinty-mcp"]
 ```
 
 **Gemini CLI** — `clients/gemini/` is an extension (`gemini-extension.json` + `GEMINI.md` + skills):

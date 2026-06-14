@@ -1,6 +1,6 @@
 {
   "sprinty": {
     "command": "npx",
-    "args": ["-y", "sprinty"]
+    "args": ["-y", "sprinty-mcp"]
   }
 }

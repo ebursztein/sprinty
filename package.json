@@ -1,5 +1,5 @@
 {
-  "name": "sprinty",
+  "name": "sprinty-mcp",
   "version": "0.1.0",
   "description": "Disciplined sprint MCP for Claude Code, Codex, and Gemini",
   "type": "module",
@@ -8,7 +8,7 @@
   "homepage": "https://github.com/ebursztein/sprinty",
   "repository": { "type": "git", "url": "git+https://github.com/ebursztein/sprinty.git" },
   "bugs": { "url": "https://github.com/ebursztein/sprinty/issues" },
-  "bin": { "sprinty": "dist/index.js" },
+  "bin": { "sprinty-mcp": "dist/index.js" },
   "files": ["dist", "skills"],
   "scripts": {
     "build": "tsc -p tsconfig.json",
