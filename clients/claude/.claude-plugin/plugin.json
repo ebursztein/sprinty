@@ -5,7 +5,7 @@
   "author": { "name": "Elie Bursztein" },
   "homepage": "https://github.com/ebursztein/sprinty",
   "repository": "https://github.com/ebursztein/sprinty",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "keywords": ["sprint", "discipline", "ledger", "mcp"],
   "mcpServers": {
     "sprinty": { "command": "npx", "args": ["-y", "sprinty"] }

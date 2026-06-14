@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "description": "Disciplined sprint MCP for Claude Code, Codex, and Gemini",
   "type": "module",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "author": "Elie Bursztein",
   "homepage": "https://github.com/ebursztein/sprinty",
   "repository": { "type": "git", "url": "git+https://github.com/ebursztein/sprinty.git" },

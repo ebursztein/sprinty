@@ -72,4 +72,4 @@ npm run build
 
 ## License
 
-MIT © Elie Bursztein
+Apache-2.0 © Elie Bursztein
