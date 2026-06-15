@@ -1,8 +1,8 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { SprintStore } from "./store/store.js";
 import { buildToolHandlers } from "./tools/register.js";
 import { startDashboard, type Dashboard } from "./dashboard/server.js";
@@ -19,7 +19,7 @@ it refuses to close if anything is open, uncommitted, missing changelog, missing
 Use search(pattern, context_lines) to query the immutable record. dashboard() returns a live URL.`;
 
 export async function main(): Promise<void> {
-  const store = new SprintStore(process.cwd());
+  const store = new SprintStore(resolveRepoDir());
   let dashboard: Dashboard | undefined;
   const openDashboard = async (): Promise<string> => {
     if (!dashboard) {
@@ -61,4 +61,25 @@ export async function main(): Promise<void> {
   }
 
   await server.connect(new StdioServerTransport());
+}
+
+export function resolveRepoDir(
+  args: string[] = process.argv.slice(2),
+  env: NodeJS.ProcessEnv = process.env,
+  cwd: string = process.cwd(),
+): string {
+  const explicit = cliRepoDir(args) ?? env.SPRINTY_REPO_DIR ?? env.SPRINTY_WORKTREE;
+  const candidate = resolve(cwd, explicit ?? ".");
+  if (!existsSync(candidate)) throw new Error(`Sprinty repo directory does not exist: ${candidate}`);
+  if (!statSync(candidate).isDirectory()) throw new Error(`Sprinty repo directory is not a directory: ${candidate}`);
+  return realpathSync(candidate);
+}
+
+function cliRepoDir(args: string[]): string | undefined {
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i]!;
+    if (arg === "--repo-dir") return args[i + 1];
+    if (arg.startsWith("--repo-dir=")) return arg.slice("--repo-dir=".length);
+  }
+  return undefined;
 }

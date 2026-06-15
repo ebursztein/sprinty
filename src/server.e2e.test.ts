@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, realpathSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
@@ -34,8 +34,13 @@ function writeCoverage(dir: string): string {
 
 const entry = join(process.cwd(), "dist/index.js");
 
-function connect(dir: string): Promise<Client> {
-  const transport = new StdioClientTransport({ command: "node", args: [entry], cwd: dir });
+function connect(dir: string, options: { cwd?: string; env?: Record<string, string> } = {}): Promise<Client> {
+  const transport = new StdioClientTransport({
+    command: "node",
+    args: [entry],
+    cwd: options.cwd ?? dir,
+    env: { ...process.env, ...options.env },
+  });
   const client = new Client({ name: "test", version: "0" });
   return client.connect(transport).then(() => client);
 }
@@ -70,6 +75,31 @@ describe("sprinty e2e over MCP", () => {
     await call(client, "done", { item: "S01-001", commit_id: sha, gate_results: [{ kind: "command", spec: "true", passed: true, evidence: "ok" }], changelog: { verb: "added", line: "Added the thing." } });
     const closed = await call(client, "sprint_close", { coverage: { path: writeCoverage(dir), format: "lcov", command: "npm run test:coverage" } });
     expect(closed.json.status).toBe("closed");
+  });
+
+  it("uses SPRINTY_REPO_DIR instead of the server launch cwd", async () => {
+    const fresh = initRepo();
+    const repoDir = realpathSync(fresh.dir);
+    const launchDir = mkdtempSync(join(tmpdir(), "sprinty-launch-"));
+    const c = await connect(fresh.dir, { cwd: launchDir, env: { SPRINTY_REPO_DIR: fresh.dir } });
+    try {
+      const created = await call(c, "sprint_new", { goal: "bind to the real repo" });
+      expect(created.json.dir).toBe(repoDir);
+      expect(created.json.worktree).toBe(repoDir);
+      expect(created.json.branch).toBe("main");
+      await call(c, "subsprint_new", { description: "core", goals: ["build core"], gates: [{ kind: "command", spec: "true" }] });
+      await call(c, "add", { subsprint: "S01", description: "do thing", code_locations: ["src/x.ts"], gates: [{ kind: "command", spec: "true" }] });
+      const done = await call(c, "done", {
+        item: "S01-001",
+        commit_id: fresh.sha,
+        gate_results: [{ kind: "command", spec: "true", passed: true, evidence: "ok" }],
+        changelog: { verb: "fixed", line: "Fixed repo directory binding." },
+      });
+      expect(done.isError).toBe(false);
+      expect(done.json.subsprints[0].items[0].commit_id).toBe(fresh.sha);
+    } finally {
+      await c.close();
+    }
   });
 
   it("rejects close when an item is unresolved (teeth)", async () => {
