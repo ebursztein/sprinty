@@ -23,7 +23,9 @@ Sprinty has two layers:
 - optional client manifests under `clients/` for agents that support plugins or extensions.
 
 The npm package is `sprinty-mcp`. The server, MCP tool namespace, and client manifests are named
-`sprinty`.
+`sprinty`. The tarball ships the canonical top-level `skills/` directory; client directories in a
+Git checkout may symlink to it, but package consumers should treat the top-level `skills/` directory
+as authoritative.
 
 ### Claude Code
 

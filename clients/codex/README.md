@@ -20,6 +20,10 @@ The installed plugin provides:
 - Sprinty MCP tools through `npx -y sprinty-mcp`
 - shared Sprinty skills from the canonical repository `skills/` directory
 
+The npm package includes the top-level `skills/` directory for MCP resource serving. Client
+directories may contain symlinks to that canonical directory in a Git checkout; npm tarballs do not
+need per-client skill copies.
+
 MCP-only setup without plugin skills:
 
 ```bash
