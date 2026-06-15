@@ -79,6 +79,28 @@ describe("tool handlers", () => {
     expect(dashboardCloseCalls).toBe(1);
   });
 
+  it("passes explicit gate supersession through done", async () => {
+    await tools.sprint_new!.handler(sprintInput("g"));
+    await tools.subsprint_new!.handler({ description: "d", goals: ["go"], gates: [{ kind: "command", spec: "true" }] });
+    await tools.add!.handler(addInput({
+      gates: [{ kind: "test", spec: "npm test -- --story SPRINTY-123" }],
+    }));
+    const view = (await tools.done!.handler({
+      item: "S01-001",
+      commit_id: sha,
+      gate_results: [{
+        kind: "test",
+        spec: "npm test -- src/store/store.test.ts",
+        passed: true,
+        evidence: "passed",
+        supersedes: { kind: "test", spec: "npm test -- --story SPRINTY-123" },
+        supersession_reason: "Placeholder story id was replaced by the final focused test.",
+      }],
+      changelog: { verb: "fixed", line: "fixed gate supersession evidence" },
+    })) as { subsprints: Array<{ items: Array<{ gate_results: Array<{ supersession_reason?: string }> }> }> };
+    expect(view.subsprints[0]!.items[0]!.gate_results[0]!.supersession_reason).toContain("Placeholder");
+  });
+
   it("keeps the dashboard open when sprint_close fails", async () => {
     await tools.sprint_new!.handler(sprintInput("g"));
     await tools.subsprint_new!.handler({ description: "d", goals: ["go"], gates: [{ kind: "command", spec: "true" }] });

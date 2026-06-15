@@ -48,8 +48,12 @@ one independently verifiable behavior. Prefer `catalogue_refresh`, `catalogue_li
 "build the catalogue MCP" as one item. If an item title needs "and", "plus", or a comma-separated
 list of outcomes, split it before calling `add()`.
 
-**GateResult shape (for `done`):** `{ kind, spec, cwd?, passed, evidence }`. Results must match the
-item's declared gates exactly by `kind`, `spec`, and `cwd`; `passed:false` is rejected.
+**GateResult shape (for `done`):** `{ kind, spec, cwd?, passed, evidence, supersedes?, supersession_reason? }`.
+Results must match the item's declared gates exactly by `kind`, `spec`, and `cwd`; `passed:false`
+is rejected. If an early declared gate was a placeholder and the real final gate has a different
+spec, pass the final gate as `kind/spec/cwd` and set `supersedes` to the declared gate plus a short
+`supersession_reason`. Supersession still requires passing evidence and must name an actual declared
+gate; it is for explained replacement, not skipped proof.
 
 **Changelog shape (for `done`):** `{ verb, line }`, where `verb` is one of
 `added|fixed|changed|removed|deprecated|security`.

@@ -132,7 +132,10 @@ export class SprintStore {
     const unexpected: GateResult[] = [];
 
     for (const result of results) {
-      const resultKey = key(result);
+      if (result.supersedes && !result.supersession_reason?.trim()) {
+        throw new StoreError("Gate supersession requires a reason.");
+      }
+      const resultKey = result.supersedes ? key(result.supersedes) : key(result);
       if (!expected.has(resultKey)) {
         unexpected.push(result);
         continue;

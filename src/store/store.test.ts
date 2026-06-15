@@ -176,6 +176,55 @@ describe("SprintStore lifecycle", () => {
     expect(view.subsprints[0]!.items[0]!.gate_results).toHaveLength(2);
   });
 
+  it("allows explicit gate supersession for a declared placeholder gate", () => {
+    store.createSprint("g");
+    store.createSubsprint({ description: "d", goals: ["go"], gates: [{ kind: "command", spec: "true" }] });
+    store.addItem({
+      subsprint: "S01",
+      description: "replace placeholder gate with final command",
+      code_locations: ["a.ts"],
+      gates: [{ kind: "test", spec: "npm test -- --story SPRINTY-123" }],
+    });
+    const gateResult = {
+      kind: "test" as const,
+      spec: "npm test -- src/store/store.test.ts",
+      passed: true,
+      evidence: "passed",
+      supersedes: { kind: "test" as const, spec: "npm test -- --story SPRINTY-123" },
+      supersession_reason: "Placeholder story id was replaced by the final focused test command.",
+    };
+    const view = store.done({
+      item: "S01-001",
+      commit_id: sha,
+      gate_results: [gateResult],
+      changelog: { verb: "fixed", line: "Fixed gate supersession evidence." },
+    });
+    expect(view.subsprints[0]!.items[0]!.gate_results).toEqual([gateResult]);
+  });
+
+  it("requires a reason when gate evidence supersedes a declared gate", () => {
+    store.createSprint("g");
+    store.createSubsprint({ description: "d", goals: ["go"], gates: [{ kind: "command", spec: "true" }] });
+    store.addItem({
+      subsprint: "S01",
+      description: "replace placeholder gate with final command",
+      code_locations: ["a.ts"],
+      gates: [{ kind: "test", spec: "npm test -- --story SPRINTY-123" }],
+    });
+    expect(() => store.done({
+      item: "S01-001",
+      commit_id: sha,
+      gate_results: [{
+        kind: "test",
+        spec: "npm test -- src/store/store.test.ts",
+        passed: true,
+        evidence: "passed",
+        supersedes: { kind: "test", spec: "npm test -- --story SPRINTY-123" },
+      }],
+      changelog: { verb: "fixed", line: "Fixed gate supersession evidence." },
+    })).toThrow(/reason/);
+  });
+
   it("requires cwd evidence when a gate declares cwd", () => {
     store.createSprint("g");
     mkdirSync(join(dir, "checks"));

@@ -138,7 +138,10 @@ items require a real git commit id and controlled changelog entry when `done()` 
 Git-backed change map for the commit: file, language, directory, additions, deletions, net change,
 churn, item ids, and commit ids. `changelog()` renders a Markdown release note with semver sections,
 coverage, and change-map tables. `done()` also requires passing evidence for every declared item
-gate, including manual gates. Dependencies are stored as a real graph: `current()` returns nodes,
+gate, including manual gates. When an early declared gate was a placeholder, `done()` can record an
+explicit supersession: the final passing gate result names the declared gate in `supersedes` and
+includes a `supersession_reason`, preserving strict evidence without pretending the placeholder
+command was the final proof. Dependencies are stored as a real graph: `current()` returns nodes,
 edges, adjacency indexes, topological order, cycle information, the first actionable `current`
 item, actionable `next` items, `blocked_open` items, and enriched relation rows that name direct
 blockers/unblocked work with statuses. Writes reject cycles. At close, executable gates are re-run

@@ -43,6 +43,10 @@ write prose plans, you create structured items the sprinty MCP records in an imm
    - **`done(item, commit_id, gate_results[], changelog)`** — completed. Requires a *real*
      commit, passing evidence for every declared item gate, and a semver changelog line. Sprinty
      records the commit's Git change map automatically.
+     If a declared gate was an early placeholder and the final evidence gate has a different spec,
+     keep the final gate as the result and set `supersedes` to the declared gate with a
+     `supersession_reason`. Use this only to explain a stricter or more accurate replacement, not
+     to bypass missing evidence.
    - **`split(item, description, goals[], gates[])`** — the item was too big; it becomes a new
      subsprint (atomically resolved as `split`). Then `add` items into the new subsprint.
    - **`deprecate(item, reason)`** — drop it, on the record, with a real reason.
