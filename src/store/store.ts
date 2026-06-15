@@ -1,5 +1,6 @@
 import { Ledger } from "../ledger/ledger.js";
 import { SprintBook } from "../ledger/book.js";
+import { join } from "node:path";
 import { project, type SprintView } from "../domain/projection.js";
 import { mintSubsprintId, mintItemId } from "../domain/ids.js";
 import { commitNumstat, gitContext, verifyCommit } from "../git/git.js";
@@ -25,7 +26,12 @@ export class StoreError extends Error {
 
 export class SprintStore {
   private readonly book: SprintBook;
-  constructor(private readonly dir: string) { this.book = new SprintBook(dir); }
+  readonly dataDir: string;
+
+  constructor(readonly dir: string, dataDir: string = join(dir, ".sprinty")) {
+    this.dataDir = dataDir;
+    this.book = new SprintBook(dataDir);
+  }
 
   // Resolves the current sprint's ledger via `.sprinty/current`. Throws if no sprint.
   private get ledger(): Ledger {
@@ -53,7 +59,7 @@ export class SprintStore {
     const id = this.book.allocateId();   // new ledger file id (001, 002, …)
     this.book.setCurrent(id);            // `.sprinty/current` -> id : enforces unicity
     const { branch, worktree } = gitContext(this.dir);
-    this.book.ledger(id).append({ type: "sprint_created", goal, worktree, branch, dir: this.dir, context_notes: contextNotes });
+    this.book.ledger(id).append({ type: "sprint_created", goal, worktree, branch, dir: this.dir, data_dir: this.dataDir, context_notes: contextNotes });
     return this.requireState();
   }
 
@@ -119,13 +125,17 @@ export class SprintStore {
   }
 
   private validateGateEvidence(gates: Gate[], results: GateResult[]): void {
-    const key = (g: Gate | GateResult) => `${g.kind}\u0000${g.spec}`;
+    const key = (g: Gate | GateResult) => `${g.kind}\u0000${g.spec}\u0000${g.cwd ?? ""}`;
     const expected = new Map(gates.map((g) => [key(g), g]));
     const seen = new Set<string>();
+    const unexpected: GateResult[] = [];
 
     for (const result of results) {
       const resultKey = key(result);
-      if (!expected.has(resultKey)) throw new StoreError(`Unexpected gate evidence: ${result.kind}:${result.spec}`);
+      if (!expected.has(resultKey)) {
+        unexpected.push(result);
+        continue;
+      }
       if (seen.has(resultKey)) throw new StoreError(`Duplicate gate evidence: ${result.kind}:${result.spec}`);
       seen.add(resultKey);
     }
@@ -133,6 +143,9 @@ export class SprintStore {
     const missing = gates.filter((g) => !seen.has(key(g)));
     if (missing.length > 0) {
       throw new StoreError(`Missing gate evidence: ${missing.map((g) => `${g.kind}:${g.spec}`).join(", ")}`);
+    }
+    if (unexpected.length > 0) {
+      throw new StoreError(`Unexpected gate evidence: ${unexpected.map((g) => `${g.kind}:${g.spec}`).join(", ")}`);
     }
   }
 

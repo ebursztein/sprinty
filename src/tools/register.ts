@@ -19,11 +19,16 @@ function def<Sc extends z.ZodObject<z.ZodRawShape>>(
 
 export type ToolHandlers = Record<string, ToolDef>;
 export type StoreProvider = () => SprintStore | Promise<SprintStore>;
+export type StoreBinder = (binding: { git_dir: string; data_dir: string }) => SprintStore | Promise<SprintStore>;
 
-export function buildToolHandlers(getStore: StoreProvider, openDashboard: () => Promise<string>): ToolHandlers {
+export function buildToolHandlers(
+  getStore: StoreProvider,
+  openDashboard: () => Promise<string>,
+  bindStore: StoreBinder = async () => getStore(),
+): ToolHandlers {
   return {
     sprint_new: def(S.SprintNewInput, "Start a sprint; returns orientation (skills + how this works).",
-      async (i) => ({ ...(await getStore()).createSprint(i.goal, i.context_notes), orientation: orientation() })),
+      async (i) => ({ ...(await bindStore({ git_dir: i.git_dir, data_dir: i.data_dir })).createSprint(i.goal, i.context_notes), orientation: orientation() })),
     sprint_close: def(S.SprintCloseInput, "Close the sprint after a programmatic re-check of all gates.",
       async (i) => (await getStore()).closeSprint(i)),
     sprint_archive: def(S.SprintArchiveInput, "Archive the sprint with a recovery reason, bypassing normal close gates.",
@@ -80,6 +85,7 @@ function orientation(): { skills: string[]; how: string } {
     skills: ["how-to-run-a-sprint", "using-sprinty"],
     how:
       "One sprint per session. Build item-driven: subsprint_new -> add -> done/split/deprecate. " +
+      "Start with explicit git_dir and data_dir so Sprinty cannot bind to a temp MCP cwd. " +
       "Items need description + code_locations + gates. Each subsprint should represent one feature. " +
       "After sprint_new, call dashboard() and show the localhost URL to the human. Resolve every item, then sprint_close re-runs gates.",
   };

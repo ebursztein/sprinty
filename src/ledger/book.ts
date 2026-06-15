@@ -3,11 +3,11 @@ import { join } from "node:path";
 import { Ledger } from "./ledger.js";
 
 export class SprintBook {
-  private readonly root: string;
+  readonly root: string;
   private readonly pointer: string;
 
-  constructor(repoDir: string) {
-    this.root = join(repoDir, ".sprinty");
+  constructor(dataDir: string) {
+    this.root = dataDir;
     this.pointer = join(this.root, "current");
   }
 

@@ -155,7 +155,8 @@
           <h1>{model.sprint.goal}</h1>
           <div class="meta-line">
             <span>{model.sprint.branch || "detached"}</span>
-            <span class="truncate">{model.sprint.worktree || model.sprint.dir}</span>
+            <span class="truncate">git {model.sprint.dir || model.sprint.worktree}</span>
+            <span class="truncate">data {model.sprint.data_dir}</span>
             <span>started {fmt(model.sprint.created_at)}</span>
             {#if stale}<span class="warning-text">stale connection</span>{/if}
           </div>

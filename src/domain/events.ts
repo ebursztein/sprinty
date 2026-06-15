@@ -21,6 +21,7 @@ export type ArtifactKind = z.infer<typeof ArtifactKind>;
 export const SprintCreated = z.object({
   ...base, type: z.literal("sprint_created"),
   goal: z.string().min(1), worktree: z.string(), branch: z.string(), dir: z.string(),
+  data_dir: z.string().default(""),
   context_notes: z.array(z.string().min(1)).default([]),
 });
 

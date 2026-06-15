@@ -19,7 +19,7 @@ describe("SprintBook", () => {
     expect(a).toBe("001");
     book.setCurrent(a);
     expect(book.currentId()).toBe("001");
-    expect(existsSync(join(dir, ".sprinty", "current"))).toBe(true);
+    expect(existsSync(join(dir, "current"))).toBe(true);
     book.ledger(a).append({ type: "sprint_created", goal: "g", worktree: "/w", branch: "main", dir: "/r" });
     expect(book.allocateId()).toBe("002"); // reflects the existing 001.jsonl
   });
@@ -27,6 +27,6 @@ describe("SprintBook", () => {
   it("ledger(id) reads/writes .sprinty/<id>.jsonl", () => {
     const book = new SprintBook(dir);
     book.ledger("001").append({ type: "sprint_created", goal: "g", worktree: "/w", branch: "main", dir: "/r" });
-    expect(existsSync(join(dir, ".sprinty", "001.jsonl"))).toBe(true);
+    expect(existsSync(join(dir, "001.jsonl"))).toBe(true);
   });
 });

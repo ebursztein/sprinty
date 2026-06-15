@@ -7,8 +7,8 @@ description: Reference for the sprinty MCP tools — exact inputs, what each ret
 
 | Tool | Input | Returns / Rejects |
 |---|---|---|
-| `sprint_new` | `{ goal, context_notes?[] }` | sprint view + orientation. Rejects if a sprint is already active. After this, call `dashboard()` and show the URL to the human. |
-| `info` | `{}` | full sprint view (subsprints + items + statuses). |
+| `sprint_new` | `{ goal, git_dir, data_dir, context_notes?[] }` | sprint view + orientation. `git_dir` is where commits, gates, coverage, and change maps run. `data_dir` is where Sprinty stores `current` and sprint JSONL ledgers. Both should be absolute paths. Rejects if a sprint is already active. After this, call `dashboard()` and show the URL to the human. |
+| `info` | `{}` | full sprint view (subsprints + items + statuses), including `dir` and `data_dir` so binding mistakes are obvious. Rejects before binding unless the MCP server was started with explicit `SPRINTY_GIT_DIR` and `SPRINTY_DATA_DIR`. |
 | `current` | `{ past?=1, future?=3 }` | last terminal items, next open items, current subsprint notes, dependency graph. |
 | `subsprint_new` | `{ description, goals[], gates[], dependencies?[] }` | `{ id: "S0N", … }`. Rejects unknown deps/cycles. |
 | `spike` | `{ description, goals[], gates[], dependencies?[] }` | creates a spike subsprint. Spikes reuse normal subsprint/item mechanics. |
@@ -31,8 +31,9 @@ description: Reference for the sprinty MCP tools — exact inputs, what each ret
 | `sprint_close` | `{ coverage: { path, format:"lcov", command? } }` | closed view, or an error listing every blocker. Coverage is required when completed code items exist. |
 | `dashboard` | `{}` | `{ url }` — read-only live view. Give this localhost URL to the human. |
 
-**Gate shape:** `{ kind: "test"|"typecheck"|"build"|"command"|"manual", spec, category? }`.
-Executable kinds are re-run at `sprint_close`; `manual` relies on recorded evidence.
+**Gate shape:** `{ kind: "test"|"typecheck"|"build"|"command"|"manual", spec, category?, cwd? }`.
+Executable kinds are re-run at `sprint_close` from `git_dir` unless `cwd` is set. `cwd` is resolved
+relative to `git_dir` unless absolute. `manual` relies on recorded evidence.
 
 **Subsprint shape:** each subsprint should be a feature-sized unit with its own user-visible or
 agent-visible outcome. Avoid catch-all phase names like "cleanup" unless the cleanup itself is the feature.
@@ -40,8 +41,8 @@ Spikes are regular subsprints with `kind:"spike"`; add normal items to them, the
 `spike_conclude()` or retire them with `spike_deprecate()`. Spike items do not contribute to the
 release changelog.
 
-**GateResult shape (for `done`):** `{ kind, spec, passed, evidence }`. Results must match the
-item's declared gates exactly by `kind` and `spec`; `passed:false` is rejected.
+**GateResult shape (for `done`):** `{ kind, spec, cwd?, passed, evidence }`. Results must match the
+item's declared gates exactly by `kind`, `spec`, and `cwd`; `passed:false` is rejected.
 
 **Changelog shape (for `done`):** `{ verb, line }`, where `verb` is one of
 `added|fixed|changed|removed|deprecated|security`.
@@ -63,6 +64,7 @@ and recent activity. Sprinty rejects dependency writes that would create a cycle
 **Timestamps:** every ledger event has `ts`. The projected sprint view includes `created_at`,
 `closed_at`, item/subsprint timestamps, dependency events, and `timeline[]` for human auditability.
 
-**Storage:** one append-only JSONL ledger per sprint under `.sprinty/`, with a `.sprinty/current`
-pointer naming the active sprint (this enforces one-open-sprint unicity). `.sprinty/` is per
-working tree, so git worktrees run independent sprints.
+**Storage:** one append-only JSONL ledger per sprint in `data_dir`, with a `current` pointer in that
+same directory naming the active sprint (this enforces one-open-sprint unicity for the binding).
+Keep `git_dir` and `data_dir` explicit; do not rely on the MCP process cwd, workspace roots, or a
+worktree guess.

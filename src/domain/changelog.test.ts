@@ -12,7 +12,7 @@ describe("changelog markdown", () => {
       goal: "Bookshop",
       worktree: "/repo",
       branch: "main",
-      dir: "/repo",
+      dir: "/repo", data_dir: "/repo/.sprinty",
       context_notes: [],
       created_at: "2026-06-14T00:00:00.000Z",
       closed_at: null,

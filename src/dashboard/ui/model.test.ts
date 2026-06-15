@@ -9,7 +9,7 @@ function sprintView(): SprintView {
     goal: "Upgrade dashboard",
     worktree: "/repo",
     branch: "main",
-    dir: "/repo",
+    dir: "/repo", data_dir: "/repo/.sprinty",
     context_notes: ["keep it local"],
     created_at: baseTime,
     closed_at: null,

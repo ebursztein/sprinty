@@ -22,7 +22,7 @@
     "websiteURL": "https://github.com/ebursztein/sprinty",
     "defaultPrompt": [
       "Use Sprinty to run this implementation as a disciplined sprint.",
-      "Call Sprinty info first, start or continue the repo-local sprint, then call dashboard() and share the local URL.",
+      "Call Sprinty info first, then start or continue the sprint with explicit git_dir and data_dir before calling dashboard() and sharing the local URL.",
       "Track each feature as a subsprint, use artifact_add/list/amend/deprecate for durable outputs, record follow_up entries with bug ids, and use spike/spike_conclude for investigations.",
       "Resolve every item with passing gates and a commit, then close with coverage."
     ],

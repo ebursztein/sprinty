@@ -47,23 +47,22 @@ command = "npx"
 args = ["-y", "sprinty-mcp"]
 ```
 
-Sprinty binds to a repository in this order:
+Sprinty does not guess from the MCP server process cwd. Start a sprint with explicit paths:
 
-1. an explicit `--repo-dir`, `SPRINTY_REPO_DIR`, or `SPRINTY_WORKTREE`;
-2. MCP workspace roots from clients that support `roots/list`;
-3. the MCP server process cwd when it is already a git worktree.
-
-If your MCP host launches servers from a temp directory and does not expose workspace roots, bind
-Sprinty to the active repo explicitly:
-
-```toml
-[mcp_servers.sprinty.env]
-SPRINTY_REPO_DIR = "/absolute/path/to/your/repo"
+```json
+{
+  "goal": "Build the catalogue MCP",
+  "git_dir": "/absolute/path/to/your/repo",
+  "data_dir": "/absolute/path/to/your/repo/.sprinty",
+  "context_notes": ["optional context"]
+}
 ```
 
-You can also pass `--repo-dir /absolute/path/to/your/repo` to the server command. Sprinty requires
-the resolved directory to be a git worktree. This prevents accidental `.sprinty/` ledgers and
-dashboards rooted in temporary launch directories such as `/private/tmp`.
+`git_dir` is where commits, gates, coverage, and change maps run. `data_dir` is where Sprinty stores
+the `current` pointer and append-only JSONL ledgers. For read-only tools before `sprint_new`, you may
+pre-bind the MCP server with `SPRINTY_GIT_DIR` and `SPRINTY_DATA_DIR` or `--git-dir` and
+`--data-dir`; both are required together. `SPRINTY_REPO_DIR` and `SPRINTY_WORKTREE` remain accepted
+as legacy aliases for `git_dir` only when a `data_dir` is also supplied.
 
 Codex CLI plugin path: install the repo-local marketplace from a repository checkout:
 
@@ -94,7 +93,7 @@ content rather than copying it.
 ## The loop
 
 ```
-sprint_new(goal, context_notes?)
+sprint_new(goal, git_dir, data_dir, context_notes?)
   -> dashboard()
   -> subsprint_new(description, goals[], gates[], dependencies?)
   -> spike(description, goals[], gates[], dependencies?)
@@ -120,7 +119,7 @@ The dashboard is for the human sitting next to the agent.
 3. Leave it open while the sprint runs; it refreshes every two seconds.
 
 Agents should call `dashboard()` right after `sprint_new()` and show the URL to the human. The
-dashboard shows the sprint goal, branch/worktree, artifact shelf, sprint progress, item status
+dashboard shows the sprint goal, explicit git/data paths, branch/worktree, artifact shelf, sprint progress, item status
 distribution, code churn, subsprint progress, open items, gate evidence, dependency graph state,
 commit ids and changelog lines for completed items, changed-file hotspots, and a paginated ledger
 from the immutable timeline.
@@ -146,10 +145,11 @@ kept out of release changelog output.
 
 ## Storage
 
-One append-only JSONL ledger file per sprint under `.sprinty/` in the repo you're working on, with a
-`.sprinty/current` pointer naming the active sprint (this enforces one-open-sprint unicity).
-`.sprinty/` is per working tree, so git worktrees run independent sprints. It is local state — keep
-it gitignored.
+One append-only JSONL ledger file per sprint under the explicit `data_dir`, with a `current` pointer
+naming the active sprint (this enforces one-open-sprint unicity for that binding). `git_dir` and
+`data_dir` are intentionally separate so agents can run gates against one checkout while storing
+Sprinty state somewhere deliberate. It is local state — keep it gitignored when `data_dir` lives
+inside a repository.
 
 ## Develop
 

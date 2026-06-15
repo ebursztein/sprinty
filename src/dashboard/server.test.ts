@@ -6,7 +6,7 @@ const view: SprintView = {
   goal: "g",
   worktree: "/w",
   branch: "main",
-  dir: "/r",
+  dir: "/r", data_dir: "/r/.sprinty",
   created_at: "2026-06-14T00:00:00.000Z",
   closed_at: null,
   status: "active",

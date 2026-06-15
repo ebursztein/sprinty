@@ -4,7 +4,7 @@ import type { SprintView } from "../domain/projection.js";
 
 function view(): SprintView {
   return {
-    goal: "g", worktree: "/w", branch: "main", dir: "/r", status: "active",
+    goal: "g", worktree: "/w", branch: "main", dir: "/r", data_dir: "/r/.sprinty", status: "active",
     created_at: "2026-06-14T00:00:00.000Z", closed_at: null, context_notes: [], timeline: [
       { seq: 0, ts: "2026-06-14T00:00:00.000Z", type: "sprint_created", id: "sprint", text: "g" },
       { seq: 1, ts: "2026-06-14T00:01:00.000Z", type: "follow_up_added", id: "F001", text: "BUG-1: fix it" },

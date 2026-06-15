@@ -22,18 +22,26 @@ function writeCoverage(dir: string): string {
 }
 
 let dir: string, sha: string, tools: ToolHandlers;
+function sprintInput(goal: string, context_notes?: string[]) {
+  return { goal, git_dir: dir, data_dir: join(dir, ".sprinty"), ...(context_notes ? { context_notes } : {}) };
+}
+
 beforeEach(() => {
   ({ dir, sha } = initRepo());
-  tools = buildToolHandlers(() => new SprintStore(dir), async () => "http://127.0.0.1:0");
+  tools = buildToolHandlers(
+    () => new SprintStore(dir),
+    async () => "http://127.0.0.1:0",
+    (binding) => new SprintStore(binding.git_dir, binding.data_dir),
+  );
 });
 
 describe("tool handlers", () => {
   it("sprint_new returns goal and rejects bad input", async () => {
-    const res = (await tools.sprint_new!.handler({ goal: "g", context_notes: ["human can watch dashboard"] })) as { goal: string; context_notes: string[] };
+    const res = (await tools.sprint_new!.handler(sprintInput("g", ["human can watch dashboard"]))) as { goal: string; context_notes: string[] };
     expect(res.goal).toBe("g");
     expect(res.context_notes).toEqual(["human can watch dashboard"]);
     expect((res as { orientation: { how: string } }).orientation.how).toContain("dashboard()");
-    await expect(tools.sprint_new!.handler({ goal: "" })).rejects.toThrow();
+    await expect(tools.sprint_new!.handler({ goal: "", git_dir: dir, data_dir: join(dir, ".sprinty") })).rejects.toThrow();
   });
 
   it("describes current as including artifacts and recent activity", () => {
@@ -42,7 +50,7 @@ describe("tool handlers", () => {
   });
 
   it("drives a full happy path through the handlers", async () => {
-    await tools.sprint_new!.handler({ goal: "g" });
+    await tools.sprint_new!.handler(sprintInput("g"));
     const sub = (await tools.subsprint_new!.handler({ description: "d", goals: ["go"], gates: [{ kind: "command", spec: "true" }] })) as { id: string };
     expect(sub.id).toBe("S01");
     const item = (await tools.add!.handler({ subsprint: "S01", description: "i", code_locations: ["a.ts"], gates: [{ kind: "command", spec: "true" }] })) as { id: string };
@@ -58,7 +66,7 @@ describe("tool handlers", () => {
   });
 
   it("renders changelog markdown through the handler", async () => {
-    await tools.sprint_new!.handler({ goal: "g" });
+    await tools.sprint_new!.handler(sprintInput("g"));
     await tools.subsprint_new!.handler({ description: "d", goals: ["go"], gates: [{ kind: "command", spec: "true" }] });
     await tools.add!.handler({ subsprint: "S01", description: "i", code_locations: ["a.ts"], gates: [{ kind: "command", spec: "true" }] });
     await tools.done!.handler({
@@ -74,7 +82,7 @@ describe("tool handlers", () => {
   });
 
   it("records dependency edges through the dependencies verb", async () => {
-    await tools.sprint_new!.handler({ goal: "g" });
+    await tools.sprint_new!.handler(sprintInput("g"));
     await tools.subsprint_new!.handler({ description: "d", goals: ["go"], gates: [{ kind: "command", spec: "true" }] });
     await tools.add!.handler({ subsprint: "S01", description: "first", code_locations: ["a.ts"], gates: [{ kind: "command", spec: "true" }] });
     await tools.add!.handler({ subsprint: "S01", description: "second", code_locations: ["b.ts"], gates: [{ kind: "command", spec: "true" }] });
@@ -83,7 +91,7 @@ describe("tool handlers", () => {
   });
 
   it("records artifacts through the artifact verb and exposes them through current", async () => {
-    await tools.sprint_new!.handler({ goal: "g" });
+    await tools.sprint_new!.handler(sprintInput("g"));
     await tools.subsprint_new!.handler({ description: "d", goals: ["go"], gates: [{ kind: "command", spec: "true" }] });
     await tools.add!.handler({ subsprint: "S01", description: "i", code_locations: ["a.ts"], gates: [{ kind: "command", spec: "true" }] });
     const artifact = (await tools.artifact!.handler({
@@ -107,7 +115,7 @@ describe("tool handlers", () => {
   });
 
   it("records follow-ups with required bug ids", async () => {
-    await tools.sprint_new!.handler({ goal: "g" });
+    await tools.sprint_new!.handler(sprintInput("g"));
     await tools.subsprint_new!.handler({ description: "d", goals: ["go"], gates: [{ kind: "command", spec: "true" }] });
     await tools.add!.handler({ subsprint: "S01", description: "i", code_locations: ["a.ts"], gates: [{ kind: "command", spec: "true" }] });
     await expect(tools.follow_up!.handler({ target: "S01-001", description: "needs bug" })).rejects.toThrow();
@@ -117,7 +125,7 @@ describe("tool handlers", () => {
   });
 
   it("creates spike subsprints and requires conclusions before sprint close", async () => {
-    await tools.sprint_new!.handler({ goal: "g" });
+    await tools.sprint_new!.handler(sprintInput("g"));
     const spike = (await tools.spike!.handler({ description: "investigate parser", goals: ["choose"], gates: [{ kind: "command", spec: "true" }] })) as { id: string };
     expect(spike.id).toBe("S01");
     await tools.add!.handler({ subsprint: "S01", description: "try parser", code_locations: ["a.ts"], gates: [{ kind: "command", spec: "true" }] });
@@ -134,7 +142,7 @@ describe("tool handlers", () => {
   });
 
   it("deprecates spike subsprints with a reason", async () => {
-    await tools.sprint_new!.handler({ goal: "g" });
+    await tools.sprint_new!.handler(sprintInput("g"));
     await tools.spike!.handler({ description: "investigate unused path", goals: ["choose"], gates: [{ kind: "command", spec: "true" }] });
     const deprecated = (await tools.spike_deprecate!.handler({ subsprint: "S01", reason: "not worth pursuing" })) as { subsprints: Array<{ status: string; spike_deprecation_reason: string | null }> };
     expect(deprecated.subsprints[0]!.status).toBe("deprecated");
@@ -142,7 +150,7 @@ describe("tool handlers", () => {
   });
 
   it("archives a sprint through the archive verb", async () => {
-    await tools.sprint_new!.handler({ goal: "g" });
+    await tools.sprint_new!.handler(sprintInput("g"));
     await tools.subsprint_new!.handler({ description: "d", goals: ["go"], gates: [{ kind: "command", spec: "true" }] });
     await tools.add!.handler({ subsprint: "S01", description: "i", code_locations: ["a.ts"], gates: [{ kind: "command", spec: "true" }] });
     const archived = (await tools.sprint_archive!.handler({ reason: "alpha recovery after bad ledger state" })) as { status: string };
@@ -150,7 +158,7 @@ describe("tool handlers", () => {
   });
 
   it("search finds matching ledger entries", async () => {
-    await tools.sprint_new!.handler({ goal: "g" });
+    await tools.sprint_new!.handler(sprintInput("g"));
     await tools.subsprint_new!.handler({ description: "serializer work", goals: ["go"], gates: [{ kind: "command", spec: "true" }] });
     const matches = (await tools.search!.handler({ pattern: "serializer", context_lines: 0 })) as unknown[];
     expect(matches.length).toBe(1);

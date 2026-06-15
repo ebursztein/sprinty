@@ -18,6 +18,7 @@ export function startDashboard(getState: () => SprintView | null): Promise<Dashb
         worktree: "",
         branch: "",
         dir: "",
+        data_dir: "",
         created_at: new Date().toISOString(),
         closed_at: null,
         status: "active",

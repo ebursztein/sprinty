@@ -13,6 +13,8 @@ export const CoverageNotApplicableInput = z.object({
 
 export const SprintNewInput = z.object({
   goal: z.string().min(1),
+  git_dir: z.string().min(1),
+  data_dir: z.string().min(1),
   context_notes: z.array(z.string().min(1)).default([]),
 });
 export const SprintCloseInput = z.object({ coverage: z.union([CoverageInput, CoverageNotApplicableInput]).optional() });

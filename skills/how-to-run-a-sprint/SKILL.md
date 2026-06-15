@@ -10,12 +10,17 @@ write prose plans, you create structured items the sprinty MCP records in an imm
 
 ## The loop
 
-1. **`sprint_new(goal, context_notes?)`** — one sentence of intent plus optional context. Returns
-   the skills to use and a primer. Call **`info()`** any time to re-orient. Then call
+1. **`sprint_new(goal, git_dir, data_dir, context_notes?)`** — one sentence of intent plus explicit
+   absolute paths. `git_dir` is where commits, gates, coverage, and change maps run. `data_dir` is
+   where Sprinty stores the `current` pointer and JSONL ledgers. Do not guess from the MCP cwd or
+   workspace roots. Returns the skills to use and a primer. Call **`info()`** any time to re-orient
+   after binding; it must show the expected `dir` and `data_dir`. Then call
    **`dashboard()`** and show the localhost URL to the human so they can follow the sprint.
 2. **`subsprint_new(description, goals[], gates[], dependencies?)`** — carve the work into a goal-bearing unit.
    Each subsprint should be one feature, not a loose phase or miscellaneous bucket. A gate is
-   always *about something*: `{ kind: test|typecheck|build|command|manual, spec, category? }`.
+   always *about something*: `{ kind: test|typecheck|build|command|manual, spec, category?, cwd? }`.
+   Executable gates run from `git_dir` unless `cwd` is set, in which case `cwd` must also appear in
+   the matching `gate_results[]` entry passed to `done()`.
    Use **`spike(description, goals[], gates[], dependencies?)`** when the feature needs an
    investigation branch; a spike is still a subsprint, can have normal items, and must end with
    **`spike_conclude(subsprint, conclusion)`** or **`spike_deprecate(subsprint, reason)`**.
@@ -44,6 +49,8 @@ write prose plans, you create structured items the sprinty MCP records in an imm
 ## Rules
 
 - Never invent an id. The server mints `S01`, `S01-001`. Read them back from tool results.
+- Start with explicit `git_dir` and `data_dir`; if `info()` reports the wrong paths, stop before
+  adding items.
 - No item without a description, at least one code location, and at least one gate.
 - Don't go out of order: orient with `info()`/`current()` before adding or resolving.
 - Use dependency ids when work is blocked. Sprinty rejects unknown ids and cycles.

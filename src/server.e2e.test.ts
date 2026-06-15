@@ -3,11 +3,9 @@ import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { pathToFileURL } from "node:url";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
-import { ListRootsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
-import { resolveRepoDir, resolveRepoDirWithRoots, SERVER_VERSION } from "./server.js";
+import { resolveBinding, resolveRepoDir, SERVER_VERSION } from "./server.js";
 
 function initRepo(): { dir: string; sha: string } {
   const dir = mkdtempSync(join(tmpdir(), "sprinty-e2e-"));
@@ -48,18 +46,8 @@ function connect(dir: string, options: { cwd?: string; env?: Record<string, stri
   return client.connect(transport).then(() => client);
 }
 
-function connectWithRoot(dir: string, rootDir: string, options: { cwd?: string; env?: Record<string, string> } = {}): Promise<Client> {
-  const transport = new StdioClientTransport({
-    command: "node",
-    args: [entry],
-    cwd: options.cwd ?? dir,
-    env: { ...process.env, ...options.env },
-  });
-  const client = new Client({ name: "test", version: "0" }, { capabilities: { roots: {} } });
-  client.setRequestHandler(ListRootsRequestSchema, () => ({
-    roots: [{ uri: pathToFileURL(rootDir).href, name: "test repo" }],
-  }));
-  return client.connect(transport).then(() => client);
+function sprintInput(repoDir: string, input: { goal: string; context_notes?: string[] }, dataDir = join(repoDir, ".sprinty")) {
+  return { ...input, git_dir: repoDir, data_dir: dataDir };
 }
 
 let client: Client, dir: string, sha: string;
@@ -96,7 +84,7 @@ describe("sprinty e2e over MCP", () => {
   });
 
   it("runs a full sprint and closes it", async () => {
-    await call(client, "sprint_new", { goal: "ship it" });
+    await call(client, "sprint_new", sprintInput(dir, { goal: "ship it" }));
     await call(client, "subsprint_new", { description: "core", goals: ["build core"], gates: [{ kind: "command", spec: "true" }] });
     await call(client, "add", { subsprint: "S01", description: "do thing", code_locations: ["src/x.ts"], gates: [{ kind: "command", spec: "true" }] });
     await call(client, "done", { item: "S01-001", commit_id: sha, gate_results: [{ kind: "command", spec: "true", passed: true, evidence: "ok" }], changelog: { verb: "added", line: "Added the thing." } });
@@ -104,15 +92,17 @@ describe("sprinty e2e over MCP", () => {
     expect(closed.json.status).toBe("closed");
   });
 
-  it("uses SPRINTY_REPO_DIR instead of the server launch cwd", async () => {
+  it("uses explicit sprint_new git_dir and data_dir instead of the server launch cwd", async () => {
     const fresh = initRepo();
     const repoDir = realpathSync(fresh.dir);
+    const dataDir = realpathSync(mkdtempSync(join(tmpdir(), "sprinty-data-")));
     const launchDir = mkdtempSync(join(tmpdir(), "sprinty-launch-"));
-    const c = await connect(fresh.dir, { cwd: launchDir, env: { SPRINTY_REPO_DIR: fresh.dir } });
+    const c = await connect(fresh.dir, { cwd: launchDir });
     try {
-      const created = await call(c, "sprint_new", { goal: "bind to the real repo" });
+      const created = await call(c, "sprint_new", sprintInput(fresh.dir, { goal: "bind to the real repo" }, dataDir));
       expect(created.json.dir).toBe(repoDir);
       expect(created.json.worktree).toBe(repoDir);
+      expect(created.json.data_dir).toBe(dataDir);
       expect(created.json.branch).toBe("main");
       await call(c, "subsprint_new", { description: "core", goals: ["build core"], gates: [{ kind: "command", spec: "true" }] });
       await call(c, "add", { subsprint: "S01", description: "do thing", code_locations: ["src/x.ts"], gates: [{ kind: "command", spec: "true" }] });
@@ -129,16 +119,21 @@ describe("sprinty e2e over MCP", () => {
     }
   });
 
-  it("uses MCP roots when launched outside the workspace without explicit repo env", async () => {
+  it("uses startup env binding for tools that read an existing sprint", async () => {
     const fresh = initRepo();
     const repoDir = realpathSync(fresh.dir);
+    const dataDir = realpathSync(mkdtempSync(join(tmpdir(), "sprinty-data-")));
     const launchDir = mkdtempSync(join(tmpdir(), "sprinty-launch-"));
-    const c = await connectWithRoot(fresh.dir, fresh.dir, { cwd: launchDir });
+    const seeded = await connect(fresh.dir, { cwd: launchDir });
+    await call(seeded, "sprint_new", sprintInput(fresh.dir, { goal: "bind through env" }, dataDir));
+    await seeded.close();
+    const c = await connect(fresh.dir, { cwd: launchDir, env: { SPRINTY_GIT_DIR: fresh.dir, SPRINTY_DATA_DIR: dataDir } });
     try {
-      const created = await call(c, "sprint_new", { goal: "bind through roots" });
-      expect(created.json.dir).toBe(repoDir);
-      expect(created.json.worktree).toBe(repoDir);
-      expect(created.json.branch).toBe("main");
+      const info = await call(c, "info", {});
+      expect(info.json.dir).toBe(repoDir);
+      expect(info.json.worktree).toBe(repoDir);
+      expect(info.json.data_dir).toBe(dataDir);
+      expect(info.json.branch).toBe("main");
       await call(c, "subsprint_new", { description: "core", goals: ["build core"], gates: [{ kind: "command", spec: "true" }] });
       await call(c, "add", { subsprint: "S01", description: "do thing", code_locations: ["src/x.ts"], gates: [{ kind: "command", spec: "true" }] });
       const done = await call(c, "done", {
@@ -153,22 +148,24 @@ describe("sprinty e2e over MCP", () => {
     }
   });
 
-  it("resolves repository directories from MCP roots before falling back to cwd", async () => {
+  it("requires complete explicit startup binding when startup paths are provided", () => {
     const fresh = initRepo();
     const repoDir = realpathSync(fresh.dir);
-    const launchDir = mkdtempSync(join(tmpdir(), "sprinty-launch-"));
-    await expect(resolveRepoDirWithRoots(async () => ({ roots: [{ uri: pathToFileURL(fresh.dir).href }] }), [], {}, launchDir)).resolves.toBe(repoDir);
+    const dataDir = realpathSync(mkdtempSync(join(tmpdir(), "sprinty-data-")));
+    expect(resolveBinding([], { SPRINTY_GIT_DIR: fresh.dir, SPRINTY_DATA_DIR: dataDir }, "/")).toEqual({ gitDir: repoDir, dataDir });
+    expect(() => resolveBinding([], { SPRINTY_GIT_DIR: fresh.dir }, "/")).toThrow(/both git_dir and data_dir/);
   });
 
-  it("rejects a non-git launch cwd instead of silently binding to a temp directory", () => {
+  it("rejects missing or non-git explicit git_dir instead of silently binding to a temp directory", () => {
     const launchDir = mkdtempSync(join(tmpdir(), "sprinty-launch-"));
-    expect(() => resolveRepoDir([], {}, launchDir)).toThrow(/Set SPRINTY_REPO_DIR=.*--repo-dir/);
+    expect(() => resolveRepoDir([], {}, launchDir)).toThrow(/git_dir is required/);
+    expect(() => resolveRepoDir([], { SPRINTY_GIT_DIR: launchDir }, "/")).toThrow(/must be a git worktree/);
   });
 
   it("rejects close when an item is unresolved (teeth)", async () => {
     const fresh = initRepo();
     const c = await connect(fresh.dir);
-    await call(c, "sprint_new", { goal: "g" });
+    await call(c, "sprint_new", sprintInput(fresh.dir, { goal: "g" }));
     await call(c, "subsprint_new", { description: "d", goals: ["go"], gates: [{ kind: "command", spec: "true" }] });
     await call(c, "add", { subsprint: "S01", description: "i", code_locations: ["a.ts"], gates: [{ kind: "command", spec: "true" }] });
     const res = await call(c, "sprint_close", {});
@@ -181,7 +178,7 @@ describe("sprinty e2e over MCP", () => {
     const fresh = initRepo();
     const c = await connect(fresh.dir);
     try {
-      await call(c, "sprint_new", { goal: "dependency teeth" });
+      await call(c, "sprint_new", sprintInput(fresh.dir, { goal: "dependency teeth" }));
       await call(c, "subsprint_new", { description: "graph", goals: ["track graph"], gates: [{ kind: "command", spec: "true" }] });
       await call(c, "add", { subsprint: "S01", description: "base", code_locations: ["a.ts"], gates: [{ kind: "command", spec: "true" }] });
       await call(c, "add", { subsprint: "S01", description: "dependent", code_locations: ["b.ts"], gates: [{ kind: "command", spec: "true" }], dependencies: ["S01-001"] });
@@ -219,7 +216,7 @@ describe("sprinty e2e over MCP", () => {
     const fresh = initRepo();
     const c = await connect(fresh.dir);
     try {
-      const created = await call(c, "sprint_new", { goal: "Build a neighborhood bookshop catalog", context_notes: ["Owner wants a cozy neighborhood workflow."] });
+      const created = await call(c, "sprint_new", sprintInput(fresh.dir, { goal: "Build a neighborhood bookshop catalog", context_notes: ["Owner wants a cozy neighborhood workflow."] }));
       expect(created.json.goal).toBe("Build a neighborhood bookshop catalog");
       expect(created.json.context_notes).toEqual(["Owner wants a cozy neighborhood workflow."]);
       expect(created.json.created_at).toMatch(/^\d{4}-\d{2}-\d{2}T/);

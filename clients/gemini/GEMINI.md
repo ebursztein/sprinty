@@ -5,7 +5,7 @@ When a task is non-trivial, run a disciplined sprint with the sprinty MCP.
 See `skills/how-to-run-a-sprint` and `skills/using-sprinty`. The loop:
 
 ```
-sprint_new(goal, context_notes?)
+sprint_new(goal, git_dir, data_dir, context_notes?)
   -> dashboard()
   -> subsprint_new(description, goals[], gates[], dependencies?)
   -> spike(description, goals[], gates[], dependencies?)
@@ -19,7 +19,9 @@ sprint_new(goal, context_notes?)
   -> sprint_close(coverage: { path, format: "lcov", command? })
 ```
 
-Rules: IDs are minted by the server (`S01`, `S01-001`) — never invent them. Every item needs a
+Rules: IDs are minted by the server (`S01`, `S01-001`) — never invent them. Start with explicit
+absolute `git_dir` and `data_dir`; `git_dir` is where commits/gates/coverage run, and `data_dir`
+stores Sprinty's `current` pointer and JSONL ledgers. Every item needs a
 description, at least one code location, and at least one gate. `done` requires a real commit,
 passing evidence for every declared item gate, and a semver-style changelog line with a verb such as
 `added`, `fixed`, or `removed`. `split` and `deprecate` are terminal non-code exits. Each

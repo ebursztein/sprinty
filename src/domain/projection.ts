@@ -83,6 +83,7 @@ export interface SprintView {
   worktree: string;
   branch: string;
   dir: string;
+  data_dir: string;
   context_notes: string[];
   created_at: string;
   closed_at: string | null;
@@ -118,7 +119,7 @@ export function project(events: LedgerEvent[]): SprintView | null {
     switch (e.type) {
       case "sprint_created":
         sprint = {
-          goal: e.goal, worktree: e.worktree, branch: e.branch, dir: e.dir,
+          goal: e.goal, worktree: e.worktree, branch: e.branch, dir: e.dir, data_dir: e.data_dir,
           context_notes: e.context_notes ?? [], created_at: e.ts, closed_at: null, status: "active",
           subsprints: [], timeline, graph: buildDependencyGraph([], []), artifacts: [], follow_ups: [],
           changelog: [], change_map: emptyChangeMap(), coverage: null,

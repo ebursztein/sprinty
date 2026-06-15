@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { SprintStore, StoreError } from "./store.js";
@@ -54,6 +54,17 @@ describe("SprintStore lifecycle", () => {
     store.createSprint("alpha");
     store.archiveSprint({ reason: "recovered broken alpha ledger" });
     expect(store.createSprint("next").goal).toBe("next");
+  });
+
+  it("keeps sprint data in the configured data directory while using git_dir for repo operations", () => {
+    const dataDir = mkdtempSync(join(tmpdir(), "sprinty-data-"));
+    const scoped = new SprintStore(dir, dataDir);
+    const s = scoped.createSprint("separate data");
+    expect(s.dir).toBe(dir);
+    expect(s.data_dir).toBe(dataDir);
+    expect(existsSync(join(dataDir, "current"))).toBe(true);
+    expect(existsSync(join(dataDir, "001.jsonl"))).toBe(true);
+    expect(existsSync(join(dir, ".sprinty", "current"))).toBe(false);
   });
 
   it("mints subsprint and item ids", () => {
@@ -163,6 +174,33 @@ describe("SprintStore lifecycle", () => {
       changelog: { verb: "fixed", line: "Fixed gate evidence handling." },
     });
     expect(view.subsprints[0]!.items[0]!.gate_results).toHaveLength(2);
+  });
+
+  it("requires cwd evidence when a gate declares cwd", () => {
+    store.createSprint("g");
+    mkdirSync(join(dir, "checks"));
+    writeFileSync(join(dir, "checks", "marker.txt"), "ok");
+    store.createSubsprint({ description: "d", goals: ["go"], gates: [{ kind: "command", spec: "test -f marker.txt", cwd: "checks" }] });
+    store.addItem({
+      subsprint: "S01",
+      description: "i",
+      code_locations: ["checks/marker.txt"],
+      gates: [{ kind: "command", spec: "test -f marker.txt", cwd: "checks" }],
+    });
+    expect(() => store.done({
+      item: "S01-001",
+      commit_id: sha,
+      gate_results: [{ kind: "command", spec: "test -f marker.txt", passed: true, evidence: "ok" }],
+      changelog: { verb: "fixed", line: "Fixed cwd gate evidence." },
+    })).toThrow(/Missing gate evidence/);
+    const view = store.done({
+      item: "S01-001",
+      commit_id: sha,
+      gate_results: [{ kind: "command", spec: "test -f marker.txt", cwd: "checks", passed: true, evidence: "ok" }],
+      changelog: { verb: "fixed", line: "Fixed cwd gate evidence." },
+    });
+    expect(view.subsprints[0]!.items[0]!.gate_results[0]).toMatchObject({ cwd: "checks" });
+    expect(store.closeSprint({ coverage: { path: writeCoverage(dir), format: "lcov" } }).status).toBe("closed");
   });
 
   it("split resolves the item and creates a seeded subsprint atomically", () => {

@@ -170,7 +170,7 @@ function render(s){
   const summary=summarize(s);
   byId("goal").textContent=s.goal||"(no sprint)";
   byId("branch").textContent=s.branch ? "branch "+s.branch : "";
-  byId("worktree").textContent=s.worktree||s.dir||"";
+  byId("worktree").textContent="git "+(s.dir||s.worktree||"")+" data "+(s.data_dir||"");
   byId("created").textContent=s.created_at ? "started "+fmt(s.created_at) : "";
   const status=byId("status");
   status.className="pill "+(s.status||"active");
