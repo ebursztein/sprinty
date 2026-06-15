@@ -259,6 +259,8 @@ describe("SprintStore lifecycle", () => {
     }
     const concluded = store.concludeSpike({ subsprint: "S01", conclusion: "Use the parser behind a small adapter." });
     expect(concluded.subsprints[0]!.spike_conclusion).toBe("Use the parser behind a small adapter.");
+    expect(() => store.concludeSpike({ subsprint: "S01", conclusion: "Actually use something else." })).toThrow(/already concluded/);
+    expect(() => store.deprecateSpike({ subsprint: "S01", reason: "changed our mind" })).toThrow(/already concluded/);
     const closed = store.closeSprint({ coverage: { path: writeCoverage(dir), format: "lcov" } });
     expect(closed.status).toBe("closed");
     expect(store.changelog()).not.toContain("Added spike-only finding.");
@@ -275,6 +277,8 @@ describe("SprintStore lifecycle", () => {
       status: "deprecated",
       reason: "Spike S01 deprecated: not worth it",
     });
+    expect(() => store.deprecateSpike({ subsprint: "S01", reason: "still not worth it" })).toThrow(/already deprecated/);
+    expect(() => store.concludeSpike({ subsprint: "S01", conclusion: "Use it anyway." })).toThrow(/deprecated/);
     const closed = store.closeSprint({ coverage: { not_applicable: "spike was deprecated before code changed" } });
     expect(closed.status).toBe("closed");
   });

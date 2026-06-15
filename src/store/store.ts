@@ -241,6 +241,7 @@ export class SprintStore {
     if (!sub) throw new StoreError(`Unknown subsprint ${input.subsprint}.`);
     if (sub.kind !== "spike") throw new StoreError(`Subsprint ${input.subsprint} is not a spike.`);
     if (sub.status === "deprecated") throw new StoreError(`Spike ${input.subsprint} is deprecated.`);
+    if (sub.status === "closed") throw new StoreError(`Spike ${input.subsprint} is already concluded.`);
     if (sub.items.some((item) => item.status === "open")) throw new StoreError(`Spike ${input.subsprint} still has open items.`);
     if (!input.conclusion.trim()) throw new StoreError("Spike conclusion is required.");
     this.ledger.append({ type: "spike_concluded", subsprint_id: input.subsprint, conclusion: input.conclusion });
@@ -252,6 +253,8 @@ export class SprintStore {
     const sub = s.subsprints.find((x) => x.id === input.subsprint);
     if (!sub) throw new StoreError(`Unknown subsprint ${input.subsprint}.`);
     if (sub.kind !== "spike") throw new StoreError(`Subsprint ${input.subsprint} is not a spike.`);
+    if (sub.status === "deprecated") throw new StoreError(`Spike ${input.subsprint} is already deprecated.`);
+    if (sub.status === "closed") throw new StoreError(`Spike ${input.subsprint} is already concluded.`);
     if (!input.reason.trim()) throw new StoreError("Spike deprecation requires a reason.");
     for (const item of sub.items.filter((child) => child.status === "open")) {
       this.ledger.append({
