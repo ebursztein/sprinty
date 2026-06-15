@@ -26,6 +26,10 @@ MCP-only setup without plugin skills:
 codex mcp add sprinty -- npx -y sprinty-mcp
 ```
 
+If Codex launches the MCP process from a temp directory, configure the server with
+`SPRINTY_REPO_DIR=/absolute/path/to/your/repo` or pass `--repo-dir /absolute/path/to/your/repo` so
+Sprinty writes `.sprinty/` and validates commits against the intended repository.
+
 Do not copy skill files into client directories; keep them in the top-level `skills/` directory.
 
 For human visibility during a sprint, ask Codex to call `dashboard()` and open the returned

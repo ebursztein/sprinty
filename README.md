@@ -44,6 +44,16 @@ command = "npx"
 args = ["-y", "sprinty-mcp"]
 ```
 
+If your MCP host launches servers from a temp directory, bind Sprinty to the active repo explicitly:
+
+```toml
+[mcp_servers.sprinty.env]
+SPRINTY_REPO_DIR = "/absolute/path/to/your/repo"
+```
+
+You can also pass `--repo-dir /absolute/path/to/your/repo` to the server command. Without an
+explicit repo directory, Sprinty uses the MCP server process cwd.
+
 Codex CLI plugin path: install the repo-local marketplace from a repository checkout:
 
 ```bash
