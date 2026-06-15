@@ -31,6 +31,7 @@ export const SubsprintCreated = z.object({
   gates: z.array(Gate).min(1),
   spawned_from_item: z.string().nullable(),
   dependencies: z.array(z.string().min(1)).default([]),
+  kind: z.enum(["feature", "spike"]).default("feature"),
 });
 
 export const ItemAdded = z.object({
@@ -79,6 +80,41 @@ export const ArtifactAdded = z.object({
   description: z.string().min(1).nullable().default(null),
 });
 
+export const ArtifactAmended = z.object({
+  ...base, type: z.literal("artifact_amended"),
+  artifact_id: z.string().min(1),
+  kind: ArtifactKind.optional(),
+  title: z.string().min(1).optional(),
+  uri: z.string().min(1).optional(),
+  description: z.string().min(1).nullable().optional(),
+});
+
+export const ArtifactDeprecated = z.object({
+  ...base, type: z.literal("artifact_deprecated"),
+  artifact_id: z.string().min(1),
+  reason: z.string().min(1),
+});
+
+export const FollowUpAdded = z.object({
+  ...base, type: z.literal("follow_up_added"),
+  follow_up_id: z.string().min(1),
+  target_id: z.string().min(1),
+  description: z.string().min(1),
+  bug_ids: z.array(z.string().min(1)).min(1),
+});
+
+export const SpikeConcluded = z.object({
+  ...base, type: z.literal("spike_concluded"),
+  subsprint_id: z.string().min(1),
+  conclusion: z.string().min(1),
+});
+
+export const SpikeDeprecated = z.object({
+  ...base, type: z.literal("spike_deprecated"),
+  subsprint_id: z.string().min(1),
+  reason: z.string().min(1),
+});
+
 export const SprintClosed = z.object({
   ...base, type: z.literal("sprint_closed"),
   gate_results: z.array(GateResult),
@@ -92,6 +128,8 @@ export const SprintArchived = z.object({
 });
 
 export const LedgerEvent = z.discriminatedUnion("type", [
-  SprintCreated, SubsprintCreated, ItemAdded, ItemUpdated, ItemResolved, NoteAdded, DependenciesAdded, ArtifactAdded, SprintClosed, SprintArchived,
+  SprintCreated, SubsprintCreated, ItemAdded, ItemUpdated, ItemResolved, NoteAdded, DependenciesAdded,
+  ArtifactAdded, ArtifactAmended, ArtifactDeprecated, FollowUpAdded, SpikeConcluded, SpikeDeprecated,
+  SprintClosed, SprintArchived,
 ]);
 export type LedgerEvent = z.infer<typeof LedgerEvent>;

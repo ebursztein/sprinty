@@ -9,10 +9,12 @@ import { startDashboard, type Dashboard } from "./dashboard/server.js";
 
 const INSTRUCTIONS = `Sprinty enforces a disciplined sprint.
 One sprint per repo/session (the .sprinty/current pointer keeps exactly one open). Call info() to orient before acting.
-Build is item-driven: sprint_new(goal, context_notes?) -> subsprint_new(..., dependencies?)
+Build is item-driven: sprint_new(goal, context_notes?) -> dashboard() for the human -> subsprint_new(..., dependencies?)
 -> add(description + code_locations + gates, dependencies?) -> done(commit + passing gates + changelog)
 | split(promote to a subsprint) | deprecate(reason). Use dependencies(target, dependencies[]) to add graph edges later.
-current() returns the sprint window plus a dependency graph with blocked_by, unblocks, topological_order, and cycles.
+Each subsprint should be one feature. Use spike() for feature investigations; spikes reuse subsprint mechanics and require spike_conclude() or spike_deprecate().
+Use artifact_add/list/amend/deprecate for durable outputs, and follow_up() with bug ids for bugs found while moving fast.
+current() returns the sprint window, relevant/recent artifacts, recent activity, and a dependency graph with blocked_by, unblocks, topological_order, and cycles.
 done() records a Git-backed file change map. changelog() renders Markdown with semver sections, coverage, and change-map tables.
 Subsprints close automatically when their items are completed, split, or deprecated. sprint_close re-runs executable gates;
 it refuses to close if anything is open, uncommitted, missing changelog, missing coverage, or failing a gate. IDs are minted by the server.

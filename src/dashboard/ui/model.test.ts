@@ -132,7 +132,10 @@ describe("deriveDashboardModel", () => {
     expect(model.currentItem?.id).toBe("S02-001");
     expect(model.nextItem?.id).toBe("S02-002");
     expect(model.progress.items).toEqual({ total: 3, done: 1, open: 2, percent: 33 });
+    expect(model.progress.statuses).toEqual({ total: 3, completed: 1, open: 2, split: 0, deprecated: 0 });
     expect(model.progress.gates).toEqual({ total: 4, passed: 2, failed: 0, pending: 2 });
+    expect(model.progress.code).toEqual({ files: 0, additions: 0, deletions: 0, net: 0, churn: 0, hotspots: 0 });
+    expect(model.artifacts.active).toEqual([]);
     expect(model.tree[0]!.tone).toBe("done");
     expect(model.tree[0]!.defaultOpen).toBe(false);
     expect(model.tree[1]!.tone).toBe("active");

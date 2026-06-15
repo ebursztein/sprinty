@@ -61,10 +61,15 @@ async function call(c: Client, name: string, args: Record<string, unknown>) {
 }
 
 describe("sprinty e2e over MCP", () => {
-  it("lists all 17 tools", async () => {
+  it("lists all 25 tools", async () => {
     const { tools } = await client.listTools();
     expect(tools.map((t) => t.name).sort()).toEqual(
-      ["add", "artifact", "changelog", "current", "dashboard", "dependencies", "deprecate", "done", "info", "note", "search", "split", "sprint_archive", "sprint_close", "sprint_new", "subsprint_new", "update"],
+      [
+        "add", "artifact", "artifact_add", "artifact_amend", "artifact_deprecate", "artifact_list",
+        "changelog", "current", "dashboard", "dependencies", "deprecate", "done", "follow_up",
+        "info", "note", "search", "spike", "spike_conclude", "spike_deprecate", "split",
+        "sprint_archive", "sprint_close", "sprint_new", "subsprint_new", "update",
+      ],
     );
   });
 

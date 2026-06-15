@@ -72,6 +72,45 @@ describe("LedgerEvent", () => {
     expect(e.target_id).toBe("S01-001");
   });
 
+  it("parses artifact amendment and deprecation events", () => {
+    expect(LedgerEvent.parse({
+      ...base,
+      type: "artifact_amended",
+      artifact_id: "A001",
+      title: "Updated spec",
+    }).type).toBe("artifact_amended");
+    const deprecated = LedgerEvent.parse({
+      ...base,
+      type: "artifact_deprecated",
+      artifact_id: "A001",
+      reason: "superseded",
+    });
+    expect(deprecated.type).toBe("artifact_deprecated");
+  });
+
+  it("parses follow-up and spike events", () => {
+    expect(LedgerEvent.parse({
+      ...base,
+      type: "follow_up_added",
+      follow_up_id: "F001",
+      target_id: "S01-001",
+      description: "Fix flaky dashboard load",
+      bug_ids: ["BUG-123"],
+    }).type).toBe("follow_up_added");
+    expect(LedgerEvent.parse({
+      ...base,
+      type: "spike_concluded",
+      subsprint_id: "S02",
+      conclusion: "Use the existing subsprint projection with a spike flag.",
+    }).type).toBe("spike_concluded");
+    expect(LedgerEvent.parse({
+      ...base,
+      type: "spike_deprecated",
+      subsprint_id: "S02",
+      reason: "not needed",
+    }).type).toBe("spike_deprecated");
+  });
+
   it("parses sprint archive events", () => {
     const e = LedgerEvent.parse({
       ...base,

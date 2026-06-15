@@ -33,6 +33,12 @@ export function buildToolHandlers(store: SprintStore, openDashboard: () => Promi
       (i) => windowCurrent(store.read(), i.past, i.future)),
     subsprint_new: def(S.SubsprintNewInput, "Create a subsprint (description, goals, gates).",
       (i) => store.createSubsprint(i)),
+    spike: def(S.SpikeInput, "Create a spike subsprint for an idea or feature investigation.",
+      (i) => store.createSpike(i)),
+    spike_conclude: def(S.SpikeConcludeInput, "Close a spike with a required written conclusion once its items are resolved.",
+      (i) => store.concludeSpike(i)),
+    spike_deprecate: def(S.SpikeDeprecateInput, "Deprecate a spike with a reason; spikes are never deleted.",
+      (i) => store.deprecateSpike(i)),
     add: def(S.AddInput, "Add an item (description, code locations, gates — all required).",
       (i) => store.addItem(i)),
     update: def(S.UpdateInput, "Attach intermediate info to an item or subsprint.",
@@ -47,6 +53,16 @@ export function buildToolHandlers(store: SprintStore, openDashboard: () => Promi
       (i) => store.addNote(i)),
     artifact: def(S.ArtifactInput, "Record a durable sprint artifact such as a spec, plan, report, dashboard, or log.",
       (i) => store.addArtifact(i)),
+    artifact_add: def(S.ArtifactInput, "Record a durable sprint artifact such as a spec, plan, report, dashboard, or log.",
+      (i) => store.addArtifact(i)),
+    artifact_list: def(S.ArtifactListInput, "List active artifacts, optionally scoped to a target or including deprecated artifacts.",
+      (i) => store.listArtifacts(i)),
+    artifact_amend: def(S.ArtifactAmendInput, "Amend an active artifact by recording an immutable amendment event.",
+      (i) => store.amendArtifact(i)),
+    artifact_deprecate: def(S.ArtifactDeprecateInput, "Deprecate an artifact with a reason instead of deleting it.",
+      (i) => store.deprecateArtifact(i)),
+    follow_up: def(S.FollowUpInput, "Record a follow-up that must reference one or more bug ids.",
+      (i) => store.addFollowUp(i)),
     dependencies: def(S.DependenciesInput, "Add dependency edges from a target item/subsprint to existing ids.",
       (i) => store.addDependencies(i)),
     search: def(S.SearchInput, "Regex search over the current sprint's immutable ledger, with context lines.",
@@ -63,6 +79,7 @@ function orientation(): { skills: string[]; how: string } {
     skills: ["how-to-run-a-sprint", "using-sprinty"],
     how:
       "One sprint per session. Build item-driven: subsprint_new -> add -> done/split/deprecate. " +
-      "Items need description + code_locations + gates. Resolve every item, then sprint_close re-runs gates.",
+      "Items need description + code_locations + gates. Each subsprint should represent one feature. " +
+      "After sprint_new, call dashboard() and show the localhost URL to the human. Resolve every item, then sprint_close re-runs gates.",
   };
 }

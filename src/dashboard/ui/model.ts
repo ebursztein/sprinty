@@ -1,4 +1,4 @@
-import type { ItemView, SprintView, SubsprintView, TimelineEntry } from "../../domain/projection.js";
+import type { ArtifactView, ItemView, SprintView, SubsprintView, TimelineEntry } from "../../domain/projection.js";
 
 export type TreeTone = "done" | "active" | "current" | "next" | "muted" | "normal";
 
@@ -9,9 +9,12 @@ export interface DashboardModel {
   nextItem: ItemView | null;
   progress: {
     items: { total: number; done: number; open: number; percent: number };
+    statuses: { total: number; completed: number; open: number; split: number; deprecated: number };
     gates: { total: number; passed: number; failed: number; pending: number };
     subsprints: Array<{ id: string; label: string; done: number; total: number; percent: number }>;
+    code: { files: number; additions: number; deletions: number; net: number; churn: number; hotspots: number };
   };
+  artifacts: { active: ArtifactView[]; recent: ArtifactView[]; deprecated: ArtifactView[] };
   tree: TreeSubsprint[];
   timeline: TimelineRow[];
   ledger: LedgerRow[];
@@ -54,7 +57,9 @@ export function deriveDashboardModel(sprint: SprintView): DashboardModel {
   const currentItem = openItems[0] ?? null;
   const nextItem = openItems[1] ?? null;
   const done = items.filter((item) => item.status !== "open").length;
+  const statusTotals = statusProgress(items);
   const gateTotals = gateProgress(items);
+  const code = codeStats(sprint);
   const subsprintProgress = sprint.subsprints.map((sub) => {
     const total = sub.items.length;
     const subDone = sub.items.filter((item) => item.status !== "open").length;
@@ -68,8 +73,15 @@ export function deriveDashboardModel(sprint: SprintView): DashboardModel {
     nextItem,
     progress: {
       items: { total: items.length, done, open: openItems.length, percent: percent(done, items.length) },
+      statuses: statusTotals,
       gates: gateTotals,
       subsprints: subsprintProgress,
+      code,
+    },
+    artifacts: {
+      active: sprint.artifacts.filter((artifact) => artifact.status === "active"),
+      recent: sprint.artifacts.filter((artifact) => artifact.status === "active").slice(-6).reverse(),
+      deprecated: sprint.artifacts.filter((artifact) => artifact.status === "deprecated"),
     },
     tree: sprint.subsprints.map((sub) => treeSubsprint(sub, activeSubsprint, currentItem, nextItem)),
     timeline: sprint.timeline.slice().reverse().map(timelineRow),
@@ -92,7 +104,7 @@ function treeSubsprint(
     goals: sub.goals,
     status: sub.status,
     defaultOpen: isActive,
-    tone: sub.status === "closed" ? "done" : isActive ? "active" : "normal",
+    tone: sub.status === "closed" ? "done" : sub.status === "deprecated" ? "muted" : isActive ? "active" : "normal",
     progress: { done, total, percent: percent(done, total) },
     items: sub.items.map((item) => ({
       id: item.id,
@@ -105,11 +117,32 @@ function treeSubsprint(
   };
 }
 
+function statusProgress(items: ItemView[]): { total: number; completed: number; open: number; split: number; deprecated: number } {
+  return {
+    total: items.length,
+    completed: items.filter((item) => item.status === "completed").length,
+    open: items.filter((item) => item.status === "open").length,
+    split: items.filter((item) => item.status === "split").length,
+    deprecated: items.filter((item) => item.status === "deprecated").length,
+  };
+}
+
 function gateProgress(items: ItemView[]): { total: number; passed: number; failed: number; pending: number } {
   const total = items.reduce((sum, item) => sum + item.gates.length, 0);
   const passed = items.reduce((sum, item) => sum + item.gate_results.filter((gate) => gate.passed).length, 0);
   const failed = items.reduce((sum, item) => sum + item.gate_results.filter((gate) => !gate.passed).length, 0);
   return { total, passed, failed, pending: Math.max(0, total - passed - failed) };
+}
+
+function codeStats(sprint: SprintView): { files: number; additions: number; deletions: number; net: number; churn: number; hotspots: number } {
+  return {
+    files: sprint.change_map.by_file.length,
+    additions: sprint.change_map.by_file.reduce((sum, row) => sum + row.additions, 0),
+    deletions: sprint.change_map.by_file.reduce((sum, row) => sum + row.deletions, 0),
+    net: sprint.change_map.by_file.reduce((sum, row) => sum + row.net, 0),
+    churn: sprint.change_map.by_file.reduce((sum, row) => sum + row.churn, 0),
+    hotspots: sprint.change_map.hotspots.length,
+  };
 }
 
 function gateSummary(item: ItemView): string {

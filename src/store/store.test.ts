@@ -50,6 +50,12 @@ describe("SprintStore lifecycle", () => {
     expect(store.createSprint("next").goal).toBe("next");
   });
 
+  it("allows a new sprint after archive recovery", () => {
+    store.createSprint("alpha");
+    store.archiveSprint({ reason: "recovered broken alpha ledger" });
+    expect(store.createSprint("next").goal).toBe("next");
+  });
+
   it("mints subsprint and item ids", () => {
     store.createSprint("g");
     const sub = store.createSubsprint({ description: "d", goals: ["go"], gates: [{ kind: "build", spec: "true" }] });
@@ -215,6 +221,50 @@ describe("SprintStore lifecycle", () => {
     expect(view.subsprints[0]!.items[0]!.notes).toEqual(["item note"]);
     expect(view.subsprints[0]!.notes).toEqual(["subsprint note"]);
     expect(() => store.addNote({ element: "nope", text: "x" })).toThrow(StoreError);
+  });
+
+  it("records artifact amendments, deprecations, and follow-ups", () => {
+    store.createSprint("g");
+    store.createSubsprint({ description: "d", goals: ["go"], gates: [{ kind: "build", spec: "true" }] });
+    store.addItem({ subsprint: "S01", description: "i", code_locations: ["a.ts"], gates: [{ kind: "command", spec: "true" }] });
+    const added = store.addArtifact({ target: "S01-001", kind: "spec", title: "Spec", uri: "docs/spec.md" });
+    expect(added.id).toBe("A001");
+    store.amendArtifact({ artifact: "A001", title: "Spec v2", description: "updated" });
+    expect(store.listArtifacts({}).artifacts[0]).toMatchObject({ title: "Spec v2", status: "active" });
+    expect(() => store.addFollowUp({ target: "S01-001", description: "missing bug id" })).toThrow(/bug_id/);
+    const followUp = store.addFollowUp({ target: "S01-001", description: "file follow-up", bug_ids: ["BUG-1", "BUG-1"] });
+    expect(followUp.id).toBe("F001");
+    expect(followUp.view.follow_ups[0]!.bug_ids).toEqual(["BUG-1"]);
+    store.deprecateArtifact({ artifact: "A001", reason: "superseded" });
+    expect(store.listArtifacts({}).artifacts).toEqual([]);
+    expect(store.listArtifacts({ include_deprecated: true }).artifacts[0]).toMatchObject({ status: "deprecated", deprecation_reason: "superseded" });
+  });
+
+  it("creates spike subsprints with normal items and a required conclusion", () => {
+    store.createSprint("g");
+    const spike = store.createSpike({ description: "try parser", goals: ["learn"], gates: [{ kind: "command", spec: "true" }] });
+    expect(spike.id).toBe("S01");
+    expect(spike.view.subsprints[0]!.kind).toBe("spike");
+    store.addItem({ subsprint: "S01", description: "run experiment", code_locations: ["a.ts"], gates: [{ kind: "command", spec: "true" }] });
+    store.done({ item: "S01-001", commit_id: sha, gate_results: [{ kind: "command", spec: "true", passed: true, evidence: "ok" }], changelog: { verb: "added", line: "Added spike-only finding." } });
+    try { store.closeSprint({ coverage: { path: writeCoverage(dir), format: "lcov" } }); throw new Error("should have thrown"); }
+    catch (e) {
+      expect(e).toBeInstanceOf(StoreError);
+      expect((e as StoreError).blockers.join(" ")).toContain("conclusion");
+    }
+    const concluded = store.concludeSpike({ subsprint: "S01", conclusion: "Use the parser behind a small adapter." });
+    expect(concluded.subsprints[0]!.spike_conclusion).toBe("Use the parser behind a small adapter.");
+    const closed = store.closeSprint({ coverage: { path: writeCoverage(dir), format: "lcov" } });
+    expect(closed.status).toBe("closed");
+    expect(store.changelog()).not.toContain("Added spike-only finding.");
+  });
+
+  it("deprecates spike subsprints with a reason", () => {
+    store.createSprint("g");
+    store.createSpike({ description: "try parser", goals: ["learn"], gates: [{ kind: "command", spec: "true" }] });
+    const view = store.deprecateSpike({ subsprint: "S01", reason: "not worth it" });
+    expect(view.subsprints[0]!.status).toBe("deprecated");
+    expect(view.subsprints[0]!.spike_deprecation_reason).toBe("not worth it");
   });
 });
 

@@ -11,14 +11,22 @@ write prose plans, you create structured items the sprinty MCP records in an imm
 ## The loop
 
 1. **`sprint_new(goal, context_notes?)`** — one sentence of intent plus optional context. Returns
-   the skills to use and a primer. Call **`info()`** any time to re-orient.
+   the skills to use and a primer. Call **`info()`** any time to re-orient. Then call
+   **`dashboard()`** and show the localhost URL to the human so they can follow the sprint.
 2. **`subsprint_new(description, goals[], gates[], dependencies?)`** — carve the work into a goal-bearing unit.
-   A gate is always *about something*: `{ kind: test|typecheck|build|command|manual, spec, category? }`.
+   Each subsprint should be one feature, not a loose phase or miscellaneous bucket. A gate is
+   always *about something*: `{ kind: test|typecheck|build|command|manual, spec, category? }`.
+   Use **`spike(description, goals[], gates[], dependencies?)`** when the feature needs an
+   investigation branch; a spike is still a subsprint, can have normal items, and must end with
+   **`spike_conclude(subsprint, conclusion)`** or **`spike_deprecate(subsprint, reason)`**.
 3. **`add(subsprint, description, code_locations[], gates[], dependencies?)`** — add an item. All three are
    required. The item's gates are what proves it; a `test`-kind gate is the test you must write.
 4. Work the item. Use **`update(target, note)`** to record intermediate discoveries,
    **`note(element, text)`** for observations, and **`dependencies(target, dependencies[])`** to
-   add graph edges. `current()` returns the dependency graph with topological order.
+   add graph edges. Use **`artifact_add/list/amend/deprecate`** for durable outputs and
+   **`follow_up(target, description, bug_id|bug_ids)`** when you discover a bug. `current()`
+   returns the dependency graph with topological order, relevant artifacts, recent artifacts, and
+   recent activity.
 5. Resolve every item exactly one way:
    - **`done(item, commit_id, gate_results[], changelog)`** — completed. Requires a *real*
      commit, passing evidence for every declared item gate, and a semver changelog line. Sprinty
@@ -42,7 +50,7 @@ write prose plans, you create structured items the sprinty MCP records in an imm
 - Generate coverage before close and pass the report path, usually `coverage/lcov.info`.
 - The ledger is append-only. You cannot un-say a resolution — resolve honestly.
 - Want to watch it live? **`dashboard()`** returns a localhost URL. Surface that URL to the human
-  so they can open it in a browser while you work.
+  so they can open it in a browser while you work. Do this at sprint start, not just at the end.
 - Search the immutable record anytime with **`search(pattern, context_lines)`** (regex + grep-style context).
 - One sprint open at a time. Start a new sprint only after `sprint_close()` accepts the current one.
 - Every ledger event has a timestamp. Use the dashboard timeline, `info()`, or `search()` when the

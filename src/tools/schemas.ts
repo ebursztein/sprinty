@@ -29,6 +29,9 @@ export const SubsprintNewInput = z.object({
   gates: z.array(Gate).min(1),
   dependencies: z.array(z.string().min(1)).default([]),
 });
+export const SpikeInput = SubsprintNewInput;
+export const SpikeConcludeInput = z.object({ subsprint: z.string().min(1), conclusion: z.string().min(1) });
+export const SpikeDeprecateInput = z.object({ subsprint: z.string().min(1), reason: z.string().min(1) });
 export const AddInput = z.object({
   subsprint: z.string().min(1),
   description: z.string().min(1),
@@ -58,6 +61,24 @@ export const ArtifactInput = z.object({
   title: z.string().min(1),
   uri: z.string().min(1),
   description: z.string().min(1).nullable().optional(),
+});
+export const ArtifactListInput = z.object({
+  target: z.string().min(1).optional(),
+  include_deprecated: z.boolean().default(false),
+});
+export const ArtifactAmendInput = z.object({
+  artifact: z.string().min(1),
+  kind: ArtifactKind.optional(),
+  title: z.string().min(1).optional(),
+  uri: z.string().min(1).optional(),
+  description: z.string().min(1).nullable().optional(),
+});
+export const ArtifactDeprecateInput = z.object({ artifact: z.string().min(1), reason: z.string().min(1) });
+export const FollowUpInput = z.object({
+  target: z.string().min(1).default("sprint"),
+  description: z.string().min(1),
+  bug_id: z.string().min(1).optional(),
+  bug_ids: z.array(z.string().min(1)).optional(),
 });
 export const DependenciesInput = z.object({
   target: z.string().min(1),

@@ -119,10 +119,48 @@ describe("project", () => {
       uri: "docs/plan.md",
       description: "Top-level plan",
       created_at: t,
+      updated_at: null,
+      deprecated_at: null,
+      deprecation_reason: null,
+      status: "active",
     });
     expect(s.subsprints[0]!.artifacts.map((artifact) => artifact.id)).toEqual(["A002"]);
     expect(s.subsprints[0]!.items[0]!.artifacts.map((artifact) => artifact.id)).toEqual(["A003"]);
     expect(s.timeline.map((entry) => entry.type)).toContain("artifact_added");
+  });
+
+  it("projects artifact amendments, deprecations, and follow-ups", () => {
+    const events: LedgerEvent[] = [
+      ev({ type: "sprint_created", goal: "g", worktree: "/w", branch: "main", dir: "/r" }, 0),
+      ev({ type: "subsprint_created", subsprint_id: "S01", description: "d", goals: ["go"], gates: [{ kind: "build", spec: "b" }], spawned_from_item: null }, 1),
+      ev({ type: "item_added", item_id: "S01-001", subsprint_id: "S01", description: "i1", code_locations: ["a.ts"], gates: [{ kind: "test", spec: "x" }] }, 2),
+      ev({ type: "artifact_added", artifact_id: "A001", target_id: "S01-001", kind: "spec", title: "Spec", uri: "docs/spec.md", description: null }, 3),
+      ev({ type: "artifact_amended", artifact_id: "A001", title: "New spec", uri: "docs/new.md" }, 4),
+      ev({ type: "follow_up_added", follow_up_id: "F001", target_id: "S01-001", description: "File dashboard bug", bug_ids: ["BUG-7"] }, 5),
+      ev({ type: "artifact_deprecated", artifact_id: "A001", reason: "superseded" }, 6),
+    ];
+    const s = project(events)!;
+    expect(s.artifacts[0]!.title).toBe("New spec");
+    expect(s.artifacts[0]!.uri).toBe("docs/new.md");
+    expect(s.artifacts[0]!.status).toBe("deprecated");
+    expect(s.artifacts[0]!.deprecation_reason).toBe("superseded");
+    expect(s.follow_ups.map((f) => f.id)).toEqual(["F001"]);
+    expect(s.subsprints[0]!.items[0]!.follow_ups[0]!.bug_ids).toEqual(["BUG-7"]);
+  });
+
+  it("projects spike subsprints and keeps them out of the changelog", () => {
+    const events: LedgerEvent[] = [
+      ev({ type: "sprint_created", goal: "g", worktree: "/w", branch: "main", dir: "/r" }, 0),
+      ev({ type: "subsprint_created", subsprint_id: "S01", description: "Spike idea", goals: ["learn"], gates: [{ kind: "build", spec: "true" }], spawned_from_item: null, kind: "spike" } as never, 1),
+      ev({ type: "item_added", item_id: "S01-001", subsprint_id: "S01", description: "try it", code_locations: ["a.ts"], gates: [{ kind: "command", spec: "true" }] }, 2),
+      ev({ type: "item_resolved", item_id: "S01-001", disposition: "completed", commit_id: "deadbeef", gate_results: [{ kind: "command", spec: "true", passed: true, evidence: "ok" }], spawned_subsprint: null, reason: null, changelog: { verb: "added", line: "Added spike-only finding." } } as never, 3),
+      ev({ type: "spike_concluded", subsprint_id: "S01", conclusion: "Use a kind flag." }, 4),
+    ];
+    const s = project(events)!;
+    expect(s.subsprints[0]!.kind).toBe("spike");
+    expect(s.subsprints[0]!.status).toBe("closed");
+    expect(s.subsprints[0]!.spike_conclusion).toBe("Use a kind flag.");
+    expect(s.changelog).toEqual([]);
   });
 
   it("reports closed status once a sprint_closed event is present", () => {

@@ -7,16 +7,24 @@ description: Reference for the sprinty MCP tools — exact inputs, what each ret
 
 | Tool | Input | Returns / Rejects |
 |---|---|---|
-| `sprint_new` | `{ goal, context_notes?[] }` | sprint view + orientation. Rejects if a sprint is already open. |
+| `sprint_new` | `{ goal, context_notes?[] }` | sprint view + orientation. Rejects if a sprint is already active. After this, call `dashboard()` and show the URL to the human. |
 | `info` | `{}` | full sprint view (subsprints + items + statuses). |
 | `current` | `{ past?=1, future?=3 }` | last terminal items, next open items, current subsprint notes, dependency graph. |
 | `subsprint_new` | `{ description, goals[], gates[], dependencies?[] }` | `{ id: "S0N", … }`. Rejects unknown deps/cycles. |
+| `spike` | `{ description, goals[], gates[], dependencies?[] }` | creates a spike subsprint. Spikes reuse normal subsprint/item mechanics. |
+| `spike_conclude` | `{ subsprint, conclusion }` | records the required spike conclusion after its items are resolved. |
+| `spike_deprecate` | `{ subsprint, reason }` | deprecates a spike with a reason. Spikes are not deleted. |
 | `add` | `{ subsprint, description, code_locations[], gates[], dependencies?[] }` | `{ id: "S0N-00M", … }`. Rejects unknown subsprint/deps/cycles. |
 | `update` | `{ target, note }` | view. Rejects unknown target. |
 | `done` | `{ item, commit_id, gate_results[], changelog }` | view. Rejects fake commit / missing, extra, mismatched, or failing gate evidence / missing changelog / terminal item. |
 | `split` | `{ item, description, goals[], gates[] }` | view. Item → `split`, new subsprint seeded. |
 | `deprecate` | `{ item, reason }` | view. Requires non-empty reason. |
 | `note` | `{ element, text }` | view. `element` is an item or subsprint id. |
+| `artifact_add` / `artifact` | `{ target?="sprint", kind, title, uri, description? }` | adds a durable artifact attached to sprint, subsprint, or item. |
+| `artifact_list` | `{ target?, include_deprecated?=false }` | lists active artifacts, optionally scoped or including deprecated artifacts. |
+| `artifact_amend` | `{ artifact, kind?, title?, uri?, description? }` | records an immutable amendment event. |
+| `artifact_deprecate` | `{ artifact, reason }` | deprecates an artifact with a reason; artifacts are not deleted. |
+| `follow_up` | `{ target?="sprint", description, bug_id? OR bug_ids?[] }` | records a follow-up and requires at least one bug id. |
 | `dependencies` | `{ target, dependencies[] }` | view. Adds dependency edges. Rejects unknown ids, duplicates, or cycles. |
 | `search` | `{ pattern, context_lines?=0 }` | regex matches over the current sprint ledger, with context lines. |
 | `changelog` | `{}` | `{ markdown }`. Renders semver changelog sections plus coverage and change-map tables. |
@@ -25,6 +33,12 @@ description: Reference for the sprinty MCP tools — exact inputs, what each ret
 
 **Gate shape:** `{ kind: "test"|"typecheck"|"build"|"command"|"manual", spec, category? }`.
 Executable kinds are re-run at `sprint_close`; `manual` relies on recorded evidence.
+
+**Subsprint shape:** each subsprint should be a feature-sized unit with its own user-visible or
+agent-visible outcome. Avoid catch-all phase names like "cleanup" unless the cleanup itself is the feature.
+Spikes are regular subsprints with `kind:"spike"`; add normal items to them, then close them with
+`spike_conclude()` or retire them with `spike_deprecate()`. Spike items do not contribute to the
+release changelog.
 
 **GateResult shape (for `done`):** `{ kind, spec, passed, evidence }`. Results must match the
 item's declared gates exactly by `kind` and `spec`; `passed:false` is rejected.
@@ -43,7 +57,8 @@ Sprinty verifies the file exists, parses LCOV totals, stores only the summary, a
 
 **Dependency graph:** dependency edges are `from -> to`, meaning `from` depends on `to`.
 `current()` and `info()` expose `graph.nodes`, `graph.edges`, `blocked_by`, `unblocks`,
-`topological_order`, and `cycles`. Sprinty rejects dependency writes that would create a cycle.
+`topological_order`, and `cycles`. `current()` also returns relevant artifacts, recent artifacts,
+and recent activity. Sprinty rejects dependency writes that would create a cycle.
 
 **Timestamps:** every ledger event has `ts`. The projected sprint view includes `created_at`,
 `closed_at`, item/subsprint timestamps, dependency events, and `timeline[]` for human auditability.

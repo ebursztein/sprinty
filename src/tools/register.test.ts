@@ -90,8 +90,49 @@ describe("tool handlers", () => {
     expect(artifact.id).toBe("A001");
     expect(artifact.view.artifacts[0]!.title).toBe("Dashboard design");
     expect(artifact.view.subsprints[0]!.items[0]!.artifacts.map((a) => a.id)).toEqual(["A001"]);
-    const current = (await tools.current!.handler({})) as { artifacts: Array<{ id: string; uri: string }> };
-    expect(current.artifacts).toEqual([{ id: "A001", target_id: "S01-001", kind: "spec", title: "Dashboard design", uri: "docs/superpowers/specs/dashboard.md", description: "Approved dashboard design", created_at: expect.any(String) }]);
+    await tools.artifact_amend!.handler({ artifact: "A001", title: "Dashboard design v2" });
+    const listed = (await tools.artifact_list!.handler({ include_deprecated: true })) as { artifacts: Array<{ id: string; title: string; status: string }> };
+    expect(listed.artifacts[0]).toMatchObject({ id: "A001", title: "Dashboard design v2", status: "active" });
+    const current = (await tools.current!.handler({})) as { artifacts: Array<{ id: string; uri: string; status: string }> };
+    expect(current.artifacts[0]).toMatchObject({ id: "A001", target_id: "S01-001", kind: "spec", title: "Dashboard design v2", uri: "docs/superpowers/specs/dashboard.md", description: "Approved dashboard design", status: "active" });
+    await tools.artifact_deprecate!.handler({ artifact: "A001", reason: "superseded by the implementation" });
+    const active = (await tools.artifact_list!.handler({})) as { artifacts: unknown[] };
+    expect(active.artifacts).toEqual([]);
+  });
+
+  it("records follow-ups with required bug ids", async () => {
+    await tools.sprint_new!.handler({ goal: "g" });
+    await tools.subsprint_new!.handler({ description: "d", goals: ["go"], gates: [{ kind: "command", spec: "true" }] });
+    await tools.add!.handler({ subsprint: "S01", description: "i", code_locations: ["a.ts"], gates: [{ kind: "command", spec: "true" }] });
+    await expect(tools.follow_up!.handler({ target: "S01-001", description: "needs bug" })).rejects.toThrow();
+    const followUp = (await tools.follow_up!.handler({ target: "S01-001", description: "file the dashboard polish bug", bug_id: "BUG-42" })) as { id: string; view: { follow_ups: Array<{ bug_ids: string[] }> } };
+    expect(followUp.id).toBe("F001");
+    expect(followUp.view.follow_ups[0]!.bug_ids).toEqual(["BUG-42"]);
+  });
+
+  it("creates spike subsprints and requires conclusions before sprint close", async () => {
+    await tools.sprint_new!.handler({ goal: "g" });
+    const spike = (await tools.spike!.handler({ description: "investigate parser", goals: ["choose"], gates: [{ kind: "command", spec: "true" }] })) as { id: string };
+    expect(spike.id).toBe("S01");
+    await tools.add!.handler({ subsprint: "S01", description: "try parser", code_locations: ["a.ts"], gates: [{ kind: "command", spec: "true" }] });
+    await tools.done!.handler({
+      item: "S01-001",
+      commit_id: sha,
+      gate_results: [{ kind: "command", spec: "true", passed: true, evidence: "ok" }],
+      changelog: { verb: "added", line: "added spike-only finding" },
+    });
+    await expect(tools.sprint_close!.handler({ coverage: { path: writeCoverage(dir), format: "lcov" } })).rejects.toMatchObject({ blockers: expect.arrayContaining([expect.stringContaining("conclusion")]) });
+    const concluded = (await tools.spike_conclude!.handler({ subsprint: "S01", conclusion: "Use the native parser." })) as { subsprints: Array<{ kind: string; spike_conclusion: string | null }> };
+    expect(concluded.subsprints[0]!.kind).toBe("spike");
+    expect(concluded.subsprints[0]!.spike_conclusion).toBe("Use the native parser.");
+  });
+
+  it("deprecates spike subsprints with a reason", async () => {
+    await tools.sprint_new!.handler({ goal: "g" });
+    await tools.spike!.handler({ description: "investigate unused path", goals: ["choose"], gates: [{ kind: "command", spec: "true" }] });
+    const deprecated = (await tools.spike_deprecate!.handler({ subsprint: "S01", reason: "not worth pursuing" })) as { subsprints: Array<{ status: string; spike_deprecation_reason: string | null }> };
+    expect(deprecated.subsprints[0]!.status).toBe("deprecated");
+    expect(deprecated.subsprints[0]!.spike_deprecation_reason).toBe("not worth pursuing");
   });
 
   it("archives a sprint through the archive verb", async () => {

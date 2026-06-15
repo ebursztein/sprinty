@@ -48,7 +48,7 @@ export class SprintStore {
 
   createSprint(goal: string, contextNotes: string[] = []): SprintView {
     const existing = this.state();
-    if (existing && existing.status !== "closed") throw new StoreError("The current sprint is still open. Close it before starting a new one.");
+    if (existing && existing.status === "active") throw new StoreError("The current sprint is still open. Close it before starting a new one.");
     if (!goal.trim()) throw new StoreError("Sprint goal is required.");
     const id = this.book.allocateId();   // new ledger file id (001, 002, …)
     this.book.setCurrent(id);            // `.sprinty/current` -> id : enforces unicity
@@ -63,7 +63,17 @@ export class SprintStore {
     const id = mintSubsprintId(s.subsprints.length);
     const dependencies = input.dependencies ?? [];
     this.validateDependencyAddition(s, id, dependencies, { allowNewTarget: true, newTarget: { id, kind: "subsprint", label: input.description, status: "open" } });
-    this.ledger.append({ type: "subsprint_created", subsprint_id: id, description: input.description, goals: input.goals, gates: input.gates, spawned_from_item: null, dependencies });
+    this.ledger.append({ type: "subsprint_created", subsprint_id: id, description: input.description, goals: input.goals, gates: input.gates, spawned_from_item: null, dependencies, kind: "feature" });
+    return { id, view: this.requireState() };
+  }
+
+  createSpike(input: { description: string; goals: string[]; gates: Gate[]; dependencies?: string[] }): { id: string; view: SprintView } {
+    const s = this.requireState();
+    this.validateGates(input.gates);
+    const id = mintSubsprintId(s.subsprints.length);
+    const dependencies = input.dependencies ?? [];
+    this.validateDependencyAddition(s, id, dependencies, { allowNewTarget: true, newTarget: { id, kind: "subsprint", label: input.description, status: "open" } });
+    this.ledger.append({ type: "subsprint_created", subsprint_id: id, description: input.description, goals: input.goals, gates: input.gates, spawned_from_item: null, dependencies, kind: "spike" });
     return { id, view: this.requireState() };
   }
 
@@ -133,7 +143,7 @@ export class SprintStore {
     const dependencies = input.dependencies ?? [];
     this.validateDependencyAddition(s, newId, dependencies, { allowNewTarget: true, newTarget: { id: newId, kind: "subsprint", label: input.description, status: "open" } });
     this.ledger.append({ type: "item_resolved", item_id: input.item, disposition: "split", commit_id: null, gate_results: [], spawned_subsprint: newId, reason: null, changelog: null, change_map: emptyChangeMap() });
-    this.ledger.append({ type: "subsprint_created", subsprint_id: newId, description: input.description, goals: input.goals, gates: input.gates, spawned_from_item: input.item, dependencies });
+    this.ledger.append({ type: "subsprint_created", subsprint_id: newId, description: input.description, goals: input.goals, gates: input.gates, spawned_from_item: input.item, dependencies, kind: "feature" });
     return this.requireState();
   }
 
@@ -160,11 +170,10 @@ export class SprintStore {
     return this.requireState();
   }
 
-  addArtifact(input: { target?: string; kind: ArtifactKind; title: string; uri: string; description?: string | null | undefined }): { id: string; view: SprintView } {
+  addArtifact(input: { target?: string | undefined; kind: ArtifactKind; title: string; uri: string; description?: string | null | undefined }): { id: string; view: SprintView } {
     const s = this.requireState();
     const target = input.target ?? "sprint";
-    const exists = target === "sprint" || s.subsprints.some((x) => x.id === target) || s.subsprints.flatMap((x) => x.items).some((i) => i.id === target);
-    if (!exists) throw new StoreError(`Unknown artifact target ${target}.`);
+    this.assertKnownTarget(s, target, "artifact target");
     const id = `A${String(s.artifacts.length + 1).padStart(3, "0")}`;
     this.ledger.append({
       type: "artifact_added",
@@ -176,6 +185,75 @@ export class SprintStore {
       description: input.description ?? null,
     });
     return { id, view: this.requireState() };
+  }
+
+  listArtifacts(input: { target?: string | undefined; include_deprecated?: boolean | undefined } = {}): { artifacts: SprintView["artifacts"] } {
+    const s = this.requireState();
+    if (input.target) this.assertKnownTarget(s, input.target, "artifact target");
+    const artifacts = s.artifacts.filter((artifact) =>
+      (!input.target || artifact.target_id === input.target) &&
+      (input.include_deprecated || artifact.status === "active"));
+    return { artifacts };
+  }
+
+  amendArtifact(input: { artifact: string; kind?: ArtifactKind | undefined; title?: string | undefined; uri?: string | undefined; description?: string | null | undefined }): SprintView {
+    const s = this.requireState();
+    const artifact = s.artifacts.find((a) => a.id === input.artifact);
+    if (!artifact) throw new StoreError(`Unknown artifact ${input.artifact}.`);
+    if (artifact.status === "deprecated") throw new StoreError(`Artifact ${input.artifact} is deprecated.`);
+    if (!input.kind && !input.title && !input.uri && !("description" in input)) throw new StoreError("Artifact amendment requires at least one changed field.");
+    const event: { type: "artifact_amended"; artifact_id: string; kind?: ArtifactKind; title?: string; uri?: string; description?: string | null } = {
+      type: "artifact_amended",
+      artifact_id: input.artifact,
+    };
+    if (input.kind) event.kind = input.kind;
+    if (input.title) event.title = input.title;
+    if (input.uri) event.uri = input.uri;
+    if ("description" in input) event.description = input.description ?? null;
+    this.ledger.append(event);
+    return this.requireState();
+  }
+
+  deprecateArtifact(input: { artifact: string; reason: string }): SprintView {
+    const s = this.requireState();
+    const artifact = s.artifacts.find((a) => a.id === input.artifact);
+    if (!artifact) throw new StoreError(`Unknown artifact ${input.artifact}.`);
+    if (!input.reason.trim()) throw new StoreError("Artifact deprecation requires a reason.");
+    this.ledger.append({ type: "artifact_deprecated", artifact_id: input.artifact, reason: input.reason });
+    return this.requireState();
+  }
+
+  addFollowUp(input: { target?: string | undefined; description: string; bug_id?: string | undefined; bug_ids?: string[] | undefined }): { id: string; view: SprintView } {
+    const s = this.requireState();
+    const target = input.target ?? "sprint";
+    this.assertKnownTarget(s, target, "follow-up target");
+    const bugIds = [...new Set([...(input.bug_ids ?? []), ...(input.bug_id ? [input.bug_id] : [])].map((bug) => bug.trim()).filter(Boolean))];
+    if (bugIds.length === 0) throw new StoreError("Follow-up requires bug_id or bug_ids.");
+    const id = `F${String(s.follow_ups.length + 1).padStart(3, "0")}`;
+    this.ledger.append({ type: "follow_up_added", follow_up_id: id, target_id: target, description: input.description, bug_ids: bugIds });
+    return { id, view: this.requireState() };
+  }
+
+  concludeSpike(input: { subsprint: string; conclusion: string }): SprintView {
+    const s = this.requireState();
+    const sub = s.subsprints.find((x) => x.id === input.subsprint);
+    if (!sub) throw new StoreError(`Unknown subsprint ${input.subsprint}.`);
+    if (sub.kind !== "spike") throw new StoreError(`Subsprint ${input.subsprint} is not a spike.`);
+    if (sub.status === "deprecated") throw new StoreError(`Spike ${input.subsprint} is deprecated.`);
+    if (sub.items.some((item) => item.status === "open")) throw new StoreError(`Spike ${input.subsprint} still has open items.`);
+    if (!input.conclusion.trim()) throw new StoreError("Spike conclusion is required.");
+    this.ledger.append({ type: "spike_concluded", subsprint_id: input.subsprint, conclusion: input.conclusion });
+    return this.requireState();
+  }
+
+  deprecateSpike(input: { subsprint: string; reason: string }): SprintView {
+    const s = this.requireState();
+    const sub = s.subsprints.find((x) => x.id === input.subsprint);
+    if (!sub) throw new StoreError(`Unknown subsprint ${input.subsprint}.`);
+    if (sub.kind !== "spike") throw new StoreError(`Subsprint ${input.subsprint} is not a spike.`);
+    if (!input.reason.trim()) throw new StoreError("Spike deprecation requires a reason.");
+    this.ledger.append({ type: "spike_deprecated", subsprint_id: input.subsprint, reason: input.reason });
+    return this.requireState();
   }
 
   private currentSprintEvents(): LedgerEvent[] {
@@ -206,6 +284,10 @@ export class SprintStore {
         try { this.validateGateEvidence(item.gates, item.gate_results); }
         catch (err) { blockers.push(`Item ${item.id}: ${(err as Error).message}`); }
       }
+    }
+    for (const sub of s.subsprints) {
+      if (sub.kind === "spike" && sub.status === "open") blockers.push(`Spike ${sub.id} is unresolved.`);
+      if (sub.kind === "spike" && sub.status === "closed" && !sub.spike_conclusion) blockers.push(`Spike ${sub.id} closed without a conclusion.`);
     }
 
     if (allItems.some((item) => item.status === "completed")) {
@@ -249,6 +331,11 @@ export class SprintStore {
         throw new StoreError(`Command gate looks like prose. Use a manual gate or provide a shell command: ${gate.spec}`);
       }
     }
+  }
+
+  private assertKnownTarget(s: SprintView, target: string, label: string): void {
+    const exists = target === "sprint" || s.subsprints.some((x) => x.id === target) || s.subsprints.flatMap((x) => x.items).some((i) => i.id === target);
+    if (!exists) throw new StoreError(`Unknown ${label} ${target}.`);
   }
 
   private validateDependencyAddition(

@@ -1,4 +1,4 @@
-import type { ArtifactView, SprintView, ItemView, SubsprintView } from "../domain/projection.js";
+import type { ArtifactView, SprintView, ItemView, SubsprintView, TimelineEntry } from "../domain/projection.js";
 import type { DependencyGraph } from "../domain/graph.js";
 
 export interface CurrentWindow {
@@ -8,6 +8,8 @@ export interface CurrentWindow {
   current_subsprint: SubsprintView | null;
   graph: DependencyGraph;
   artifacts: ArtifactView[];
+  recent_artifacts: ArtifactView[];
+  recent_activity: TimelineEntry[];
 }
 
 export function windowCurrent(view: SprintView, past: number, future: number): CurrentWindow {
@@ -21,7 +23,9 @@ export function windowCurrent(view: SprintView, past: number, future: number): C
     next: open.slice(0, future),
     current_subsprint: current,
     graph: view.graph,
-    artifacts: collectArtifacts(view),
+    artifacts: collectRelevantArtifacts(view, current, resolved.slice(-past), open.slice(0, future)),
+    recent_artifacts: collectArtifacts(view).filter((artifact) => artifact.status === "active").slice(-future),
+    recent_activity: view.timeline.slice(-Math.max(5, past + future)),
   };
 }
 
@@ -39,4 +43,14 @@ function collectArtifacts(view: SprintView): ArtifactView[] {
     seen.add(artifact.id);
     return true;
   });
+}
+
+function collectRelevantArtifacts(view: SprintView, current: SubsprintView | null, past: ItemView[], future: ItemView[]): ArtifactView[] {
+  const targetIds = new Set<string>([
+    "sprint",
+    ...(current ? [current.id] : []),
+    ...past.map((item) => item.id),
+    ...future.map((item) => item.id),
+  ]);
+  return collectArtifacts(view).filter((artifact) => artifact.status === "active" && targetIds.has(artifact.target_id));
 }

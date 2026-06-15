@@ -2,24 +2,27 @@
   import { onMount } from "svelte";
   import DOMPurify from "dompurify";
   import { marked } from "marked";
-  import { deriveDashboardModel, type DashboardModel, type TreeItem, type TreeSubsprint } from "../model";
-  import type { ItemView, SprintView, SubsprintView, TimelineEntry } from "../../../domain/projection";
-
-  type Selection =
-    | { kind: "item"; id: string }
-    | { kind: "subsprint"; id: string }
-    | { kind: "event"; seq: number }
-    | null;
+  import { deriveDashboardModel, type DashboardModel, type TreeSubsprint } from "../model";
+  import type { ArtifactView, ItemView, SprintView, SubsprintView } from "../../../domain/projection";
 
   let sprint: SprintView | null = null;
   let model: DashboardModel | null = null;
   let error: string | null = null;
   let stale = false;
-  let selection: Selection = null;
-  let expandedGoals = new Set<string>();
+  let selectedSubId: string | null = null;
+  let expandedItemId: string | null = null;
+  let ledgerPage = 0;
+  let dark = true;
+
+  const pageSize = 8;
 
   $: model = sprint ? deriveDashboardModel(sprint) : null;
-  $: if (!selection && model?.currentItem) selection = { kind: "item", id: model.currentItem.id };
+  $: if (model && !selectedSubId) selectedSubId = model.activeSubsprint?.id ?? model.sprint.subsprints[0]?.id ?? null;
+  $: selectedSub = model?.sprint.subsprints.find((sub) => sub.id === selectedSubId) ?? model?.activeSubsprint ?? null;
+  $: if (model && !expandedItemId) expandedItemId = model.currentItem?.id ?? selectedSub?.items[0]?.id ?? null;
+  $: ledgerRows = model?.ledger ?? [];
+  $: ledgerPages = Math.max(1, Math.ceil(ledgerRows.length / pageSize));
+  $: visibleLedger = ledgerRows.slice(ledgerPage * pageSize, ledgerPage * pageSize + pageSize);
 
   onMount(() => {
     void tick();
@@ -40,38 +43,13 @@
     }
   }
 
-  function selectItem(item: TreeItem): void {
-    selection = { kind: "item", id: item.id };
+  function selectSub(sub: TreeSubsprint): void {
+    selectedSubId = sub.id;
+    expandedItemId = sub.items[0]?.id ?? null;
   }
 
-  function selectSubsprint(sub: TreeSubsprint): void {
-    selection = { kind: "subsprint", id: sub.id };
-  }
-
-  function selectEvent(row: TimelineEntry | { seq: number }): void {
-    selection = { kind: "event", seq: row.seq };
-  }
-
-  function toggleGoals(id: string): void {
-    const next = new Set(expandedGoals);
-    if (next.has(id)) next.delete(id);
-    else next.add(id);
-    expandedGoals = next;
-  }
-
-  function selectedItem(): ItemView | null {
-    if (!sprint || selection?.kind !== "item") return null;
-    return sprint.subsprints.flatMap((sub) => sub.items).find((item) => item.id === selection.id) ?? null;
-  }
-
-  function selectedSubsprint(): SubsprintView | null {
-    if (!sprint || selection?.kind !== "subsprint") return null;
-    return sprint.subsprints.find((sub) => sub.id === selection.id) ?? null;
-  }
-
-  function selectedEvent(): TimelineEntry | null {
-    if (!sprint || selection?.kind !== "event") return null;
-    return sprint.timeline.find((entry) => entry.seq === selection.seq) ?? null;
+  function toggleItem(item: ItemView): void {
+    expandedItemId = expandedItemId === item.id ? null : item.id;
   }
 
   function markdown(value: string): string {
@@ -84,17 +62,25 @@
     return Number.isNaN(date.valueOf()) ? ts : date.toLocaleString();
   }
 
-  function itemTone(tone: TreeItem["tone"]): string {
-    if (tone === "current") return "border-sky-400 bg-sky-950/60 text-sky-50";
-    if (tone === "next") return "border-stone-200 bg-stone-100 text-stone-950";
-    if (tone === "muted") return "border-stone-700 bg-stone-900/40 text-stone-500";
-    return "border-stone-700 bg-[#191d1a] text-stone-200";
+  function statusClass(status: string): string {
+    if (status === "completed" || status === "closed") return "bg-emerald-500/15 text-emerald-700 ring-emerald-500/25 dark:text-emerald-300";
+    if (status === "open") return "bg-sky-500/15 text-sky-700 ring-sky-500/25 dark:text-sky-300";
+    if (status === "split") return "bg-amber-500/15 text-amber-700 ring-amber-500/25 dark:text-amber-300";
+    if (status === "deprecated") return "bg-zinc-500/15 text-zinc-600 ring-zinc-500/25 dark:text-zinc-400";
+    return "bg-zinc-500/15 text-zinc-600 ring-zinc-500/25 dark:text-zinc-400";
   }
 
-  function subTone(tone: TreeSubsprint["tone"]): string {
-    if (tone === "active") return "border-sky-500 bg-[#172536]";
-    if (tone === "done") return "border-stone-800 bg-[#171917] text-stone-500";
-    return "border-stone-700 bg-[#191d1a]";
+  function statusDonut(model: DashboardModel): string {
+    const total = Math.max(1, model.progress.statuses.total);
+    const done = model.progress.statuses.completed / total * 100;
+    const open = model.progress.statuses.open / total * 100;
+    const split = model.progress.statuses.split / total * 100;
+    const deprecated = model.progress.statuses.deprecated / total * 100;
+    return `conic-gradient(#10b981 0 ${done}%, #0ea5e9 ${done}% ${done + open}%, #f59e0b ${done + open}% ${done + open + split}%, #71717a ${done + open + split}% ${done + open + split + deprecated}%, #e4e4e7 0)`;
+  }
+
+  function targetLabel(artifact: ArtifactView): string {
+    return artifact.target_id === "sprint" ? "sprint" : artifact.target_id;
   }
 </script>
 
@@ -103,186 +89,198 @@
 </svelte:head>
 
 {#if !model}
-  <main class="grid min-h-screen place-items-center bg-[#111312] px-6 text-stone-100">
-    <div class="max-w-md rounded-lg border border-stone-700 bg-[#191d1a] p-6">
-      <div class="text-sm text-stone-400">sprinty dashboard</div>
+  <main class="grid min-h-screen place-items-center bg-zinc-950 px-6 text-zinc-100">
+    <div class="max-w-md rounded-lg border border-zinc-800 bg-zinc-900 p-6">
+      <div class="text-sm text-zinc-400">sprinty dashboard</div>
       <h1 class="mt-2 text-2xl font-semibold">Loading sprint</h1>
       {#if error}<p class="mt-3 text-sm text-rose-300">{error}</p>{/if}
     </div>
   </main>
 {:else}
-  <div class="dashboard-shell">
-    <header class="border-b border-stone-800 bg-[#151815] px-5 py-4">
-      <div class="mx-auto flex max-w-7xl flex-col gap-4">
-        <div class="flex flex-col justify-between gap-3 md:flex-row md:items-end">
-          <div>
-            <div class="text-xs font-medium uppercase text-lime-300">Sprinty</div>
-            <h1 class="mt-1 text-2xl font-semibold text-stone-50">{model.sprint.goal}</h1>
-            <div class="mt-2 flex flex-wrap gap-2 text-xs text-stone-400">
+  <div class:dark class="dashboard-shell min-h-screen bg-zinc-50 text-zinc-950 dark:bg-zinc-950 dark:text-zinc-100">
+    <header class="border-b border-zinc-200 bg-white/95 px-5 py-4 dark:border-zinc-800 dark:bg-zinc-950/95">
+      <div class="mx-auto max-w-7xl">
+        <div class="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+          <div class="min-w-0">
+            <div class="text-xs font-semibold uppercase text-sky-600 dark:text-sky-400">Sprinty</div>
+            <h1 class="mt-1 text-balance text-2xl font-semibold tracking-normal">{model.sprint.goal}</h1>
+            <div class="mt-2 flex flex-wrap gap-2 text-xs text-zinc-500 dark:text-zinc-400">
               <span>{model.sprint.branch || "no branch"}</span>
-              <span>{model.sprint.worktree || model.sprint.dir}</span>
+              <span class="max-w-full truncate">{model.sprint.worktree || model.sprint.dir}</span>
               <span>{fmt(model.sprint.created_at)}</span>
-              {#if stale}<span class="text-amber-300">stale connection</span>{/if}
+              {#if stale}<span class="text-amber-600 dark:text-amber-300">stale connection</span>{/if}
             </div>
           </div>
-          <div class="rounded-full border border-emerald-700 px-3 py-1 text-sm text-emerald-200">{model.sprint.status}</div>
-        </div>
-
-        <div class="grid gap-3 md:grid-cols-4">
-          <div class="rounded-lg border border-stone-700 bg-[#1b1f1c] p-3">
-            <div class="text-xs text-stone-400">Items</div>
-            <div class="mt-1 text-2xl font-semibold">{model.progress.items.percent}%</div>
-            <div class="mt-3 h-2 rounded-full bg-stone-800">
-              <div class="h-2 rounded-full bg-lime-400" style={`width:${model.progress.items.percent}%`}></div>
-            </div>
-            <div class="mt-2 text-xs text-stone-400">{model.progress.items.done}/{model.progress.items.total} done</div>
-          </div>
-          <div class="rounded-lg border border-stone-700 bg-[#1b1f1c] p-3">
-            <div class="text-xs text-stone-400">Gates</div>
-            <div class="mt-1 text-2xl font-semibold">{model.progress.gates.passed}/{model.progress.gates.total}</div>
-            <div class="mt-3 flex h-2 overflow-hidden rounded-full bg-stone-800">
-              <div class="bg-emerald-400" style={`width:${model.progress.gates.total ? (model.progress.gates.passed / model.progress.gates.total) * 100 : 0}%`}></div>
-              <div class="bg-rose-400" style={`width:${model.progress.gates.total ? (model.progress.gates.failed / model.progress.gates.total) * 100 : 0}%`}></div>
-              <div class="bg-amber-300" style={`width:${model.progress.gates.total ? (model.progress.gates.pending / model.progress.gates.total) * 100 : 0}%`}></div>
-            </div>
-            <div class="mt-2 text-xs text-stone-400">{model.progress.gates.pending} pending</div>
-          </div>
-          <div class="rounded-lg border border-stone-700 bg-[#1b1f1c] p-3">
-            <div class="text-xs text-stone-400">Current</div>
-            <button class="mt-1 text-left text-lg font-semibold text-sky-200" on:click={() => model.currentItem && (selection = { kind: "item", id: model.currentItem.id })}>
-              {model.currentItem?.id ?? "none"}
+          <div class="flex items-center gap-2">
+            <span class={`rounded-full px-3 py-1 text-sm ring-1 ${statusClass(model.sprint.status)}`}>{model.sprint.status}</span>
+            <button class="rounded-md border border-zinc-300 px-3 py-1.5 text-sm text-zinc-700 hover:border-sky-500 dark:border-zinc-700 dark:text-zinc-200" on:click={() => dark = !dark}>
+              {dark ? "Light" : "Dark"}
             </button>
-            <div class="mt-2 truncate text-xs text-stone-400">{model.currentItem?.description ?? "No open item"}</div>
-          </div>
-          <div class="rounded-lg border border-stone-700 bg-[#1b1f1c] p-3">
-            <div class="text-xs text-stone-400">Next</div>
-            <button class="mt-1 text-left text-lg font-semibold text-stone-50" on:click={() => model.nextItem && (selection = { kind: "item", id: model.nextItem.id })}>
-              {model.nextItem?.id ?? "none"}
-            </button>
-            <div class="mt-2 truncate text-xs text-stone-400">{model.nextItem?.description ?? "Queue clear"}</div>
           </div>
         </div>
       </div>
     </header>
 
-    <main class="mx-auto grid w-full max-w-7xl grid-cols-1 gap-4 px-5 py-5 xl:grid-cols-[minmax(0,1fr)_24rem]">
-      <section class="min-w-0">
-        <div class="mb-3 flex items-center justify-between">
-          <h2 class="text-sm font-semibold text-stone-100">Sprint Tree</h2>
-          <div class="text-xs text-stone-500">{model.progress.items.open} open</div>
+    <main class="mx-auto grid w-full max-w-7xl gap-5 px-5 py-5">
+      <section class="artifact-shelf" data-testid="artifact-shelf">
+        <div class="flex items-center justify-between gap-3">
+          <h2 class="text-sm font-semibold">Artifacts</h2>
+          <div class="text-xs text-zinc-500 dark:text-zinc-400">{model.artifacts.active.length} active</div>
         </div>
-        <div class="tree-grid">
-          {#each model.tree as sub}
-            <details class={`rounded-lg border p-3 ${subTone(sub.tone)}`} open={sub.defaultOpen}>
-              <summary class="cursor-pointer list-none">
-                <button class="flex w-full items-center justify-between gap-3 text-left" on:click|preventDefault={() => selectSubsprint(sub)}>
-                  <span>
-                    <span class="font-mono text-xs text-sky-300">{sub.id}</span>
-                    <span class="ml-2 font-semibold">{sub.label}</span>
-                  </span>
-                  <span class="text-xs text-stone-400">{sub.progress.done}/{sub.progress.total}</span>
-                </button>
-                <div class="mt-3 h-1.5 rounded-full bg-stone-800">
-                  <div class="h-1.5 rounded-full bg-sky-400" style={`width:${sub.progress.percent}%`}></div>
-                </div>
-              </summary>
-              <div class="mt-3">
-                <button class="text-xs text-stone-400" on:click={() => toggleGoals(sub.id)}>
-                  {expandedGoals.has(sub.id) ? "Hide goals" : "Show goals"}
-                </button>
-                {#if expandedGoals.has(sub.id)}
-                  <ul class="mt-2 list-disc space-y-1 pl-5 text-sm text-stone-400">
-                    {#each sub.goals as goal}<li>{goal}</li>{/each}
-                  </ul>
-                {/if}
+        <div class="mt-3 grid gap-3 md:grid-cols-3">
+          {#each model.artifacts.recent as artifact}
+            <a class="artifact-card" href={artifact.uri} title={artifact.uri}>
+              <div class="flex items-center justify-between gap-2">
+                <span class="rounded bg-sky-500/10 px-2 py-0.5 text-xs font-medium text-sky-700 dark:text-sky-300">{artifact.kind}</span>
+                <span class="truncate text-xs text-zinc-500 dark:text-zinc-400">{targetLabel(artifact)}</span>
               </div>
-              <div class="mt-3 grid gap-2">
-                {#each sub.items as item}
-                  <button class={`rounded-md border px-3 py-2 text-left ${itemTone(item.tone)}`} on:click={() => selectItem(item)}>
-                    <div class="flex flex-wrap items-center justify-between gap-2">
-                      <span class="font-mono text-xs">{item.id}</span>
-                      <span class="text-xs">{item.status}</span>
-                    </div>
-                    <div class="mt-1 text-sm font-medium">{item.label}</div>
-                    <div class="mt-1 text-xs opacity-70">{item.gateSummary}</div>
-                  </button>
-                {/each}
-              </div>
-            </details>
+              <div class="mt-2 truncate text-sm font-semibold">{artifact.title}</div>
+              {#if artifact.description}<div class="mt-1 line-clamp-2 text-xs text-zinc-500 dark:text-zinc-400">{artifact.description}</div>{/if}
+            </a>
+          {:else}
+            <div class="rounded-lg border border-dashed border-zinc-300 p-4 text-sm text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">No artifacts recorded yet.</div>
           {/each}
         </div>
+      </section>
 
-        <section class="mt-5 rounded-lg border border-stone-800 bg-[#171a18] p-4">
-          <h2 class="text-sm font-semibold text-stone-100">Timeline</h2>
-          <div class="mt-3 grid gap-2">
-            {#each model.timeline.slice(0, 10) as row}
-              <button class="rounded-md border border-stone-800 bg-[#1c201d] p-3 text-left hover:border-sky-500" on:click={() => selectEvent(row)}>
-                <div class="flex flex-wrap justify-between gap-2 text-xs text-stone-500">
-                  <span>{row.type}</span>
-                  <span>{fmt(row.time)}</span>
+      <section class="stats-grid" data-testid="stats-strip">
+        <div class="stat-panel md:col-span-2">
+          <div class="flex items-center justify-between">
+            <div>
+              <div class="text-xs text-zinc-500 dark:text-zinc-400">Sprint progress</div>
+              <div class="mt-1 text-2xl font-semibold">{model.progress.items.percent}%</div>
+            </div>
+            <div class="text-sm text-zinc-500 dark:text-zinc-400">{model.progress.items.done}/{model.progress.items.total} terminal</div>
+          </div>
+          <div class="mt-4 h-3 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800">
+            <div class="h-full rounded-full bg-sky-500" style={`width:${model.progress.items.percent}%`}></div>
+          </div>
+        </div>
+        <div class="stat-panel">
+          <div class="flex items-center gap-4">
+            <div class="donut" style={`background:${statusDonut(model)}`}></div>
+            <div class="grid gap-1 text-xs">
+              <span><b class="text-emerald-600 dark:text-emerald-300">{model.progress.statuses.completed}</b> done</span>
+              <span><b class="text-sky-600 dark:text-sky-300">{model.progress.statuses.open}</b> todo</span>
+              <span><b class="text-amber-600 dark:text-amber-300">{model.progress.statuses.split}</b> split</span>
+              <span><b class="text-zinc-500">{model.progress.statuses.deprecated}</b> deprecated</span>
+            </div>
+          </div>
+        </div>
+        <div class="stat-panel">
+          <div class="text-xs text-zinc-500 dark:text-zinc-400">Code stats</div>
+          <div class="mt-2 grid grid-cols-2 gap-2 text-sm">
+            <div><b>{model.progress.code.additions}</b><span class="ml-1 text-zinc-500">added</span></div>
+            <div><b>{model.progress.code.deletions}</b><span class="ml-1 text-zinc-500">deleted</span></div>
+            <div><b>{model.progress.code.churn}</b><span class="ml-1 text-zinc-500">churn</span></div>
+            <div><b>{model.progress.code.hotspots}</b><span class="ml-1 text-zinc-500">hotspots</span></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="workspace-grid">
+        <aside class="sidebar-panel" data-testid="subsprint-sidebar">
+          <div class="mb-3 flex items-center justify-between">
+            <h2 class="text-sm font-semibold">Subsprints</h2>
+            <span class="text-xs text-zinc-500">{model.sprint.subsprints.length}</span>
+          </div>
+          <div class="grid gap-2">
+            {#each model.tree as sub}
+              <button class:selected-sub={selectedSubId === sub.id} class="sub-row" on:click={() => selectSub(sub)}>
+                <div class="flex items-center justify-between gap-2">
+                  <span class="min-w-0 truncate text-left">
+                    <span class="font-mono text-xs text-sky-600 dark:text-sky-300">{sub.id}</span>
+                    <span class="ml-2 text-sm font-medium">{sub.label}</span>
+                  </span>
+                  <span class={`shrink-0 rounded-full px-2 py-0.5 text-xs ring-1 ${statusClass(sub.status)}`}>{sub.status}</span>
                 </div>
-                <div class="mt-1 text-sm text-stone-200">{row.id}: {row.text}</div>
+                <div class="mt-2 flex items-center gap-2">
+                  <div class="h-1.5 flex-1 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800">
+                    <div class="h-full rounded-full bg-sky-500" style={`width:${sub.progress.percent}%`}></div>
+                  </div>
+                  <span class="text-xs text-zinc-500">{sub.progress.done}/{sub.progress.total}</span>
+                </div>
               </button>
             {/each}
           </div>
-        </section>
+        </aside>
 
-        <section class="mt-5 rounded-lg border border-stone-800 bg-[#171a18] p-4">
-          <h2 class="text-sm font-semibold text-stone-100">Ledger</h2>
-          <div class="mt-3 overflow-x-auto">
-            <table class="w-full min-w-[42rem] text-left text-sm">
-              <thead class="text-xs text-stone-500">
-                <tr><th class="py-2">Seq</th><th>Type</th><th>Target</th><th>Text</th></tr>
-              </thead>
-              <tbody>
-                {#each model.ledger as row}
-                  <tr class="border-t border-stone-800 hover:bg-stone-900/60">
-                    <td class="py-2 font-mono text-xs text-stone-500">{row.seq}</td>
-                    <td class="text-stone-400">{row.type}</td>
-                    <td class="font-mono text-xs text-sky-300">{row.id}</td>
-                    <td><button class="text-left text-stone-200" on:click={() => selectEvent(row)}>{row.text}</button></td>
-                  </tr>
-                {/each}
-              </tbody>
-            </table>
+        <section class="min-w-0" data-testid="item-core">
+          <div class="content-panel">
+            <div class="flex flex-col gap-2 border-b border-zinc-200 p-4 dark:border-zinc-800 md:flex-row md:items-center md:justify-between">
+              <div>
+                <h2 class="text-base font-semibold">{selectedSub?.description ?? "No subsprint"}</h2>
+                {#if selectedSub}
+                  <div class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{selectedSub.kind}{selectedSub.spike_conclusion ? ` · ${selectedSub.spike_conclusion}` : ""}</div>
+                {/if}
+              </div>
+              {#if selectedSub}
+                <span class={`w-fit rounded-full px-3 py-1 text-xs ring-1 ${statusClass(selectedSub.status)}`}>{selectedSub.status}</span>
+              {/if}
+            </div>
+
+            <div class="divide-y divide-zinc-200 dark:divide-zinc-800">
+              {#each selectedSub?.items ?? [] as item}
+                <article class="item-row" data-testid="item-row">
+                  <button class="flex w-full items-center justify-between gap-3 p-4 text-left" on:click={() => toggleItem(item)} aria-expanded={expandedItemId === item.id}>
+                    <div class="min-w-0">
+                      <div class="flex items-center gap-2">
+                        <span class="font-mono text-xs text-sky-600 dark:text-sky-300">{item.id}</span>
+                        <span class={`rounded-full px-2 py-0.5 text-xs ring-1 ${statusClass(item.status)}`}>{item.status}</span>
+                      </div>
+                      <div class="mt-1 truncate text-sm font-medium">{item.description}</div>
+                    </div>
+                    <span class="text-xl text-zinc-400">{expandedItemId === item.id ? "-" : "+"}</span>
+                  </button>
+                  {#if expandedItemId === item.id}
+                    <div class="grid gap-4 px-4 pb-4 md:grid-cols-[minmax(0,1fr)_18rem]">
+                      <div class="detail-markdown prose prose-zinc max-w-none text-sm dark:prose-invert">{@html markdown(item.description)}</div>
+                      <div class="grid gap-3 rounded-lg bg-zinc-100 p-3 text-xs dark:bg-zinc-900">
+                        <div><span class="text-zinc-500">Files</span><div class="mt-1 font-mono">{item.code_locations.join(", ")}</div></div>
+                        <div><span class="text-zinc-500">Gates</span><div class="mt-1">{item.gate_results.filter((g) => g.passed).length}/{item.gates.length} passed</div></div>
+                        {#if item.commit_id}<div><span class="text-zinc-500">Commit</span><div class="mt-1 font-mono">{item.commit_id}</div></div>{/if}
+                        {#if item.artifacts.length}<div><span class="text-zinc-500">Artifacts</span>{#each item.artifacts as artifact}<div class="mt-1 truncate">{artifact.title}</div>{/each}</div>{/if}
+                        {#if item.follow_ups.length}<div><span class="text-zinc-500">Follow-ups</span>{#each item.follow_ups as follow}<div class="mt-1">{follow.bug_ids.join(", ")} · {follow.description}</div>{/each}</div>{/if}
+                      </div>
+                    </div>
+                  {/if}
+                </article>
+              {:else}
+                <div class="p-4 text-sm text-zinc-500 dark:text-zinc-400">No items in this subsprint yet.</div>
+              {/each}
+            </div>
           </div>
+
+          <section class="content-panel mt-5" data-testid="ledger-table">
+            <div class="flex items-center justify-between border-b border-zinc-200 p-4 dark:border-zinc-800">
+              <h2 class="text-sm font-semibold">Ledger</h2>
+              <div class="flex items-center gap-2 text-xs text-zinc-500">
+                <button class="pager-button" disabled={ledgerPage === 0} on:click={() => ledgerPage = Math.max(0, ledgerPage - 1)}>Prev</button>
+                <span>{ledgerPage + 1}/{ledgerPages}</span>
+                <button class="pager-button" disabled={ledgerPage >= ledgerPages - 1} on:click={() => ledgerPage = Math.min(ledgerPages - 1, ledgerPage + 1)}>Next</button>
+              </div>
+            </div>
+            <div class="overflow-x-auto">
+              <table class="w-full min-w-[44rem] text-left text-sm">
+                <thead class="bg-zinc-100 text-xs text-zinc-500 dark:bg-zinc-900 dark:text-zinc-400">
+                  <tr><th class="px-4 py-2">Seq</th><th>Type</th><th>Target</th><th>Text</th><th>Time</th></tr>
+                </thead>
+                <tbody>
+                  {#each visibleLedger as row}
+                    <tr class="border-t border-zinc-200 hover:bg-sky-500/5 dark:border-zinc-800">
+                      <td class="px-4 py-2 font-mono text-xs text-zinc-500">{row.seq}</td>
+                      <td>{row.type}</td>
+                      <td class="font-mono text-xs text-sky-600 dark:text-sky-300">{row.id}</td>
+                      <td class="max-w-[26rem] truncate">{row.text}</td>
+                      <td class="text-xs text-zinc-500">{fmt(row.time)}</td>
+                    </tr>
+                  {/each}
+                </tbody>
+              </table>
+            </div>
+          </section>
         </section>
       </section>
-
-      <aside class="relative">
-        <div class="panel-shadow sticky top-5 max-h-[calc(100vh-2.5rem)] overflow-auto rounded-lg border border-stone-700 bg-[#1b1f1c] p-4">
-          <div class="mb-3 flex items-center justify-between">
-            <h2 class="text-sm font-semibold text-stone-100">Details</h2>
-            <button class="rounded border border-stone-700 px-2 py-1 text-xs text-stone-400" on:click={() => selection = null}>Close</button>
-          </div>
-
-          {#if selectedItem()}
-            <div class="font-mono text-xs text-sky-300">{selectedItem()?.id}</div>
-            <div class="detail-markdown mt-2 text-sm text-stone-100">{@html markdown(selectedItem()?.description ?? "")}</div>
-            <div class="mt-4 grid gap-3 text-sm">
-              <div><div class="text-xs text-stone-500">Status</div><div>{selectedItem()?.status}</div></div>
-              <div><div class="text-xs text-stone-500">Files</div><div class="font-mono text-xs text-stone-300">{selectedItem()?.code_locations.join(", ")}</div></div>
-              <div><div class="text-xs text-stone-500">Gates</div>{#each selectedItem()?.gates ?? [] as gate}<div class="mt-1 rounded border border-stone-800 p-2 font-mono text-xs">{gate.kind}: {gate.spec}</div>{/each}</div>
-              {#if selectedItem()?.updates.length}<div><div class="text-xs text-stone-500">Updates</div>{#each selectedItem()?.updates ?? [] as update}<div class="mt-1 text-stone-300">{update}</div>{/each}</div>{/if}
-              {#if selectedItem()?.notes.length}<div><div class="text-xs text-stone-500">Notes</div>{#each selectedItem()?.notes ?? [] as note}<div class="mt-1 text-stone-300">{note}</div>{/each}</div>{/if}
-              {#if selectedItem()?.commit_id}<div><div class="text-xs text-stone-500">Commit</div><div class="font-mono text-xs">{selectedItem()?.commit_id}</div></div>{/if}
-            </div>
-          {:else if selectedSubsprint()}
-            <div class="font-mono text-xs text-sky-300">{selectedSubsprint()?.id}</div>
-            <div class="mt-2 text-lg font-semibold">{selectedSubsprint()?.description}</div>
-            <div class="mt-4 text-xs text-stone-500">Goals</div>
-            <ul class="mt-2 list-disc space-y-1 pl-5 text-sm text-stone-300">{#each selectedSubsprint()?.goals ?? [] as goal}<li>{goal}</li>{/each}</ul>
-            {#if selectedSubsprint()?.notes.length}<div class="mt-4 text-xs text-stone-500">Notes</div>{#each selectedSubsprint()?.notes ?? [] as note}<div class="mt-1 text-sm text-stone-300">{note}</div>{/each}{/if}
-          {:else if selectedEvent()}
-            <div class="font-mono text-xs text-sky-300">#{selectedEvent()?.seq}</div>
-            <div class="mt-2 text-lg font-semibold">{selectedEvent()?.type}</div>
-            <div class="mt-1 text-xs text-stone-500">{fmt(selectedEvent()?.ts)}</div>
-            <div class="detail-markdown mt-3 text-sm text-stone-100">{@html markdown(selectedEvent()?.text ?? "")}</div>
-          {:else}
-            <div class="text-sm text-stone-400">Select a row from the tree, timeline, or ledger.</div>
-          {/if}
-        </div>
-      </aside>
     </main>
   </div>
 {/if}

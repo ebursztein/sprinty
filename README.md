@@ -5,7 +5,8 @@ A disciplined-sprint MCP server for AI coding agents — **Claude Code, Codex, a
 Sprinty gives an agent first-class tools to run a sprint with structure that can't silently rot:
 structured **sprint → subsprint → item** objects, dependency graphs with topological ordering and
 cycle detection, an **immutable append-only ledger** anchored to real git commits,
-Git-backed **change maps**, Markdown changelogs with file tables, **programmatic close-gates**
+Git-backed **change maps**, durable **artifacts**, bug-backed **follow-ups**, feature-sized
+**spikes**, Markdown changelogs with file tables, **programmatic close-gates**
 that re-run your tests and require coverage evidence before a sprint can close, a **regex search**
 over the record, and a **live follow-along dashboard**.
 
@@ -84,10 +85,15 @@ content rather than copying it.
 
 ```
 sprint_new(goal, context_notes?)
+  -> dashboard()
   -> subsprint_new(description, goals[], gates[], dependencies?)
+  -> spike(description, goals[], gates[], dependencies?)
   -> add(subsprint, description, code_locations[], gates[], dependencies?)
+  -> artifact_add/list/amend/deprecate(...)
+  -> follow_up(target, description, bug_id|bug_ids)
   -> dependencies(target, dependencies[])
   -> done(commit_id, gate_results[], changelog) | split(...) | deprecate(reason)
+  -> spike_conclude(subsprint, conclusion) | spike_deprecate(subsprint, reason)
   -> changelog()
   -> sprint_close(coverage: { path, format: "lcov", command? })
 ```
@@ -103,9 +109,11 @@ The dashboard is for the human sitting next to the agent.
 2. Open the returned `http://127.0.0.1:<port>` URL in a browser.
 3. Leave it open while the sprint runs; it refreshes every two seconds.
 
-The dashboard shows the sprint goal, branch/worktree, start time, progress counts, line coverage,
-open items, gate evidence, dependency graph state, commit ids and changelog lines for completed
-items, changed-file hotspots, and a timestamped timeline from the immutable ledger.
+Agents should call `dashboard()` right after `sprint_new()` and show the URL to the human. The
+dashboard shows the sprint goal, branch/worktree, artifact shelf, sprint progress, item status
+distribution, code churn, subsprint progress, open items, gate evidence, dependency graph state,
+commit ids and changelog lines for completed items, changed-file hotspots, and a paginated ledger
+from the immutable timeline.
 
 The dashboard server binds to `127.0.0.1` on an ephemeral port and is read-only. It lives only for
 the running MCP server process.
@@ -121,6 +129,10 @@ coverage, and change-map tables. `done()` also requires passing evidence for eve
 gate, including manual gates. Dependencies are stored as a real graph: `current()` returns nodes,
 edges, adjacency indexes, topological order, and cycle information; writes reject cycles. At close,
 executable gates are re-run by Sprinty and `sprint_close()` requires an LCOV coverage report path.
+Artifacts are append-only too: amendments and deprecations are separate ledger events, never
+in-place edits or deletes. Follow-ups require bug ids. Spikes are subsprints with a `spike` flag:
+they can have normal items, but must be concluded or deprecated with a reason, and spike work is
+kept out of release changelog output.
 
 ## Storage
 

@@ -12,6 +12,11 @@ export function renderEvent(e: LedgerEvent): string {
     case "note_added": return `[${e.element_id}] note: ${e.text}`;
     case "dependencies_added": return `[${e.target_id}] dependencies: ${e.dependencies.join(", ")}`;
     case "artifact_added": return `[${e.target_id}] artifact ${e.artifact_id}: ${e.kind} ${e.title} @ ${e.uri}${e.description ? ` | ${e.description}` : ""}`;
+    case "artifact_amended": return `[${e.artifact_id}] artifact amended${e.title ? ` title: ${e.title}` : ""}${e.uri ? ` uri: ${e.uri}` : ""}`;
+    case "artifact_deprecated": return `[${e.artifact_id}] artifact deprecated: ${e.reason}`;
+    case "follow_up_added": return `[${e.target_id}] follow-up ${e.follow_up_id}: ${e.bug_ids.join(", ")} ${e.description}`;
+    case "spike_concluded": return `[${e.subsprint_id}] spike concluded: ${e.conclusion}`;
+    case "spike_deprecated": return `[${e.subsprint_id}] spike deprecated: ${e.reason}`;
     case "sprint_closed": return `[sprint] closed`;
     case "sprint_archived": return `[sprint] archived: ${e.reason}`;
   }

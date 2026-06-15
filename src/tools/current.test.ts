@@ -5,17 +5,32 @@ import type { SprintView } from "../domain/projection.js";
 function view(): SprintView {
   return {
     goal: "g", worktree: "/w", branch: "main", dir: "/r", status: "active",
-    created_at: "2026-06-14T00:00:00.000Z", closed_at: null, context_notes: [], timeline: [],
+    created_at: "2026-06-14T00:00:00.000Z", closed_at: null, context_notes: [], timeline: [
+      { seq: 0, ts: "2026-06-14T00:00:00.000Z", type: "sprint_created", id: "sprint", text: "g" },
+      { seq: 1, ts: "2026-06-14T00:01:00.000Z", type: "follow_up_added", id: "F001", text: "BUG-1: fix it" },
+    ],
     graph: { nodes: [], edges: [{ from: "S01-002", to: "S01-001" }] },
-    artifacts: [{ id: "A001", target_id: "sprint", kind: "plan", title: "Sprint plan", uri: "docs/plan.md", description: null, created_at: "2026-06-14T00:00:00.000Z" }],
+    artifacts: [
+      { id: "A001", target_id: "sprint", kind: "plan", title: "Sprint plan", uri: "docs/plan.md", description: null, created_at: "2026-06-14T00:00:00.000Z", updated_at: null, deprecated_at: null, deprecation_reason: null, status: "active" },
+      { id: "A004", target_id: "S99", kind: "log", title: "Old log", uri: "docs/old.md", description: null, created_at: "2026-06-14T00:00:00.000Z", updated_at: null, deprecated_at: "2026-06-14T00:00:00.000Z", deprecation_reason: "old", status: "deprecated" },
+    ],
+    follow_ups: [{ id: "F001", target_id: "S01-002", description: "fix it", bug_ids: ["BUG-1"], created_at: "2026-06-14T00:01:00.000Z" }],
     subsprints: [{
-      id: "S01", description: "d", created_at: "2026-06-14T00:00:00.000Z", closed_at: null, goals: ["go"], gates: [], status: "open", spawned_from_item: null, notes: ["n"], dependencies: [],
-      artifacts: [{ id: "A002", target_id: "S01", kind: "report", title: "Report", uri: "docs/report.md", description: null, created_at: "2026-06-14T00:00:00.000Z" }],
+      id: "S01", kind: "feature", description: "d", created_at: "2026-06-14T00:00:00.000Z", closed_at: null, goals: ["go"], gates: [], status: "open", spawned_from_item: null, notes: ["n"], dependencies: [],
+      artifacts: [{ id: "A002", target_id: "S01", kind: "report", title: "Report", uri: "docs/report.md", description: null, created_at: "2026-06-14T00:00:00.000Z", updated_at: null, deprecated_at: null, deprecation_reason: null, status: "active" }],
+      follow_ups: [],
+      spike_conclusion: null,
+      spike_deprecation_reason: null,
+      changelog: [],
+      change_map: { by_file: [], by_directory: [], by_language: [], hotspots: [] },
       items: [
-        { id: "S01-001", subsprint_id: "S01", description: "done one", created_at: "2026-06-14T00:00:00.000Z", resolved_at: "2026-06-14T00:01:00.000Z", code_locations: ["a"], gates: [], status: "completed", disposition: "completed", commit_id: "abc", gate_results: [], reason: null, spawned_subsprint: null, updates: [], notes: [], dependencies: [], changelog: { verb: "fixed", line: "Fixed one thing." }, artifacts: [] },
-        { id: "S01-002", subsprint_id: "S01", description: "open one", created_at: "2026-06-14T00:02:00.000Z", resolved_at: null, code_locations: ["b"], gates: [], status: "open", disposition: null, commit_id: null, gate_results: [], reason: null, spawned_subsprint: null, updates: [], notes: [], dependencies: ["S01-001"], changelog: null, artifacts: [{ id: "A003", target_id: "S01-002", kind: "spec", title: "Item spec", uri: "docs/spec.md", description: null, created_at: "2026-06-14T00:00:00.000Z" }] },
+        { id: "S01-001", subsprint_id: "S01", description: "done one", created_at: "2026-06-14T00:00:00.000Z", resolved_at: "2026-06-14T00:01:00.000Z", code_locations: ["a"], gates: [], status: "completed", disposition: "completed", commit_id: "abc", gate_results: [], reason: null, spawned_subsprint: null, updates: [], notes: [], dependencies: [], changelog: { verb: "fixed", line: "Fixed one thing." }, change_map: { by_file: [], by_directory: [], by_language: [], hotspots: [] }, artifacts: [], follow_ups: [] },
+        { id: "S01-002", subsprint_id: "S01", description: "open one", created_at: "2026-06-14T00:02:00.000Z", resolved_at: null, code_locations: ["b"], gates: [], status: "open", disposition: null, commit_id: null, gate_results: [], reason: null, spawned_subsprint: null, updates: [], notes: [], dependencies: ["S01-001"], changelog: null, change_map: { by_file: [], by_directory: [], by_language: [], hotspots: [] }, artifacts: [{ id: "A003", target_id: "S01-002", kind: "spec", title: "Item spec", uri: "docs/spec.md", description: null, created_at: "2026-06-14T00:00:00.000Z", updated_at: null, deprecated_at: null, deprecation_reason: null, status: "active" }], follow_ups: [{ id: "F001", target_id: "S01-002", description: "fix it", bug_ids: ["BUG-1"], created_at: "2026-06-14T00:01:00.000Z" }] },
       ],
     }],
+    changelog: [],
+    change_map: { by_file: [], by_directory: [], by_language: [], hotspots: [] },
+    coverage: null,
   };
 }
 
@@ -28,5 +43,7 @@ describe("windowCurrent", () => {
     expect(w.current_subsprint?.notes).toEqual(["n"]);
     expect(w.graph.edges).toEqual([{ from: "S01-002", to: "S01-001" }]);
     expect(w.artifacts.map((artifact) => artifact.id)).toEqual(["A001", "A002", "A003"]);
+    expect(w.recent_artifacts.map((artifact) => artifact.id)).toEqual(["A001", "A002", "A003"]);
+    expect(w.recent_activity.map((entry) => entry.type)).toContain("follow_up_added");
   });
 });
