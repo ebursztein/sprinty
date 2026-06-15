@@ -1,15 +1,26 @@
 {
   "name": "sprinty-mcp",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Disciplined sprint MCP for Claude Code, Codex, and Gemini",
   "type": "module",
   "license": "Apache-2.0",
   "author": "Elie Bursztein",
   "homepage": "https://github.com/ebursztein/sprinty",
-  "repository": { "type": "git", "url": "git+https://github.com/ebursztein/sprinty.git" },
-  "bugs": { "url": "https://github.com/ebursztein/sprinty/issues" },
-  "bin": { "sprinty-mcp": "dist/index.js" },
-  "files": ["dist", "skills", "clients"],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ebursztein/sprinty.git"
+  },
+  "bugs": {
+    "url": "https://github.com/ebursztein/sprinty/issues"
+  },
+  "bin": {
+    "sprinty-mcp": "dist/index.js"
+  },
+  "files": [
+    "dist",
+    "skills",
+    "clients"
+  ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "pretest": "npm run build",
@@ -29,5 +40,7 @@
     "@vitest/coverage-v8": "^2.0.0",
     "@types/node": "^22.0.0"
   },
-  "engines": { "node": ">=20" }
+  "engines": {
+    "node": ">=20"
+  }
 }
