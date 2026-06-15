@@ -21,6 +21,7 @@ export function startDashboard(getState: () => SprintView | null): Promise<Dashb
         timeline: [],
         context_notes: [],
         graph: { nodes: [], edges: [], blocked_by: {}, unblocks: {}, topological_order: [], cycles: [] },
+        artifacts: [],
         changelog: [],
         change_map: { by_file: [], by_directory: [], by_language: [], hotspots: [] },
         coverage: null,

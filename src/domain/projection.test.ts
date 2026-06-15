@@ -100,6 +100,31 @@ describe("project", () => {
     expect(s.subsprints[0]!.notes).toEqual(["subsprint-level note"]);
   });
 
+  it("attaches artifacts to sprint, subsprint, and item views", () => {
+    const events: LedgerEvent[] = [
+      ev({ type: "sprint_created", goal: "g", worktree: "/w", branch: "main", dir: "/r" }, 0),
+      ev({ type: "subsprint_created", subsprint_id: "S01", description: "d", goals: ["go"], gates: [{ kind: "build", spec: "b" }], spawned_from_item: null }, 1),
+      ev({ type: "item_added", item_id: "S01-001", subsprint_id: "S01", description: "i1", code_locations: ["a.ts"], gates: [{ kind: "test", spec: "x" }] }, 2),
+      ev({ type: "artifact_added", artifact_id: "A001", target_id: "sprint", kind: "plan", title: "Sprint plan", uri: "docs/plan.md", description: "Top-level plan" }, 3),
+      ev({ type: "artifact_added", artifact_id: "A002", target_id: "S01", kind: "report", title: "Discovery report", uri: "docs/report.md", description: null }, 4),
+      ev({ type: "artifact_added", artifact_id: "A003", target_id: "S01-001", kind: "spec", title: "Item spec", uri: "docs/spec.md", description: "Item details" }, 5),
+    ];
+    const s = project(events)!;
+    expect(s.artifacts.map((artifact) => artifact.id)).toEqual(["A001", "A002", "A003"]);
+    expect(s.artifacts[0]).toEqual({
+      id: "A001",
+      target_id: "sprint",
+      kind: "plan",
+      title: "Sprint plan",
+      uri: "docs/plan.md",
+      description: "Top-level plan",
+      created_at: t,
+    });
+    expect(s.subsprints[0]!.artifacts.map((artifact) => artifact.id)).toEqual(["A002"]);
+    expect(s.subsprints[0]!.items[0]!.artifacts.map((artifact) => artifact.id)).toEqual(["A003"]);
+    expect(s.timeline.map((entry) => entry.type)).toContain("artifact_added");
+  });
+
   it("reports closed status once a sprint_closed event is present", () => {
     const events: LedgerEvent[] = [
       ev({ type: "sprint_created", goal: "only", worktree: "/w", branch: "main", dir: "/r" }, 0),

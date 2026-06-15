@@ -1,4 +1,4 @@
-import type { SprintView, ItemView, SubsprintView } from "../domain/projection.js";
+import type { ArtifactView, SprintView, ItemView, SubsprintView } from "../domain/projection.js";
 import type { DependencyGraph } from "../domain/graph.js";
 
 export interface CurrentWindow {
@@ -7,6 +7,7 @@ export interface CurrentWindow {
   next: ItemView[];
   current_subsprint: SubsprintView | null;
   graph: DependencyGraph;
+  artifacts: ArtifactView[];
 }
 
 export function windowCurrent(view: SprintView, past: number, future: number): CurrentWindow {
@@ -20,5 +21,22 @@ export function windowCurrent(view: SprintView, past: number, future: number): C
     next: open.slice(0, future),
     current_subsprint: current,
     graph: view.graph,
+    artifacts: collectArtifacts(view),
   };
+}
+
+function collectArtifacts(view: SprintView): ArtifactView[] {
+  const artifacts = [
+    ...view.artifacts,
+    ...view.subsprints.flatMap((sub) => [
+      ...sub.artifacts,
+      ...sub.items.flatMap((item) => item.artifacts),
+    ]),
+  ];
+  const seen = new Set<string>();
+  return artifacts.filter((artifact) => {
+    if (seen.has(artifact.id)) return false;
+    seen.add(artifact.id);
+    return true;
+  });
 }

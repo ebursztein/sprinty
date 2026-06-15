@@ -9,7 +9,7 @@ import { GraphCycleError, buildDependencyGraph } from "../domain/graph.js";
 import { buildItemChangeMap, emptyChangeMap } from "../domain/change-map.js";
 import { parseCoverageReport, type CoverageInput, type CoverageSummary } from "../domain/coverage.js";
 import { renderChangelogMarkdown } from "../domain/changelog.js";
-import type { ChangelogEntry, LedgerEvent } from "../domain/events.js";
+import type { ArtifactKind, ChangelogEntry, LedgerEvent } from "../domain/events.js";
 import type { Gate, GateResult } from "../domain/gates.js";
 
 export class StoreError extends Error {
@@ -151,6 +151,24 @@ export class SprintStore {
     if (!exists) throw new StoreError(`Unknown element ${input.element}.`);
     this.ledger.append({ type: "note_added", element_id: input.element, text: input.text });
     return this.requireState();
+  }
+
+  addArtifact(input: { target?: string; kind: ArtifactKind; title: string; uri: string; description?: string | null | undefined }): { id: string; view: SprintView } {
+    const s = this.requireState();
+    const target = input.target ?? "sprint";
+    const exists = target === "sprint" || s.subsprints.some((x) => x.id === target) || s.subsprints.flatMap((x) => x.items).some((i) => i.id === target);
+    if (!exists) throw new StoreError(`Unknown artifact target ${target}.`);
+    const id = `A${String(s.artifacts.length + 1).padStart(3, "0")}`;
+    this.ledger.append({
+      type: "artifact_added",
+      artifact_id: id,
+      target_id: target,
+      kind: input.kind,
+      title: input.title,
+      uri: input.uri,
+      description: input.description ?? null,
+    });
+    return { id, view: this.requireState() };
   }
 
   private currentSprintEvents(): LedgerEvent[] {

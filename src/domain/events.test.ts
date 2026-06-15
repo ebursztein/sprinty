@@ -56,6 +56,22 @@ describe("LedgerEvent", () => {
     expect(e.dependencies).toEqual(["S01-001"]);
   });
 
+  it("parses artifact additions", () => {
+    const e = LedgerEvent.parse({
+      ...base,
+      type: "artifact_added",
+      artifact_id: "A001",
+      target_id: "S01-001",
+      kind: "spec",
+      title: "Dashboard UI spec",
+      uri: "docs/superpowers/specs/dashboard.md",
+      description: "Approved design artifact",
+    });
+    expect(e.type).toBe("artifact_added");
+    expect(e.kind).toBe("spec");
+    expect(e.target_id).toBe("S01-001");
+  });
+
   it("rejects an unknown event type", () => {
     expect(() => LedgerEvent.parse({ ...base, type: "smuggled" })).toThrow();
   });

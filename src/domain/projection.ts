@@ -1,4 +1,4 @@
-import type { ChangelogEntry, LedgerEvent } from "./events.js";
+import type { ArtifactKind, ChangelogEntry, LedgerEvent } from "./events.js";
 import type { Gate, GateResult } from "./gates.js";
 import type { Disposition, ItemStatus, SubsprintStatus, SprintStatus } from "./enums.js";
 import type { CoverageSummary } from "./coverage.js";
@@ -24,6 +24,17 @@ export interface ItemView {
   change_map: ChangeMap;
   updates: string[];
   notes: string[];
+  artifacts: ArtifactView[];
+}
+
+export interface ArtifactView {
+  id: string;
+  target_id: string;
+  kind: ArtifactKind;
+  title: string;
+  uri: string;
+  description: string | null;
+  created_at: string;
 }
 
 export interface ChangelogLine {
@@ -44,6 +55,7 @@ export interface SubsprintView {
   spawned_from_item: string | null;
   dependencies: string[];
   notes: string[];
+  artifacts: ArtifactView[];
   changelog: Array<Omit<ChangelogLine, "subsprint">>;
   change_map: ChangeMap;
   items: ItemView[];
@@ -61,6 +73,7 @@ export interface SprintView {
   subsprints: SubsprintView[];
   timeline: TimelineEntry[];
   graph: DependencyGraph;
+  artifacts: ArtifactView[];
   changelog: ChangelogLine[];
   change_map: ChangeMap;
   coverage: CoverageSummary | null;
@@ -87,7 +100,7 @@ export function project(events: LedgerEvent[]): SprintView | null {
         sprint = {
           goal: e.goal, worktree: e.worktree, branch: e.branch, dir: e.dir,
           context_notes: e.context_notes ?? [], created_at: e.ts, closed_at: null, status: "active",
-          subsprints: [], timeline, graph: buildDependencyGraph([], []),
+          subsprints: [], timeline, graph: buildDependencyGraph([], []), artifacts: [],
           changelog: [], change_map: emptyChangeMap(), coverage: null,
         };
         timeline.push({ seq: e.seq, ts: e.ts, type: e.type, id: "sprint", text: e.goal });
@@ -97,7 +110,7 @@ export function project(events: LedgerEvent[]): SprintView | null {
           id: e.subsprint_id, description: e.description, created_at: e.ts, closed_at: null,
           goals: e.goals, gates: e.gates,
           status: "open", spawned_from_item: e.spawned_from_item, dependencies: e.dependencies ?? [],
-          notes: [], changelog: [], change_map: emptyChangeMap(), items: [],
+          notes: [], artifacts: [], changelog: [], change_map: emptyChangeMap(), items: [],
         };
         subsprints.set(sub.id, sub);
         sprint?.subsprints.push(sub);
@@ -111,6 +124,7 @@ export function project(events: LedgerEvent[]): SprintView | null {
           code_locations: e.code_locations, gates: e.gates, status: "open",
           disposition: null, dependencies: e.dependencies ?? [], commit_id: null, gate_results: [], reason: null,
           spawned_subsprint: null, changelog: null, change_map: emptyChangeMap(), updates: [], notes: [],
+          artifacts: [],
         };
         items.set(item.id, item);
         subsprints.get(e.subsprint_id)?.items.push(item);
@@ -150,6 +164,25 @@ export function project(events: LedgerEvent[]): SprintView | null {
         const target = item ?? sub;
         if (target) target.dependencies = unique([...target.dependencies, ...e.dependencies]);
         timeline.push({ seq: e.seq, ts: e.ts, type: e.type, id: e.target_id, text: e.dependencies.join(", ") });
+        break;
+      }
+      case "artifact_added": {
+        const artifact: ArtifactView = {
+          id: e.artifact_id,
+          target_id: e.target_id,
+          kind: e.kind,
+          title: e.title,
+          uri: e.uri,
+          description: e.description,
+          created_at: e.ts,
+        };
+        sprint?.artifacts.push(artifact);
+        if (e.target_id !== "sprint") {
+          const item = items.get(e.target_id);
+          if (item) item.artifacts.push(artifact);
+          else subsprints.get(e.target_id)?.artifacts.push(artifact);
+        }
+        timeline.push({ seq: e.seq, ts: e.ts, type: e.type, id: e.artifact_id, text: `${e.title}: ${e.uri}` });
         break;
       }
       case "sprint_closed":

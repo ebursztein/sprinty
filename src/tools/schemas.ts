@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ChangelogEntry } from "../domain/events.js";
+import { ArtifactKind, ChangelogEntry } from "../domain/events.js";
 import { Gate, GateResult } from "../domain/gates.js";
 
 export const CoverageInput = z.object({
@@ -48,6 +48,13 @@ export const SplitInput = z.object({
 });
 export const DeprecateInput = z.object({ item: z.string().min(1), reason: z.string().min(1) });
 export const NoteInput = z.object({ element: z.string().min(1), text: z.string().min(1) });
+export const ArtifactInput = z.object({
+  target: z.string().min(1).default("sprint"),
+  kind: ArtifactKind,
+  title: z.string().min(1),
+  uri: z.string().min(1),
+  description: z.string().min(1).nullable().optional(),
+});
 export const DependenciesInput = z.object({
   target: z.string().min(1),
   dependencies: z.array(z.string().min(1)).min(1),

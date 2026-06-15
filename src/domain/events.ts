@@ -15,6 +15,9 @@ export const ChangelogEntry = z.object({
 });
 export type ChangelogEntry = z.infer<typeof ChangelogEntry>;
 
+export const ArtifactKind = z.enum(["spec", "plan", "report", "dashboard", "log", "other"]);
+export type ArtifactKind = z.infer<typeof ArtifactKind>;
+
 export const SprintCreated = z.object({
   ...base, type: z.literal("sprint_created"),
   goal: z.string().min(1), worktree: z.string(), branch: z.string(), dir: z.string(),
@@ -66,6 +69,16 @@ export const DependenciesAdded = z.object({
   dependencies: z.array(z.string().min(1)).min(1),
 });
 
+export const ArtifactAdded = z.object({
+  ...base, type: z.literal("artifact_added"),
+  artifact_id: z.string().min(1),
+  target_id: z.string().min(1),
+  kind: ArtifactKind,
+  title: z.string().min(1),
+  uri: z.string().min(1),
+  description: z.string().min(1).nullable().default(null),
+});
+
 export const SprintClosed = z.object({
   ...base, type: z.literal("sprint_closed"),
   gate_results: z.array(GateResult),
@@ -73,6 +86,6 @@ export const SprintClosed = z.object({
 });
 
 export const LedgerEvent = z.discriminatedUnion("type", [
-  SprintCreated, SubsprintCreated, ItemAdded, ItemUpdated, ItemResolved, NoteAdded, DependenciesAdded, SprintClosed,
+  SprintCreated, SubsprintCreated, ItemAdded, ItemUpdated, ItemResolved, NoteAdded, DependenciesAdded, ArtifactAdded, SprintClosed,
 ]);
 export type LedgerEvent = z.infer<typeof LedgerEvent>;

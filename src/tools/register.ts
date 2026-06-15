@@ -43,6 +43,8 @@ export function buildToolHandlers(store: SprintStore, openDashboard: () => Promi
       (i) => store.deprecate(i)),
     note: def(S.NoteInput, "Add a note to an item or subsprint.",
       (i) => store.addNote(i)),
+    artifact: def(S.ArtifactInput, "Record a durable sprint artifact such as a spec, plan, report, dashboard, or log.",
+      (i) => store.addArtifact(i)),
     dependencies: def(S.DependenciesInput, "Add dependency edges from a target item/subsprint to existing ids.",
       (i) => store.addDependencies(i)),
     search: def(S.SearchInput, "Regex search over the current sprint's immutable ledger, with context lines.",
