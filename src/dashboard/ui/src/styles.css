@@ -38,61 +38,16 @@ button {
     @apply mt-3 text-sm text-error;
   }
 
-  .brand-mark,
-  .rail-logo {
+  .brand-mark {
     @apply grid h-10 w-10 place-items-center rounded-md bg-primary text-lg font-black text-primary-content shadow-sm;
   }
 
   .dashboard-frame {
-    @apply flex min-h-screen bg-base-200 text-base-content;
-  }
-
-  .app-rail {
-    @apply sticky top-0 z-30 flex h-screen w-[4.5rem] shrink-0 flex-col items-center border-r border-base-300 bg-base-100 px-3 py-4;
-  }
-
-  .rail-stack {
-    @apply mt-8 grid gap-2;
-  }
-
-  .rail-icon {
-    @apply relative grid h-10 w-10 place-items-center rounded-md border border-transparent text-zinc-500 transition hover:bg-base-200 hover:text-base-content dark:text-zinc-400;
-  }
-
-  .rail-icon::before {
-    content: "";
-    @apply h-4 w-4 rounded-sm border border-current;
-  }
-
-  .rail-icon-active {
-    @apply border-blue-400 bg-primary text-primary-content shadow-lg shadow-blue-950/20;
-  }
-
-  .rail-icon-active::before {
-    box-shadow: inset 6px 0 0 rgba(255, 255, 255, .32);
-  }
-
-  .rail-icon-tree::before {
-    @apply absolute left-[15px] h-5 w-px rounded-none border-0 bg-current;
-  }
-
-  .rail-icon-tree::after {
-    content: "";
-    @apply absolute left-[21px] top-[11px] h-1.5 w-1.5 rounded-full bg-current;
-    box-shadow: 0 8px 0 currentColor, 0 16px 0 currentColor;
-  }
-
-  .rail-icon-ledger::before {
-    @apply h-3 w-5 rounded-none border-x-0;
-  }
-
-  .rail-icon-ledger::after {
-    content: "";
-    @apply absolute h-px w-5 bg-current;
+    @apply min-h-screen bg-base-200 text-base-content;
   }
 
   .theme-toggle {
-    @apply mt-auto min-h-0 h-9 w-9 rounded-md border border-base-300 p-0 text-xs font-semibold;
+    @apply min-h-0 h-8 rounded-md px-3 text-xs font-semibold;
   }
 
   .dashboard-canvas {
@@ -120,7 +75,7 @@ button {
   }
 
   .topbar-actions {
-    @apply flex shrink-0 items-center gap-2;
+    @apply flex shrink-0 flex-wrap items-center gap-2;
   }
 
   .coverage-chip {
@@ -346,6 +301,10 @@ button {
     @apply flex flex-col gap-3 border-b border-base-300 px-5 py-4 lg:flex-row lg:items-center lg:justify-between;
   }
 
+  .core-actions {
+    @apply flex shrink-0 flex-wrap items-center gap-2;
+  }
+
   .core-header h2 {
     @apply mt-1 text-balance text-xl font-semibold leading-snug text-base-content;
   }
@@ -364,6 +323,10 @@ button {
 
   .goals-fold ul {
     @apply mt-2 list-disc space-y-1 pl-5 text-zinc-500 dark:text-zinc-400;
+  }
+
+  .collapse-button {
+    @apply rounded-md border border-base-300 px-3 py-1.5 text-xs font-semibold text-base-content transition hover:border-primary hover:bg-base-200 disabled:cursor-not-allowed disabled:opacity-40;
   }
 
   .todo-list {
@@ -583,23 +546,6 @@ button {
 }
 
 @media (max-width: 760px) {
-  .dashboard-frame {
-    display: block;
-  }
-
-  .app-rail {
-    position: static;
-    flex-direction: row;
-    width: auto;
-    height: auto;
-    justify-content: space-between;
-  }
-
-  .rail-stack {
-    margin-top: 0;
-    display: flex;
-  }
-
   .dashboard-main {
     padding: 1rem;
   }

@@ -10,7 +10,7 @@
   let error: string | null = null;
   let stale = false;
   let selectedSubId: string | null = null;
-  let expandedItemId: string | null = null;
+  let expandedItemIds: string[] = [];
   let ledgerPage = 0;
   let dark = true;
 
@@ -19,12 +19,12 @@
   $: model = sprint ? deriveDashboardModel(sprint) : null;
   $: if (model && !selectedSubId) selectedSubId = model.activeSubsprint?.id ?? model.sprint.subsprints[0]?.id ?? null;
   $: selectedSub = model?.sprint.subsprints.find((sub) => sub.id === selectedSubId) ?? model?.activeSubsprint ?? null;
-  $: if (model && selectedSub && !selectedSub.items.some((item) => item.id === expandedItemId)) expandedItemId = model.currentItem?.subsprint_id === selectedSub.id ? model.currentItem.id : selectedSub.items[0]?.id ?? null;
   $: ledgerRows = model?.ledger ?? [];
   $: ledgerPages = Math.max(1, Math.ceil(ledgerRows.length / pageSize));
   $: if (ledgerPage > ledgerPages - 1) ledgerPage = ledgerPages - 1;
   $: visibleLedger = ledgerRows.slice(ledgerPage * pageSize, ledgerPage * pageSize + pageSize);
   $: recentTimeline = model?.timeline.slice(0, 6) ?? [];
+  $: selectedExpandedCount = selectedSub?.items.filter((item) => expandedItemIds.includes(item.id)).length ?? 0;
 
   onMount(() => {
     void tick();
@@ -47,11 +47,18 @@
 
   function selectSub(sub: TreeSubsprint): void {
     selectedSubId = sub.id;
-    expandedItemId = model?.currentItem?.subsprint_id === sub.id ? model.currentItem.id : sub.items[0]?.id ?? null;
   }
 
   function toggleItem(item: ItemView): void {
-    expandedItemId = expandedItemId === item.id ? null : item.id;
+    expandedItemIds = expandedItemIds.includes(item.id)
+      ? expandedItemIds.filter((id) => id !== item.id)
+      : [...expandedItemIds, item.id];
+  }
+
+  function collapseSelectedItems(): void {
+    if (!selectedSub) return;
+    const selectedIds = new Set(selectedSub.items.map((item) => item.id));
+    expandedItemIds = expandedItemIds.filter((id) => !selectedIds.has(id));
   }
 
   function markdown(value: string): string {
@@ -145,16 +152,6 @@
   </main>
 {:else}
   <div class:dark class="dashboard-frame" data-theme={dark ? "sprintydark" : "sprinty"}>
-    <aside class="app-rail" aria-label="Sprinty navigation">
-      <div class="rail-logo">S</div>
-      <div class="rail-stack">
-        <span class="rail-icon rail-icon-active" title="Dashboard" aria-hidden="true"></span>
-        <span class="rail-icon rail-icon-tree" title="Tree" aria-hidden="true"></span>
-        <span class="rail-icon rail-icon-ledger" title="Ledger" aria-hidden="true"></span>
-      </div>
-      <button class="theme-toggle btn btn-ghost btn-sm" on:click={() => dark = !dark} aria-label="Toggle theme">{dark ? "L" : "D"}</button>
-    </aside>
-
     <div class="dashboard-canvas">
       <header class="topbar">
         <div class="min-w-0">
@@ -171,6 +168,7 @@
         <div class="topbar-actions">
           <span class={statusClass(model.sprint.status)}>{model.sprint.status}</span>
           <span class="coverage-chip badge badge-outline">{model.sprint.coverage?.lines.percent ?? "--"}% cov</span>
+          <button class="theme-toggle btn btn-outline btn-sm" on:click={() => dark = !dark} aria-label="Toggle theme">{dark ? "Light" : "Dark"}</button>
         </div>
       </header>
 
@@ -264,7 +262,12 @@
                   <p>{selectedSub.kind}{selectedSub.spike_conclusion ? `: ${selectedSub.spike_conclusion}` : ""}</p>
                 {/if}
               </div>
-              {#if selectedSub}<span class={statusClass(selectedSub.status)}>{selectedSub.status}</span>{/if}
+              <div class="core-actions">
+                {#if selectedSub}<span class={statusClass(selectedSub.status)}>{selectedSub.status}</span>{/if}
+                <button class="collapse-button" disabled={selectedExpandedCount === 0} on:click={collapseSelectedItems}>
+                  Collapse all
+                </button>
+              </div>
             </div>
 
             {#if selectedSub?.goals.length}
@@ -281,15 +284,15 @@
             <div class="todo-list">
               {#each selectedSub?.items ?? [] as item}
                 <article class={itemRowClass(item)} data-testid="item-row">
-                  <button class="todo-button" on:click={() => toggleItem(item)} aria-expanded={expandedItemId === item.id}>
+                  <button class="todo-button" on:click={() => toggleItem(item)} aria-expanded={expandedItemIds.includes(item.id)}>
                     <span class={statusDot(item.status)}></span>
                     <span class="todo-id">{item.id}</span>
                     <span class="todo-title">{itemTitle(item)}</span>
                     <span class={statusClass(item.status)}>{item.status}</span>
-                    <span class:todo-expand-open={expandedItemId === item.id} class="todo-expand" aria-hidden="true"></span>
+                    <span class:todo-expand-open={expandedItemIds.includes(item.id)} class="todo-expand" aria-hidden="true"></span>
                   </button>
 
-                  {#if expandedItemId === item.id}
+                  {#if expandedItemIds.includes(item.id)}
                     <div class="todo-detail">
                       <div class="detail-copy prose prose-zinc max-w-none dark:prose-invert">{@html markdown(item.description)}</div>
                       <div class="detail-grid">
