@@ -61,10 +61,13 @@ Sprinty does not guess from the MCP server process cwd. Start a sprint with expl
 `git_dir` is where commits, gates, coverage, and change maps run. `data_dir` is where Sprinty stores
 the `current` pointer and append-only JSONL ledgers. Use a worktree-scoped, uncommitted `data_dir`,
 such as `<git_dir>/.sprinty` when that path is gitignored; avoid shared temp dirs or any directory
-that will be committed. For read-only tools before `sprint_new`, you may pre-bind the MCP server
-with `SPRINTY_GIT_DIR` and `SPRINTY_DATA_DIR` or `--git-dir` and
-`--data-dir`; both are required together. `SPRINTY_REPO_DIR` and `SPRINTY_WORKTREE` remain accepted
-as legacy aliases for `git_dir` only when a `data_dir` is also supplied.
+that will be committed. After a Codex/MCP restart, call `sprint_list(data_dir)` to inspect the
+existing ledgers and `sprint_resume(git_dir, data_dir)` to reattach without creating a sprint.
+Use `sprint_detach()` to clear a process binding before resuming another sprint. For read-only
+tools before `sprint_new`, you may also pre-bind the MCP server with `SPRINTY_GIT_DIR` and
+`SPRINTY_DATA_DIR` or `--git-dir` and `--data-dir`; both are required together.
+`SPRINTY_REPO_DIR` and `SPRINTY_WORKTREE` remain accepted as legacy aliases for `git_dir` only when
+a `data_dir` is also supplied.
 
 Codex CLI plugin path: install the repo-local marketplace from a repository checkout:
 
@@ -95,6 +98,7 @@ content rather than copying it.
 ## The loop
 
 ```
+sprint_list(data_dir?) -> sprint_resume(git_dir, data_dir) | sprint_detach()
 sprint_new(goal, git_dir, data_dir, context_notes?)
   -> dashboard()
   -> subsprint_new(description, goals[], gates[], dependencies?)

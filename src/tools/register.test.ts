@@ -57,6 +57,83 @@ describe("tool handlers", () => {
     await expect(tools.sprint_new!.handler({ goal: "", git_dir: dir, data_dir: join(dir, ".sprinty") })).rejects.toThrow();
   });
 
+  it("sprint_resume reattaches an unbound session to an existing sprint without creating one", async () => {
+    const dataDir = join(dir, ".sprinty-existing");
+    new SprintStore(dir, dataDir).createSprint("existing sprint");
+    let bound: SprintStore | undefined;
+    const unboundTools = buildToolHandlers(
+      () => {
+        if (!bound) throw new Error("not bound");
+        return bound;
+      },
+      async () => "http://127.0.0.1:0",
+      (binding) => {
+        bound = new SprintStore(binding.git_dir, binding.data_dir);
+        return bound;
+      },
+    );
+
+    await expect(unboundTools.info!.handler({})).rejects.toThrow("not bound");
+    const rebound = (await unboundTools.sprint_resume!.handler({ git_dir: dir, data_dir: dataDir })) as { goal: string; dir: string; data_dir: string };
+    expect(rebound.goal).toBe("existing sprint");
+    expect(rebound.dir).toBe(dir);
+    expect(rebound.data_dir).toBe(dataDir);
+    const info = (await unboundTools.info!.handler({})) as { goal: string };
+    expect(info.goal).toBe("existing sprint");
+  });
+
+  it("sprint_list can inspect a data_dir while the session is unbound", async () => {
+    const dataDir = join(dir, ".sprinty-existing");
+    new SprintStore(dir, dataDir).createSprint("existing sprint");
+    const unboundTools = buildToolHandlers(
+      () => { throw new Error("not bound"); },
+      async () => "http://127.0.0.1:0",
+      (binding) => new SprintStore(binding.git_dir, binding.data_dir),
+    );
+
+    const listed = (await unboundTools.sprint_list!.handler({ data_dir: dataDir })) as { current: string | null; sprints: Array<{ id: string; goal: string; status: string }> };
+    expect(listed.current).toBe("001");
+    expect(listed.sprints).toEqual([
+      expect.objectContaining({ id: "001", goal: "existing sprint", status: "active" }),
+    ]);
+  });
+
+  it("sprint_list returns an unbound hint when no data_dir is supplied", async () => {
+    const unboundTools = buildToolHandlers(
+      () => { throw new Error("not bound"); },
+      async () => "http://127.0.0.1:0",
+      (binding) => new SprintStore(binding.git_dir, binding.data_dir),
+    );
+
+    const listed = (await unboundTools.sprint_list!.handler({})) as { current: string | null; sprints: unknown[]; hint: string };
+    expect(listed.current).toBeNull();
+    expect(listed.sprints).toEqual([]);
+    expect(listed.hint).toContain("data_dir");
+  });
+
+  it("sprint_detach clears the current binding and closes the dashboard", async () => {
+    let bound: SprintStore | undefined = new SprintStore(dir, join(dir, ".sprinty"));
+    bound.createSprint("attached sprint");
+    const detachableTools = buildToolHandlers(
+      () => {
+        if (!bound) throw new Error("not bound");
+        return bound;
+      },
+      async () => "http://127.0.0.1:0",
+      (binding) => {
+        bound = new SprintStore(binding.git_dir, binding.data_dir);
+        return bound;
+      },
+      async () => { dashboardCloseCalls += 1; },
+      async () => { bound = undefined; },
+    );
+
+    const detached = (await detachableTools.sprint_detach!.handler({})) as { detached: boolean };
+    expect(detached.detached).toBe(true);
+    expect(dashboardCloseCalls).toBe(1);
+    await expect(detachableTools.info!.handler({})).rejects.toThrow("not bound");
+  });
+
   it("describes current as including artifacts and recent activity", () => {
     expect(tools.current!.description).toContain("relevant artifacts");
     expect(tools.current!.description).toContain("recent activity");

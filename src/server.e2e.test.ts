@@ -82,14 +82,14 @@ describe("sprinty e2e over MCP", () => {
     expect(SERVER_VERSION).toBe(pkg.version);
   });
 
-  it("lists all 25 tools", async () => {
+  it("lists all 28 tools", async () => {
     const { tools } = await client.listTools();
     expect(tools.map((t) => t.name).sort()).toEqual(
       [
         "add", "artifact", "artifact_add", "artifact_amend", "artifact_deprecate", "artifact_list",
         "changelog", "current", "dashboard", "dependencies", "deprecate", "done", "follow_up",
         "info", "note", "search", "spike", "spike_conclude", "spike_deprecate", "split",
-        "sprint_archive", "sprint_close", "sprint_new", "subsprint_new", "update",
+        "sprint_archive", "sprint_close", "sprint_detach", "sprint_list", "sprint_new", "sprint_resume", "subsprint_new", "update",
       ],
     );
   });
@@ -154,6 +154,90 @@ describe("sprinty e2e over MCP", () => {
         changelog: { verb: "fixed", line: "Fixed roots directory binding." },
       });
       expect(done.json.subsprints[0].items[0].commit_id).toBe(fresh.sha);
+    } finally {
+      await c.close();
+    }
+  });
+
+  it("uses sprint_resume to reattach an unbound MCP session to an existing sprint", async () => {
+    const fresh = initRepo();
+    const repoDir = realpathSync(fresh.dir);
+    const dataDir = realpathSync(mkdtempSync(join(tmpdir(), "sprinty-data-")));
+    const launchDir = mkdtempSync(join(tmpdir(), "sprinty-launch-"));
+    const seeded = await connect(fresh.dir, { cwd: launchDir });
+    await call(seeded, "sprint_new", sprintInput(fresh.dir, { goal: "bind after restart" }, dataDir));
+    await seeded.close();
+
+    const c = await connect(fresh.dir, { cwd: launchDir });
+    try {
+      const before = await call(c, "info", {});
+      expect(before.isError).toBe(true);
+      expect(before.text).toContain("Sprinty is not bound");
+
+      const rebound = await call(c, "sprint_resume", { git_dir: fresh.dir, data_dir: dataDir });
+      expect(rebound.isError).toBe(false);
+      expect(rebound.json.goal).toBe("bind after restart");
+      expect(rebound.json.dir).toBe(repoDir);
+      expect(rebound.json.worktree).toBe(repoDir);
+      expect(rebound.json.data_dir).toBe(dataDir);
+
+      const info = await call(c, "info", {});
+      expect(info.json.goal).toBe("bind after restart");
+      expect(info.json.data_dir).toBe(dataDir);
+    } finally {
+      await c.close();
+    }
+  });
+
+  it("uses sprint_list to inspect existing sprint data before resuming", async () => {
+    const fresh = initRepo();
+    const dataDir = realpathSync(mkdtempSync(join(tmpdir(), "sprinty-data-")));
+    const launchDir = mkdtempSync(join(tmpdir(), "sprinty-launch-"));
+    const seeded = await connect(fresh.dir, { cwd: launchDir });
+    await call(seeded, "sprint_new", sprintInput(fresh.dir, { goal: "discover me" }, dataDir));
+    await seeded.close();
+
+    const c = await connect(fresh.dir, { cwd: launchDir });
+    try {
+      const listed = await call(c, "sprint_list", { data_dir: dataDir });
+      expect(listed.isError).toBe(false);
+      expect(listed.json.current).toBe("001");
+      expect(listed.json.sprints).toEqual([
+        expect.objectContaining({ id: "001", goal: "discover me", status: "active" }),
+      ]);
+      const empty = await call(c, "sprint_list", {});
+      expect(empty.isError).toBe(false);
+      expect(empty.json.sprints).toEqual([]);
+      expect(empty.json.hint).toContain("data_dir");
+    } finally {
+      await c.close();
+    }
+  });
+
+  it("uses sprint_detach to clear a binding before resuming another sprint", async () => {
+    const first = initRepo();
+    const second = initRepo();
+    const firstData = realpathSync(mkdtempSync(join(tmpdir(), "sprinty-data-")));
+    const secondData = realpathSync(mkdtempSync(join(tmpdir(), "sprinty-data-")));
+    const launchDir = mkdtempSync(join(tmpdir(), "sprinty-launch-"));
+    const c = await connect(first.dir, { cwd: launchDir });
+    try {
+      await call(c, "sprint_new", sprintInput(first.dir, { goal: "first sprint" }, firstData));
+      const detached = await call(c, "sprint_detach", {});
+      expect(detached.isError).toBe(false);
+      expect(detached.json.detached).toBe(true);
+      const unbound = await call(c, "info", {});
+      expect(unbound.isError).toBe(true);
+      expect(unbound.text).toContain("Sprinty is not bound");
+
+      const seeded = await connect(second.dir, { cwd: launchDir });
+      await call(seeded, "sprint_new", sprintInput(second.dir, { goal: "second sprint" }, secondData));
+      await seeded.close();
+
+      const resumed = await call(c, "sprint_resume", { git_dir: second.dir, data_dir: secondData });
+      expect(resumed.isError).toBe(false);
+      expect(resumed.json.goal).toBe("second sprint");
+      expect(resumed.json.dir).toBe(realpathSync(second.dir));
     } finally {
       await c.close();
     }

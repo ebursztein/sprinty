@@ -7,6 +7,9 @@ description: Reference for the sprinty MCP tools — exact inputs, what each ret
 
 | Tool | Input | Returns / Rejects |
 |---|---|---|
+| `sprint_list` | `{ data_dir? }` | Lists sprint ledgers in `data_dir` without binding or creating anything, returning `{ current, sprints[] }`. If `data_dir` is omitted, lists the current binding when attached; when unbound, returns an empty list with a hint to pass `data_dir`. Use this after a Codex/MCP restart to inspect known sprint state before resuming. |
+| `sprint_resume` | `{ git_dir, data_dir }` | Binds this MCP process to an existing sprint and returns the sprint view + orientation. Does not create a new sprint. Use after `sprint_list(data_dir)` or when the human gives exact binding paths. Rejects if the MCP process is already bound to different paths, or if the existing sprint cannot be read. |
+| `sprint_detach` | `{}` | Clears this MCP process binding and stops the dashboard, returning `{ detached:true }`. Use before resuming a different sprint in the same MCP process. |
 | `sprint_new` | `{ goal, git_dir, data_dir, context_notes?[] }` | sprint view + orientation. `git_dir` is where commits, gates, coverage, and change maps run. `data_dir` is where Sprinty stores `current` and sprint JSONL ledgers. Both should be absolute paths. Use a worktree-scoped, uncommitted `data_dir`, such as `<git_dir>/.sprinty` when that path is gitignored. Rejects if a sprint is already active. After this, call `dashboard()` and show the URL to the human. |
 | `info` | `{}` | full sprint view (subsprints + items + statuses), including `dir` and `data_dir` so binding mistakes are obvious. Rejects before binding unless the MCP server was started with explicit `SPRINTY_GIT_DIR` and `SPRINTY_DATA_DIR`. |
 | `current` | `{ past?=1, future?=3 }` | last terminal items, `current`, actionable `next`, `blocked_open`, current subsprint notes, dependency graph, and enriched `relations` rows. |
@@ -84,3 +87,8 @@ same directory naming the active sprint (this enforces one-open-sprint unicity f
 Keep `git_dir` and `data_dir` explicit; do not rely on the MCP process cwd, workspace roots, or a
 worktree guess. `data_dir` is local agent state, not source code: scope it to the current worktree
 or repo, keep it out of commits, and avoid shared temp directories that could mix sessions.
+
+**Restart recovery:** after Codex or the MCP server restarts, the process may be unbound even though
+the ledger exists. Call `sprint_list(data_dir)` to confirm the ledger and current sprint id, then
+`sprint_resume(git_dir, data_dir)` to reattach. Do not call `sprint_new` as a resume workaround; if
+you need to switch one MCP process from one repo/sprint to another, call `sprint_detach()` first.

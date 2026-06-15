@@ -17,6 +17,14 @@ export const SprintNewInput = z.object({
   data_dir: z.string().min(1),
   context_notes: z.array(z.string().min(1)).default([]),
 });
+export const SprintResumeInput = z.object({
+  git_dir: z.string().min(1),
+  data_dir: z.string().min(1),
+});
+export const SprintDetachInput = z.object({});
+export const SprintListInput = z.object({
+  data_dir: z.string().min(1).optional(),
+});
 export const SprintCloseInput = z.object({ coverage: z.union([CoverageInput, CoverageNotApplicableInput]).optional() });
 export const SprintArchiveInput = z.object({ reason: z.string().min(1) });
 export const ChangelogInput = z.object({});

@@ -14,8 +14,12 @@ write prose plans, you create structured items the sprinty MCP records in an imm
    absolute paths. `git_dir` is where commits, gates, coverage, and change maps run. `data_dir` is
    where Sprinty stores the `current` pointer and JSONL ledgers. Make `data_dir` worktree-scoped and
    uncommitted, such as `<git_dir>/.sprinty` when that path is gitignored; avoid shared temp dirs.
-   Do not guess from the MCP cwd or workspace roots. Returns the skills to use and a primer. Call
-   **`info()`** any time to re-orient after binding; it must show the expected `dir` and `data_dir`. Then call
+   Do not guess from the MCP cwd or workspace roots. Returns the skills to use and a primer. After a
+   Codex/MCP restart, do not call `sprint_new` just to make the server notice an existing ledger:
+   call **`sprint_list(data_dir)`** to inspect the known ledger directory, then
+   **`sprint_resume(git_dir, data_dir)`** to reattach without creating a sprint. Use
+   **`sprint_detach()`** before switching one MCP process to another sprint. Call **`info()`** any
+   time to re-orient after binding; it must show the expected `dir` and `data_dir`. Then call
    **`dashboard()`** and show the localhost URL to the human so they can follow the sprint.
 2. **`subsprint_new(description, goals[], gates[], dependencies?)`** — carve the work into a goal-bearing unit.
    Each subsprint should be one feature, not a loose phase or miscellaneous bucket. A gate is
@@ -63,6 +67,9 @@ write prose plans, you create structured items the sprinty MCP records in an imm
 - Never invent an id. The server mints `S01`, `S01-001`. Read them back from tool results.
 - Start with explicit `git_dir` and a worktree-scoped, uncommitted `data_dir`; if `info()` reports
   the wrong paths, stop before adding items.
+- After Codex or the MCP server restarts, resume with `sprint_list(data_dir)` and
+  `sprint_resume(git_dir, data_dir)`; never use a rejected `sprint_new` call as a binding trick.
+- Use `sprint_detach()` to clear the current MCP process binding before resuming a different sprint.
 - No item without a short title, bounded description, at least one code location, and at least one gate.
 - Keep items atomic. If the title needs "and", "plus", or multiple deliverables, split it before
   adding it. Oversized `add()` calls are rejected with a nudge to use `split()` or smaller items.
