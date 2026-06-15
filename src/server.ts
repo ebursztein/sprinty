@@ -1,5 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join, resolve } from "node:path";
@@ -74,7 +75,9 @@ export function resolveRepoDir(
   const candidate = resolve(cwd, explicit ?? ".");
   if (!existsSync(candidate)) throw new Error(`Sprinty repo directory does not exist: ${candidate}`);
   if (!statSync(candidate).isDirectory()) throw new Error(`Sprinty repo directory is not a directory: ${candidate}`);
-  return realpathSync(candidate);
+  const real = realpathSync(candidate);
+  assertGitWorktree(real, explicit !== undefined);
+  return real;
 }
 
 function cliRepoDir(args: string[]): string | undefined {
@@ -84,4 +87,15 @@ function cliRepoDir(args: string[]): string | undefined {
     if (arg.startsWith("--repo-dir=")) return arg.slice("--repo-dir=".length);
   }
   return undefined;
+}
+
+function assertGitWorktree(dir: string, explicit: boolean): void {
+  try {
+    execFileSync("git", ["rev-parse", "--show-toplevel"], { cwd: dir, stdio: "ignore" });
+  } catch {
+    const hint = explicit
+      ? "Choose a git worktree for --repo-dir/SPRINTY_REPO_DIR."
+      : "Set SPRINTY_REPO_DIR=/absolute/path/to/repo or pass --repo-dir /absolute/path/to/repo.";
+    throw new Error(`Sprinty repo directory must be a git worktree: ${dir}. ${hint}`);
+  }
 }

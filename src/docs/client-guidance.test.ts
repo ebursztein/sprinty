@@ -55,6 +55,15 @@ describe("client guidance", () => {
     expect(pkg.scripts?.prepack).toBe("npm run build");
   });
 
+  it("documents explicit repo binding for temp-launched MCP hosts", () => {
+    for (const file of ["README.md", "clients/codex/README.md", "plugins/sprinty/README.md"]) {
+      const text = readFileSync(file, "utf8");
+      expect(text, file).toContain("SPRINTY_REPO_DIR");
+      expect(text, file).toContain("--repo-dir");
+      expect(text, file).toContain("/private/tmp");
+    }
+  });
+
   it("describes the current workflow in npm package metadata", () => {
     const pkg = JSON.parse(readFileSync("package.json", "utf8")) as { description?: string; keywords?: string[] };
     expect(pkg.description).toContain("dashboard");

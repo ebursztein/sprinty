@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
+import { resolveRepoDir } from "./server.js";
 
 function initRepo(): { dir: string; sha: string } {
   const dir = mkdtempSync(join(tmpdir(), "sprinty-e2e-"));
@@ -105,6 +106,11 @@ describe("sprinty e2e over MCP", () => {
     } finally {
       await c.close();
     }
+  });
+
+  it("rejects a non-git launch cwd instead of silently binding to a temp directory", () => {
+    const launchDir = mkdtempSync(join(tmpdir(), "sprinty-launch-"));
+    expect(() => resolveRepoDir([], {}, launchDir)).toThrow(/Set SPRINTY_REPO_DIR=.*--repo-dir/);
   });
 
   it("rejects close when an item is unresolved (teeth)", async () => {

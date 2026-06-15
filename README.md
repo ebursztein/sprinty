@@ -55,7 +55,9 @@ SPRINTY_REPO_DIR = "/absolute/path/to/your/repo"
 ```
 
 You can also pass `--repo-dir /absolute/path/to/your/repo` to the server command. Without an
-explicit repo directory, Sprinty uses the MCP server process cwd.
+explicit repo directory, Sprinty uses the MCP server process cwd and requires it to be a git
+worktree. This prevents accidental `.sprinty/` ledgers and dashboards rooted in temporary launch
+directories such as `/private/tmp`.
 
 Codex CLI plugin path: install the repo-local marketplace from a repository checkout:
 

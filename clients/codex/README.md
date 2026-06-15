@@ -33,6 +33,8 @@ codex mcp add sprinty -- npx -y sprinty-mcp
 If Codex launches the MCP process from a temp directory, configure the server with
 `SPRINTY_REPO_DIR=/absolute/path/to/your/repo` or pass `--repo-dir /absolute/path/to/your/repo` so
 Sprinty writes `.sprinty/` and validates commits against the intended repository.
+Sprinty refuses to start against a non-git launch directory, which keeps accidental `/private/tmp`
+bindings from becoming real sprint ledgers.
 
 Do not copy skill files into client directories; keep them in the top-level `skills/` directory.
 

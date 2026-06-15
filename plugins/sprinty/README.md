@@ -32,3 +32,8 @@ For MCP-only setup without plugin skills:
 ```bash
 codex mcp add sprinty -- npx -y sprinty-mcp
 ```
+
+If your Codex host starts plugin MCP processes from a temp directory, configure the server with
+`SPRINTY_REPO_DIR=/absolute/path/to/your/repo` or add `--repo-dir /absolute/path/to/your/repo` to
+the MCP command. Sprinty requires the resolved directory to be a git worktree, so accidental
+`/private/tmp` launch directories fail fast instead of becoming the sprint ledger.
