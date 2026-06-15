@@ -1,13 +1,13 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, realpathSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { ListRootsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
-import { resolveRepoDir, resolveRepoDirWithRoots } from "./server.js";
+import { resolveRepoDir, resolveRepoDirWithRoots, SERVER_VERSION } from "./server.js";
 
 function initRepo(): { dir: string; sha: string } {
   const dir = mkdtempSync(join(tmpdir(), "sprinty-e2e-"));
@@ -78,6 +78,11 @@ async function call(c: Client, name: string, args: Record<string, unknown>) {
 }
 
 describe("sprinty e2e over MCP", () => {
+  it("advertises the package version from package metadata", () => {
+    const pkg = JSON.parse(readFileSync("package.json", "utf8")) as { version: string };
+    expect(SERVER_VERSION).toBe(pkg.version);
+  });
+
   it("lists all 25 tools", async () => {
     const { tools } = await client.listTools();
     expect(tools.map((t) => t.name).sort()).toEqual(

@@ -2,6 +2,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync, realpathSync, statSync } from "node:fs";
+import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { dirname, join, resolve } from "node:path";
 import { SprintStore } from "./store/store.js";
@@ -9,6 +10,10 @@ import { buildToolHandlers } from "./tools/register.js";
 import { startDashboard, type Dashboard } from "./dashboard/server.js";
 
 interface RootLike { uri: string; name?: string | undefined; }
+
+const require = createRequire(import.meta.url);
+const packageJson = require("../package.json") as { version: string };
+export const SERVER_VERSION = packageJson.version;
 
 const INSTRUCTIONS = `Sprinty enforces a disciplined sprint.
 One sprint per repo/session (the .sprinty/current pointer keeps exactly one open). Call info() to orient before acting.
@@ -26,7 +31,7 @@ Use search(pattern, context_lines) to query the immutable record. dashboard() re
 export async function main(): Promise<void> {
   let dashboard: Dashboard | undefined;
   let storePromise: Promise<SprintStore> | undefined;
-  const server = new McpServer({ name: "sprinty", version: "0.1.0" }, { instructions: INSTRUCTIONS });
+  const server = new McpServer({ name: "sprinty", version: SERVER_VERSION }, { instructions: INSTRUCTIONS });
   const getStore = (): Promise<SprintStore> => {
     storePromise ??= resolveRepoDirWithRoots(() => server.server.listRoots()).then((dir) => new SprintStore(dir));
     return storePromise;
