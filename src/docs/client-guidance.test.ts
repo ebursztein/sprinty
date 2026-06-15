@@ -55,6 +55,24 @@ describe("client guidance", () => {
     expect(pkg.scripts?.prepack).toBe("npm run build");
   });
 
+  it("describes the current workflow in npm package metadata", () => {
+    const pkg = JSON.parse(readFileSync("package.json", "utf8")) as { description?: string; keywords?: string[] };
+    expect(pkg.description).toContain("dashboard");
+    expect(pkg.description).toContain("artifacts");
+    expect(pkg.description).toContain("follow-ups");
+    expect(pkg.description).toContain("spikes");
+    expect(pkg.description).toContain("gates");
+    expect(pkg.keywords).toEqual(expect.arrayContaining([
+      "mcp",
+      "dashboard",
+      "artifacts",
+      "follow-ups",
+      "spikes",
+      "gates",
+      "ledger",
+    ]));
+  });
+
   it("keeps client and plugin manifest versions aligned with the package", () => {
     const pkg = JSON.parse(readFileSync("package.json", "utf8")) as { version: string };
     for (const manifestPath of [

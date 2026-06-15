@@ -1,7 +1,7 @@
 {
   "name": "sprinty-mcp",
   "version": "0.1.1",
-  "description": "Disciplined sprint MCP for Claude Code, Codex, and Gemini",
+  "description": "Disciplined sprint MCP with dashboard, artifacts, follow-ups, spikes, gates, and changelogs for Claude Code, Codex, and Gemini",
   "type": "module",
   "license": "Apache-2.0",
   "author": "Elie Bursztein",
@@ -13,6 +13,20 @@
   "bugs": {
     "url": "https://github.com/ebursztein/sprinty/issues"
   },
+  "keywords": [
+    "mcp",
+    "sprint",
+    "codex",
+    "claude",
+    "gemini",
+    "dashboard",
+    "artifacts",
+    "follow-ups",
+    "spikes",
+    "gates",
+    "changelog",
+    "ledger"
+  ],
   "bin": {
     "sprinty-mcp": "dist/index.js"
   },
