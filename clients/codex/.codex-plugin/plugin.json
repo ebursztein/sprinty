@@ -7,6 +7,6 @@
   "repository": "https://github.com/ebursztein/sprinty",
   "license": "Apache-2.0",
   "keywords": ["sprint", "discipline", "ledger", "mcp"],
-  "skills": "./skills/",
+  "skills": "../../skills/",
   "mcpServers": "./.mcp.json"
 }

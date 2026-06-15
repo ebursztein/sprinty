@@ -9,7 +9,22 @@ export function startDashboard(getState: () => SprintView | null): Promise<Dashb
   const server: Server = createServer((req, res) => {
     if (req.url === "/state") {
       res.writeHead(200, { "content-type": "application/json" });
-      res.end(JSON.stringify(getState() ?? { goal: "(no sprint)", status: "active", branch: "", subsprints: [] }));
+      res.end(JSON.stringify(getState() ?? {
+        goal: "(no sprint)",
+        worktree: "",
+        branch: "",
+        dir: "",
+        created_at: new Date().toISOString(),
+        closed_at: null,
+        status: "active",
+        subsprints: [],
+        timeline: [],
+        context_notes: [],
+        graph: { nodes: [], edges: [], blocked_by: {}, unblocks: {}, topological_order: [], cycles: [] },
+        changelog: [],
+        change_map: { by_file: [], by_directory: [], by_language: [], hotspots: [] },
+        coverage: null,
+      }));
       return;
     }
     res.writeHead(200, { "content-type": "text/html" });

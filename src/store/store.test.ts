@@ -1,9 +1,10 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { SprintStore, StoreError } from "./store.js";
+import { Ledger } from "../ledger/ledger.js";
 
 function initRepo(): { dir: string; sha: string } {
   const dir = mkdtempSync(join(tmpdir(), "sprinty-store-"));
@@ -11,10 +12,29 @@ function initRepo(): { dir: string; sha: string } {
   run(["init", "-b", "main"]);
   run(["config", "user.email", "t@t.dev"]);
   run(["config", "user.name", "t"]);
+  run(["config", "commit.gpgsign", "false"]);
   writeFileSync(join(dir, "f.txt"), "x");
   run(["add", "f.txt"]);
   run(["commit", "-m", "init"]);
   return { dir, sha: run(["rev-parse", "HEAD"]) };
+}
+
+function writeCoverage(dir: string): string {
+  const path = join(dir, "coverage", "lcov.info");
+  mkdirSync(join(dir, "coverage"), { recursive: true });
+  writeFileSync(path, [
+    "TN:",
+    "SF:src/a.ts",
+    "LF:10",
+    "LH:9",
+    "BRF:4",
+    "BRH:3",
+    "FNF:2",
+    "FNH:2",
+    "end_of_record",
+    "",
+  ].join("\n"));
+  return path;
 }
 
 let dir: string, sha: string, store: SprintStore;
@@ -47,16 +67,64 @@ describe("SprintStore lifecycle", () => {
     store.createSprint("g");
     store.createSubsprint({ description: "d", goals: ["go"], gates: [{ kind: "build", spec: "true" }] });
     store.addItem({ subsprint: "S01", description: "i", code_locations: ["a.ts"], gates: [{ kind: "command", spec: "true" }] });
-    expect(() => store.done({ item: "S01-001", commit_id: "0000000000000000000000000000000000000000", gate_results: [{ kind: "command", spec: "true", passed: true, evidence: "ok" }] })).toThrow(StoreError);
-    const view = store.done({ item: "S01-001", commit_id: sha, gate_results: [{ kind: "command", spec: "true", passed: true, evidence: "ok" }] });
-    expect(view.subsprints[0]!.items[0]!.status).toBe("resolved");
+    expect(() => store.done({ item: "S01-001", commit_id: "0000000000000000000000000000000000000000", gate_results: [{ kind: "command", spec: "true", passed: true, evidence: "ok" }], changelog: { verb: "added", line: "Added the thing." } })).toThrow(StoreError);
+    const view = store.done({ item: "S01-001", commit_id: sha, gate_results: [{ kind: "command", spec: "true", passed: true, evidence: "ok" }], changelog: { verb: "added", line: "Added the thing." } });
+    expect(view.subsprints[0]!.items[0]!.status).toBe("completed");
+    expect(view.subsprints[0]!.items[0]!.changelog).toEqual({ verb: "added", line: "Added the thing." });
+  });
+
+  it("done requires a semver changelog line", () => {
+    store.createSprint("g");
+    store.createSubsprint({ description: "d", goals: ["go"], gates: [{ kind: "build", spec: "true" }] });
+    store.addItem({ subsprint: "S01", description: "i", code_locations: ["a.ts"], gates: [{ kind: "command", spec: "true" }] });
+    expect(() => store.done({ item: "S01-001", commit_id: sha, gate_results: [{ kind: "command", spec: "true", passed: true, evidence: "ok" }] } as never)).toThrow();
   });
 
   it("done rejects a failed gate result", () => {
     store.createSprint("g");
     store.createSubsprint({ description: "d", goals: ["go"], gates: [{ kind: "build", spec: "true" }] });
     store.addItem({ subsprint: "S01", description: "i", code_locations: ["a.ts"], gates: [{ kind: "command", spec: "true" }] });
-    expect(() => store.done({ item: "S01-001", commit_id: sha, gate_results: [{ kind: "command", spec: "true", passed: false, evidence: "boom" }] })).toThrow(StoreError);
+    expect(() => store.done({ item: "S01-001", commit_id: sha, gate_results: [{ kind: "command", spec: "true", passed: false, evidence: "boom" }], changelog: { verb: "fixed", line: "Fixed the thing." } })).toThrow(StoreError);
+  });
+
+  it("done requires passing evidence for every declared item gate and no unrelated extras", () => {
+    store.createSprint("g");
+    store.createSubsprint({ description: "d", goals: ["go"], gates: [{ kind: "build", spec: "true" }] });
+    store.addItem({
+      subsprint: "S01",
+      description: "i",
+      code_locations: ["a.ts"],
+      gates: [
+        { kind: "command", spec: "true" },
+        { kind: "manual", spec: "reviewed timeline" },
+      ],
+    });
+    expect(() => store.done({
+      item: "S01-001",
+      commit_id: sha,
+      gate_results: [{ kind: "command", spec: "true", passed: true, evidence: "ok" }],
+      changelog: { verb: "fixed", line: "Fixed missing gate coverage." },
+    })).toThrow(/Missing gate evidence/);
+    expect(() => store.done({
+      item: "S01-001",
+      commit_id: sha,
+      gate_results: [
+        { kind: "command", spec: "true", passed: true, evidence: "ok" },
+        { kind: "manual", spec: "reviewed timeline", passed: true, evidence: "approved" },
+        { kind: "command", spec: "unrelated", passed: true, evidence: "ok" },
+      ],
+      changelog: { verb: "fixed", line: "Fixed unexpected gate coverage." },
+    })).toThrow(/Unexpected gate evidence/);
+    const view = store.done({
+      item: "S01-001",
+      commit_id: sha,
+      gate_results: [
+        { kind: "command", spec: "true", passed: true, evidence: "ok" },
+        { kind: "manual", spec: "reviewed timeline", passed: true, evidence: "approved" },
+      ],
+      changelog: { verb: "fixed", line: "Fixed gate evidence handling." },
+    });
+    expect(view.subsprints[0]!.items[0]!.gate_results).toHaveLength(2);
   });
 
   it("split resolves the item and creates a seeded subsprint atomically", () => {
@@ -64,7 +132,7 @@ describe("SprintStore lifecycle", () => {
     store.createSubsprint({ description: "d", goals: ["go"], gates: [{ kind: "build", spec: "true" }] });
     store.addItem({ subsprint: "S01", description: "too big", code_locations: ["a.ts"], gates: [{ kind: "command", spec: "true" }] });
     const view = store.split({ item: "S01-001", description: "promoted", goals: ["finish it"], gates: [{ kind: "build", spec: "true" }] });
-    expect(view.subsprints[0]!.items[0]!.disposition).toBe("split");
+    expect(view.subsprints[0]!.items[0]!.status).toBe("split");
     expect(view.subsprints[0]!.items[0]!.spawned_subsprint).toBe("S02");
     expect(view.subsprints[1]!.id).toBe("S02");
     expect(view.subsprints[1]!.spawned_from_item).toBe("S01-001");
@@ -76,7 +144,36 @@ describe("SprintStore lifecycle", () => {
     store.addItem({ subsprint: "S01", description: "i", code_locations: ["a.ts"], gates: [{ kind: "command", spec: "true" }] });
     expect(() => store.deprecate({ item: "S01-001", reason: "" })).toThrow(StoreError);
     const view = store.deprecate({ item: "S01-001", reason: "superseded" });
-    expect(view.subsprints[0]!.items[0]!.disposition).toBe("deprecated");
+    expect(view.subsprints[0]!.items[0]!.status).toBe("deprecated");
+  });
+
+  it("records and rejects dependency graph edges", () => {
+    store.createSprint("g", ["keep the graph visible"]);
+    store.createSubsprint({ description: "d", goals: ["go"], gates: [{ kind: "build", spec: "true" }], dependencies: [] });
+    store.addItem({ subsprint: "S01", description: "base", code_locations: ["a.ts"], gates: [{ kind: "command", spec: "true" }], dependencies: [] });
+    store.addItem({ subsprint: "S01", description: "dependent", code_locations: ["b.ts"], gates: [{ kind: "command", spec: "true" }], dependencies: ["S01-001"] });
+    expect(() => store.addDependencies({ target: "S01-002", dependencies: ["S99-999"] })).toThrow(StoreError);
+    const view = store.addDependencies({ target: "S01-002", dependencies: ["S01"] });
+    expect(view.context_notes).toEqual(["keep the graph visible"]);
+    expect(view.subsprints[0]!.items[1]!.dependencies).toEqual(["S01-001", "S01"]);
+    expect(view.graph.edges).toContainEqual({ from: "S01-002", to: "S01-001" });
+    expect(view.graph.edges).toContainEqual({ from: "S01-002", to: "S01" });
+    expect(view.graph.topological_order.indexOf("S01-001")).toBeLessThan(view.graph.topological_order.indexOf("S01-002"));
+    expect(view.graph.blocked_by["S01-002"]).toEqual(["S01-001", "S01"]);
+    expect(() => store.addDependencies({ target: "S01-001", dependencies: ["S01-002"] })).toThrow(/cycle/i);
+  });
+
+  it("rejects invalid dependency edges before they enter the ledger", () => {
+    store.createSprint("g");
+    store.createSubsprint({ description: "d", goals: ["go"], gates: [{ kind: "build", spec: "true" }] });
+    store.addItem({ subsprint: "S01", description: "base", code_locations: ["a.ts"], gates: [{ kind: "command", spec: "true" }] });
+    store.addItem({ subsprint: "S01", description: "dependent", code_locations: ["b.ts"], gates: [{ kind: "command", spec: "true" }], dependencies: ["S01-001"] });
+
+    expect(() => store.addDependencies({ target: "S99-001", dependencies: ["S01-001"] })).toThrow(/Unknown dependency target/);
+    expect(() => store.addDependencies({ target: "S01-002", dependencies: ["S99-001"] })).toThrow(/Unknown dependency/);
+    expect(() => store.addDependencies({ target: "S01-002", dependencies: ["S01-002"] })).toThrow(/cannot depend on itself/);
+    expect(() => store.addDependencies({ target: "S01-002", dependencies: ["S01", "S01"] })).toThrow(/Duplicate dependencies/);
+    expect(() => store.addDependencies({ target: "S01-002", dependencies: ["S01-001"] })).toThrow(/already exists/);
   });
 
   it("update attaches intermediate info and rejects an unknown target", () => {
@@ -106,7 +203,7 @@ describe("sprint_close teeth", () => {
     store.createSprint("g");
     store.createSubsprint({ description: "d", goals: ["go"], gates: [{ kind: "command", spec: "true" }] });
     store.addItem({ subsprint: "S01", description: "i", code_locations: ["a.ts"], gates: [{ kind: "command", spec: "true" }] });
-    try { store.closeSprint(); throw new Error("should have thrown"); }
+    try { store.closeSprint({ coverage: { path: writeCoverage(dir), format: "lcov" } }); throw new Error("should have thrown"); }
     catch (e) { expect(e).toBeInstanceOf(StoreError); expect((e as StoreError).blockers.join(" ")).toContain("S01-001"); }
   });
 
@@ -114,16 +211,74 @@ describe("sprint_close teeth", () => {
     store.createSprint("g");
     store.createSubsprint({ description: "d", goals: ["go"], gates: [{ kind: "command", spec: "true" }] });
     store.addItem({ subsprint: "S01", description: "i", code_locations: ["a.ts"], gates: [{ kind: "command", spec: "true" }] });
-    store.done({ item: "S01-001", commit_id: sha, gate_results: [{ kind: "command", spec: "true", passed: true, evidence: "ok" }] });
-    const view = store.closeSprint();
+    store.done({ item: "S01-001", commit_id: sha, gate_results: [{ kind: "command", spec: "true", passed: true, evidence: "ok" }], changelog: { verb: "added", line: "Added close coverage." } });
+    const view = store.closeSprint({ coverage: { path: writeCoverage(dir), format: "lcov", command: "npm run test:coverage" } });
     expect(view.status).toBe("closed");
+    expect(view.coverage?.lines).toEqual({ covered: 9, total: 10, percent: 90 });
+  });
+
+  it("requires coverage evidence by path to close", () => {
+    store.createSprint("g");
+    store.createSubsprint({ description: "d", goals: ["go"], gates: [{ kind: "command", spec: "true" }] });
+    store.addItem({ subsprint: "S01", description: "i", code_locations: ["a.ts"], gates: [{ kind: "command", spec: "true" }] });
+    store.done({ item: "S01-001", commit_id: sha, gate_results: [{ kind: "command", spec: "true", passed: true, evidence: "ok" }], changelog: { verb: "added", line: "Added close coverage." } });
+    try { store.closeSprint(); throw new Error("should have thrown"); }
+    catch (e) {
+      expect(e).toBeInstanceOf(StoreError);
+      expect((e as StoreError).blockers.join(" ")).toContain("Coverage evidence is required");
+    }
+    try { store.closeSprint({ coverage: { path: "coverage/missing.info", format: "lcov" } }); throw new Error("should have thrown"); }
+    catch (e) {
+      expect(e).toBeInstanceOf(StoreError);
+      expect((e as StoreError).blockers.join(" ")).toContain("Coverage report not found");
+    }
+  });
+
+  it("returns changelog markdown with file change-map and coverage tables", () => {
+    store.createSprint("bookshop");
+    store.createSubsprint({ description: "catalog", goals: ["go"], gates: [{ kind: "command", spec: "true" }] });
+    writeFileSync(join(dir, "catalog.ts"), "export const catalog = ['Dune'];\n");
+    execFileSync("git", ["add", "catalog.ts"], { cwd: dir });
+    execFileSync("git", ["commit", "-m", "catalog"], { cwd: dir });
+    const commit = execFileSync("git", ["rev-parse", "HEAD"], { cwd: dir }).toString().trim();
+    store.addItem({ subsprint: "S01", description: "catalog", code_locations: ["catalog.ts"], gates: [{ kind: "command", spec: "true" }] });
+    const view = store.done({ item: "S01-001", commit_id: commit, gate_results: [{ kind: "command", spec: "true", passed: true, evidence: "ok" }], changelog: { verb: "added", line: "Added catalog data." } });
+    expect(view.change_map.by_file).toContainEqual(expect.objectContaining({ file: "catalog.ts", additions: 1, deletions: 0, items: ["S01-001"] }));
+
+    store.closeSprint({ coverage: { path: writeCoverage(dir), format: "lcov", command: "npm run test:coverage" } });
+    const md = store.changelog();
+    expect(md).toContain("## Added");
+    expect(md).toContain("| catalog.ts | TypeScript | . | S01-001 |");
+    expect(md).toContain("## Coverage");
+    expect(md).toContain("| Lines | 9/10 | 90% |");
   });
 
   it("refuses to close when a gate re-run fails", () => {
     store.createSprint("g");
     store.createSubsprint({ description: "d", goals: ["go"], gates: [{ kind: "command", spec: "exit 1" }] });
     store.addItem({ subsprint: "S01", description: "i", code_locations: ["a.ts"], gates: [{ kind: "command", spec: "true" }] });
-    store.done({ item: "S01-001", commit_id: sha, gate_results: [{ kind: "command", spec: "true", passed: true, evidence: "ok" }] });
-    expect(() => store.closeSprint()).toThrow(StoreError);
+    store.done({ item: "S01-001", commit_id: sha, gate_results: [{ kind: "command", spec: "true", passed: true, evidence: "ok" }], changelog: { verb: "added", line: "Added close failure coverage." } });
+    expect(() => store.closeSprint({ coverage: { path: writeCoverage(dir), format: "lcov" } })).toThrow(StoreError);
+  });
+
+  it("re-verifies completed item commits when closing", () => {
+    store.createSprint("g");
+    store.createSubsprint({ description: "d", goals: ["go"], gates: [{ kind: "command", spec: "true" }] });
+    store.addItem({ subsprint: "S01", description: "i", code_locations: ["a.ts"], gates: [{ kind: "command", spec: "true" }] });
+    new Ledger(join(dir, ".sprinty", "001.jsonl")).append({
+      type: "item_resolved",
+      item_id: "S01-001",
+      disposition: "completed",
+      commit_id: "0000000000000000000000000000000000000000",
+      gate_results: [{ kind: "command", spec: "true", passed: true, evidence: "ok" }],
+      spawned_subsprint: null,
+      reason: null,
+    });
+    try { store.closeSprint({ coverage: { path: writeCoverage(dir), format: "lcov" } }); throw new Error("should have thrown"); }
+    catch (e) {
+      expect(e).toBeInstanceOf(StoreError);
+      expect((e as StoreError).blockers.join(" ")).toContain("commit");
+      expect((e as StoreError).blockers.join(" ")).toContain("S01-001");
+    }
   });
 });

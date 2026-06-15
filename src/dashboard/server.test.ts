@@ -2,7 +2,17 @@ import { describe, it, expect, afterEach } from "vitest";
 import { startDashboard, type Dashboard } from "./server.js";
 import type { SprintView } from "../domain/projection.js";
 
-const view: SprintView = { goal: "g", worktree: "/w", branch: "main", dir: "/r", status: "active", subsprints: [] };
+const view: SprintView = {
+  goal: "g",
+  worktree: "/w",
+  branch: "main",
+  dir: "/r",
+  created_at: "2026-06-14T00:00:00.000Z",
+  closed_at: null,
+  status: "active",
+  subsprints: [],
+  timeline: [],
+};
 let dash: Dashboard | undefined;
 afterEach(async () => { await dash?.stop(); dash = undefined; });
 
@@ -13,5 +23,18 @@ describe("dashboard", () => {
     expect(state.goal).toBe("g");
     const html = await (await fetch(`${dash.url}/`)).text();
     expect(html).toContain("<!doctype html>");
+  });
+
+  it("serves a dashboard shell that renders ledger text safely", async () => {
+    dash = await startDashboard(() => ({
+      ...view,
+      goal: "<script>alert('x')</script>",
+      timeline: [{ seq: 0, ts: view.created_at, type: "sprint_created", id: "sprint", text: "<img src=x onerror=alert(1)>" }],
+    }));
+    const html = await (await fetch(`${dash.url}/`)).text();
+    expect(html).not.toContain("innerHTML");
+    expect(html).toContain("textContent");
+    expect(html).toContain('id="timeline"');
+    expect(html).toContain('id="active-items"');
   });
 });

@@ -22,9 +22,9 @@ export type ToolHandlers = Record<string, ToolDef>;
 export function buildToolHandlers(store: SprintStore, openDashboard: () => Promise<string>): ToolHandlers {
   return {
     sprint_new: def(S.SprintNewInput, "Start a sprint; returns orientation (skills + how this works).",
-      (i) => ({ ...store.createSprint(i.goal), orientation: orientation() })),
+      (i) => ({ ...store.createSprint(i.goal, i.context_notes), orientation: orientation() })),
     sprint_close: def(S.SprintCloseInput, "Close the sprint after a programmatic re-check of all gates.",
-      () => store.closeSprint()),
+      (i) => store.closeSprint(i)),
     info: def(S.InfoInput, "The one status read: sprint, subsprints, statuses.",
       () => store.read()),
     current: def(S.CurrentInput, "Focus window: last closed item + next N, notes scoped to current subsprint.",
@@ -43,8 +43,12 @@ export function buildToolHandlers(store: SprintStore, openDashboard: () => Promi
       (i) => store.deprecate(i)),
     note: def(S.NoteInput, "Add a note to an item or subsprint.",
       (i) => store.addNote(i)),
+    dependencies: def(S.DependenciesInput, "Add dependency edges from a target item/subsprint to existing ids.",
+      (i) => store.addDependencies(i)),
     search: def(S.SearchInput, "Regex search over the current sprint's immutable ledger, with context lines.",
       (i) => store.search(i.pattern, i.context_lines)),
+    changelog: def(S.ChangelogInput, "Render the sprint changelog as Markdown with change-map and coverage tables.",
+      () => ({ markdown: store.changelog() })),
     dashboard: def(S.DashboardInput, "Start (once) and return the follow-along dashboard URL.",
       async () => ({ url: await openDashboard() })),
   };

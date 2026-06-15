@@ -3,29 +3,40 @@
 A disciplined-sprint MCP server for AI coding agents — **Claude Code, Codex, and Gemini**.
 
 Sprinty gives an agent first-class tools to run a sprint with structure that can't silently rot:
-structured **sprint → subsprint → item** objects, an **immutable append-only ledger** anchored to
-real git commits, **programmatic close-gates** that re-run your tests before a sprint can close, a
-**regex search** over the record, and a **live follow-along dashboard**.
+structured **sprint → subsprint → item** objects, dependency graphs with topological ordering and
+cycle detection, an **immutable append-only ledger** anchored to real git commits,
+Git-backed **change maps**, Markdown changelogs with file tables, **programmatic close-gates**
+that re-run your tests and require coverage evidence before a sprint can close, a **regex search**
+over the record, and a **live follow-along dashboard**.
 
 The point: the agent doesn't drift, and the record doesn't lie. IDs are minted server-side, items
-can't exist without gates, `done` rejects a commit that doesn't exist, and `sprint_close` refuses
-to close while anything is unresolved or a gate fails.
+can't exist without gates, `done` rejects a commit that doesn't exist or lacks a semver changelog
+line, and `sprint_close` refuses to close while anything is open, coverage is missing, or a gate
+fails.
 
 ## Install
 
-Sprinty ships as a native plugin for each agent. The MCP server itself runs via `npx -y sprinty-mcp`
-(the npm package is `sprinty-mcp`; the server, tools, and plugins are all named `sprinty`).
+Sprinty has two layers:
 
-**Claude Code** — `clients/claude/` is a plugin (`.claude-plugin/plugin.json`) bundling the MCP
-server and skills. Add the MCP directly:
+- the MCP server, which runs from npm as `npx -y sprinty-mcp`;
+- optional client manifests under `clients/` for agents that support plugins or extensions.
+
+The npm package is `sprinty-mcp`. The server, MCP tool namespace, and client manifests are named
+`sprinty`.
+
+### Claude Code
+
+Add the MCP server directly:
 
 ```bash
 claude mcp add sprinty -- npx -y sprinty-mcp
 ```
 
-**Codex** — `clients/codex/` is a plugin (`.codex-plugin/plugin.json` + `.mcp.json` + skills),
-installed through a marketplace (`clients/codex/marketplace.json`). Or add the server to
-`~/.codex/config.toml`:
+The repo also includes a Claude plugin manifest in `clients/claude/`.
+
+### Codex
+
+Fast path: add the MCP server to `~/.codex/config.toml`:
 
 ```toml
 [mcp_servers.sprinty]
@@ -33,7 +44,17 @@ command = "npx"
 args = ["-y", "sprinty-mcp"]
 ```
 
-**Gemini CLI** — `clients/gemini/` is an extension (`gemini-extension.json` + `GEMINI.md` + skills):
+Plugin path: `clients/codex/` contains `.codex-plugin/plugin.json`, `.mcp.json`, and `AGENTS.md`.
+The Codex manifest points at the shared top-level `skills/` directory. If you use a local Codex marketplace, point it at
+`clients/codex/marketplace.json`; the plugin entry in that marketplace resolves to the
+`clients/codex/` directory.
+
+After installation, ask Codex to use Sprinty for a non-trivial task. It should call `sprint_new`
+before implementation and `sprint_close` before claiming the sprint is done.
+
+### Gemini CLI
+
+`clients/gemini/` is a Gemini extension (`gemini-extension.json` + `GEMINI.md` + skills):
 
 ```bash
 gemini extensions install ./clients/gemini
@@ -45,15 +66,44 @@ body of guidance.
 ## The loop
 
 ```
-sprint_new(goal)
-  -> subsprint_new(description, goals[], gates[])
-  -> add(subsprint, description, code_locations[], gates[])
-  -> done(commit_id, gate_results[]) | split(...) | deprecate(reason)
-  -> sprint_close()
+sprint_new(goal, context_notes?)
+  -> subsprint_new(description, goals[], gates[], dependencies?)
+  -> add(subsprint, description, code_locations[], gates[], dependencies?)
+  -> dependencies(target, dependencies[])
+  -> done(commit_id, gate_results[], changelog) | split(...) | deprecate(reason)
+  -> changelog()
+  -> sprint_close(coverage: { path, format: "lcov", command? })
 ```
 
 Full tool reference: [`skills/using-sprinty/SKILL.md`](skills/using-sprinty/SKILL.md).
 How to run a sprint: [`skills/how-to-run-a-sprint/SKILL.md`](skills/how-to-run-a-sprint/SKILL.md).
+
+## Watching the Dashboard
+
+The dashboard is for the human sitting next to the agent.
+
+1. Ask the agent to call `dashboard()`.
+2. Open the returned `http://127.0.0.1:<port>` URL in a browser.
+3. Leave it open while the sprint runs; it refreshes every two seconds.
+
+The dashboard shows the sprint goal, branch/worktree, start time, progress counts, line coverage,
+open items, gate evidence, dependency graph state, commit ids and changelog lines for completed
+items, changed-file hotspots, and a timestamped timeline from the immutable ledger.
+
+The dashboard server binds to `127.0.0.1` on an ephemeral port and is read-only. It lives only for
+the running MCP server process.
+
+## Proof Model
+
+Sprinty records timestamps on every event and projects them into the sprint timeline. Completed
+items require a real git commit id and controlled changelog entry when `done()` is called, and
+`sprint_close()` checks that the commit still resolves before closing. `done()` also records a
+Git-backed change map for the commit: file, language, directory, additions, deletions, net change,
+churn, item ids, and commit ids. `changelog()` renders a Markdown release note with semver sections,
+coverage, and change-map tables. `done()` also requires passing evidence for every declared item
+gate, including manual gates. Dependencies are stored as a real graph: `current()` returns nodes,
+edges, adjacency indexes, topological order, and cycle information; writes reject cycles. At close,
+executable gates are re-run by Sprinty and `sprint_close()` requires an LCOV coverage report path.
 
 ## Storage
 

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { GateKind, Disposition, ItemStatus, SubsprintStatus, SprintStatus, EventType } from "./enums.js";
+import { GateKind, Disposition, ItemStatus, ChangelogVerb, SubsprintStatus, SprintStatus, EventType } from "./enums.js";
 
 describe("enums", () => {
   it("GateKind accepts known kinds and rejects others", () => {
@@ -10,14 +10,17 @@ describe("enums", () => {
     expect(Disposition.options).toEqual(["completed", "split", "deprecated"]);
   });
   it("ItemStatus / SubsprintStatus / SprintStatus are closed sets", () => {
-    expect(ItemStatus.options).toEqual(["open", "resolved"]);
+    expect(ItemStatus.options).toEqual(["open", "completed", "split", "deprecated"]);
     expect(SubsprintStatus.options).toEqual(["open", "closed"]);
     expect(SprintStatus.options).toEqual(["active", "closed"]);
+  });
+  it("ChangelogVerb is the semver-facing verb set", () => {
+    expect(ChangelogVerb.options).toEqual(["added", "fixed", "changed", "removed", "deprecated", "security"]);
   });
   it("EventType enumerates every ledger event", () => {
     expect(EventType.options).toEqual([
       "sprint_created", "subsprint_created", "item_added",
-      "item_updated", "item_resolved", "note_added", "sprint_closed",
+      "item_updated", "item_resolved", "note_added", "dependencies_added", "sprint_closed",
     ]);
   });
 });

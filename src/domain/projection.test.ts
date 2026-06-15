@@ -24,6 +24,52 @@ describe("project", () => {
     expect(s.subsprints[0]!.items[0]!.status).toBe("open");
   });
 
+  it("projects event timestamps into the sprint timeline", () => {
+    const events: LedgerEvent[] = [
+      { ...ev({ type: "sprint_created", goal: "g", worktree: "/w", branch: "main", dir: "/r" }, 0), ts: "2026-06-14T00:00:00.000Z" },
+      { ...ev({ type: "subsprint_created", subsprint_id: "S01", description: "d", goals: ["go"], gates: [{ kind: "build", spec: "b" }], spawned_from_item: null }, 1), ts: "2026-06-14T00:01:00.000Z" },
+      { ...ev({ type: "item_added", item_id: "S01-001", subsprint_id: "S01", description: "i1", code_locations: ["a.ts"], gates: [{ kind: "test", spec: "x" }] }, 2), ts: "2026-06-14T00:02:00.000Z" },
+      { ...ev({ type: "item_resolved", item_id: "S01-001", disposition: "completed", commit_id: "deadbeef", gate_results: [{ kind: "test", spec: "x", passed: true, evidence: "ok" }], spawned_subsprint: null, reason: null }, 3), ts: "2026-06-14T00:03:00.000Z" },
+      { ...ev({ type: "sprint_closed", gate_results: [] }, 4), ts: "2026-06-14T00:04:00.000Z" },
+    ];
+    const s = project(events)!;
+    expect(s.created_at).toBe("2026-06-14T00:00:00.000Z");
+    expect(s.closed_at).toBe("2026-06-14T00:04:00.000Z");
+    expect(s.subsprints[0]!.created_at).toBe("2026-06-14T00:01:00.000Z");
+    expect(s.subsprints[0]!.items[0]!.created_at).toBe("2026-06-14T00:02:00.000Z");
+    expect(s.subsprints[0]!.items[0]!.resolved_at).toBe("2026-06-14T00:03:00.000Z");
+    expect(s.timeline.map((entry) => entry.type)).toEqual([
+      "sprint_created",
+      "subsprint_created",
+      "item_added",
+      "item_resolved",
+      "sprint_closed",
+    ]);
+  });
+
+  it("projects context notes, dependency graph, terminal item states, and changelog", () => {
+    const events: LedgerEvent[] = [
+      { ...ev({ type: "sprint_created", goal: "g", worktree: "/w", branch: "main", dir: "/r", context_notes: ["ship carefully"] } as never, 0), ts: "2026-06-14T00:00:00.000Z" },
+      { ...ev({ type: "subsprint_created", subsprint_id: "S01", description: "foundation", goals: ["go"], gates: [{ kind: "build", spec: "b", category: "unit" }], spawned_from_item: null, dependencies: [] } as never, 1), ts: "2026-06-14T00:01:00.000Z" },
+      { ...ev({ type: "item_added", item_id: "S01-001", subsprint_id: "S01", description: "first", code_locations: ["a.ts"], gates: [{ kind: "test", spec: "x", category: "functional" }], dependencies: [] } as never, 2), ts: "2026-06-14T00:02:00.000Z" },
+      { ...ev({ type: "item_added", item_id: "S01-002", subsprint_id: "S01", description: "second", code_locations: ["b.ts"], gates: [{ kind: "test", spec: "y" }], dependencies: ["S01-001"] } as never, 3), ts: "2026-06-14T00:03:00.000Z" },
+      { ...ev({ type: "dependencies_added", target_id: "S01-002", dependencies: ["S01"] } as never, 4), ts: "2026-06-14T00:04:00.000Z" },
+      { ...ev({ type: "item_resolved", item_id: "S01-001", disposition: "completed", commit_id: "deadbeef", gate_results: [{ kind: "test", spec: "x", passed: true, evidence: "ok" }], spawned_subsprint: null, reason: null, changelog: { verb: "added", line: "Added the first bookshop catalog slice." } } as never, 5), ts: "2026-06-14T00:05:00.000Z" },
+      { ...ev({ type: "item_resolved", item_id: "S01-002", disposition: "deprecated", commit_id: null, gate_results: [], spawned_subsprint: null, reason: "not needed", changelog: null } as never, 6), ts: "2026-06-14T00:06:00.000Z" },
+    ];
+    const s = project(events)!;
+    expect(s.context_notes).toEqual(["ship carefully"]);
+    expect(s.subsprints[0]!.items[0]!.status).toBe("completed");
+    expect(s.subsprints[0]!.items[0]!.changelog).toEqual({ verb: "added", line: "Added the first bookshop catalog slice." });
+    expect(s.subsprints[0]!.items[1]!.status).toBe("deprecated");
+    expect(s.subsprints[0]!.items[1]!.changelog).toBeNull();
+    expect(s.subsprints[0]!.items[1]!.dependencies).toEqual(["S01-001", "S01"]);
+    expect(s.graph.edges).toEqual([
+      { from: "S01-002", to: "S01-001" },
+      { from: "S01-002", to: "S01" },
+    ]);
+  });
+
   it("marks subsprint closed when all items resolved; attaches evidence", () => {
     const events: LedgerEvent[] = [
       ev({ type: "sprint_created", goal: "g", worktree: "/w", branch: "main", dir: "/r" }, 0),
@@ -34,7 +80,7 @@ describe("project", () => {
     const s = project(events)!;
     expect(s.subsprints[0]!.status).toBe("closed");
     const item = s.subsprints[0]!.items[0]!;
-    expect(item.status).toBe("resolved");
+    expect(item.status).toBe("completed");
     expect(item.disposition).toBe("completed");
     expect(item.commit_id).toBe("deadbeef");
   });

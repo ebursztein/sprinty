@@ -4,6 +4,7 @@ import { GateKind } from "./enums.js";
 export const Gate = z.object({
   kind: GateKind,
   spec: z.string().min(1),
+  category: z.string().min(1).optional(),
 });
 export type Gate = z.infer<typeof Gate>;
 

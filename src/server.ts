@@ -9,10 +9,13 @@ import { startDashboard, type Dashboard } from "./dashboard/server.js";
 
 const INSTRUCTIONS = `Sprinty enforces a disciplined sprint.
 One sprint per repo/session (the .sprinty/current pointer keeps exactly one open). Call info() to orient before acting.
-Build is item-driven: subsprint_new -> add (description + code_locations + gates, all required)
--> done (commit + passing gates) | split (promote to a subsprint) | deprecate (with reason).
-Subsprints close automatically when their items resolve. sprint_close re-runs every gate; it refuses
-to close if anything is unresolved, uncommitted, or a gate fails. IDs are minted by the server.
+Build is item-driven: sprint_new(goal, context_notes?) -> subsprint_new(..., dependencies?)
+-> add(description + code_locations + gates, dependencies?) -> done(commit + passing gates + changelog)
+| split(promote to a subsprint) | deprecate(reason). Use dependencies(target, dependencies[]) to add graph edges later.
+current() returns the sprint window plus a dependency graph with blocked_by, unblocks, topological_order, and cycles.
+done() records a Git-backed file change map. changelog() renders Markdown with semver sections, coverage, and change-map tables.
+Subsprints close automatically when their items are completed, split, or deprecated. sprint_close re-runs executable gates;
+it refuses to close if anything is open, uncommitted, missing changelog, missing coverage, or failing a gate. IDs are minted by the server.
 Use search(pattern, context_lines) to query the immutable record. dashboard() returns a live URL.`;
 
 export async function main(): Promise<void> {

@@ -17,4 +17,10 @@ describe("runGate", () => {
     const r = runGate({ kind: "command", spec: "exit 3" }, process.cwd());
     expect(r.passed).toBe(false);
   });
+
+  it("fails timed-out commands instead of hanging indefinitely", () => {
+    const r = runGate({ kind: "command", spec: "node -e \"setTimeout(() => {}, 5000)\"" }, process.cwd(), 50);
+    expect(r.passed).toBe(false);
+    expect(r.evidence).toContain("timed out");
+  });
 });

@@ -10,6 +10,7 @@ export function renderEvent(e: LedgerEvent): string {
     case "item_updated": return `[${e.target_id}] update: ${e.note}`;
     case "item_resolved": return `[${e.item_id}] resolved: ${e.disposition}${e.commit_id ? ` @${e.commit_id}` : ""}${e.reason ? ` reason: ${e.reason}` : ""}${e.spawned_subsprint ? ` -> ${e.spawned_subsprint}` : ""}`;
     case "note_added": return `[${e.element_id}] note: ${e.text}`;
+    case "dependencies_added": return `[${e.target_id}] dependencies: ${e.dependencies.join(", ")}`;
     case "sprint_closed": return `[sprint] closed`;
   }
 }
