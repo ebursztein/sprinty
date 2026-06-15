@@ -25,4 +25,10 @@ describe("client guidance", () => {
     const codex = readFileSync("clients/codex/README.md", "utf8");
     expect(codex).toContain("top-level `skills/` directory");
   });
+
+  it("builds generated dist before npm packaging", () => {
+    const pkg = JSON.parse(readFileSync("package.json", "utf8")) as { scripts?: Record<string, string>; files?: string[] };
+    expect(pkg.files).toContain("dist");
+    expect(pkg.scripts?.prepack).toBe("npm run build");
+  });
 });
