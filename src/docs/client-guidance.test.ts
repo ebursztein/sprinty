@@ -54,4 +54,16 @@ describe("client guidance", () => {
     expect(pkg.files).toContain("dist");
     expect(pkg.scripts?.prepack).toBe("npm run build");
   });
+
+  it("keeps client and plugin manifest versions aligned with the package", () => {
+    const pkg = JSON.parse(readFileSync("package.json", "utf8")) as { version: string };
+    for (const manifestPath of [
+      "plugins/sprinty/.codex-plugin/plugin.json",
+      "clients/claude/.claude-plugin/plugin.json",
+      "clients/gemini/gemini-extension.json",
+    ]) {
+      const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as { version: string };
+      expect(manifest.version, manifestPath).toBe(pkg.version);
+    }
+  });
 });
