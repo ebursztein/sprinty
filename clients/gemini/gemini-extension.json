@@ -1,7 +1,7 @@
 {
   "name": "sprinty",
   "version": "0.1.0",
-  "description": "Disciplined sprint discipline with an immutable git-anchored ledger and live dashboard.",
+  "description": "Disciplined sprint workflow with dashboard-at-start, feature subsprints, artifacts, bug-id follow-ups, spike investigations, an immutable git-anchored ledger, and close gates.",
   "contextFileName": "GEMINI.md",
   "mcpServers": {
     "sprinty": { "command": "npx", "args": ["-y", "sprinty-mcp"] }

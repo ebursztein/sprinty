@@ -39,6 +39,14 @@ describe("client guidance", () => {
     expect(pluginText).toContain("artifact_add/list/amend/deprecate");
     expect(pluginText).toContain("follow_up");
     expect(pluginText).toContain("spike_conclude");
+
+    for (const manifestPath of ["clients/claude/.claude-plugin/plugin.json", "clients/gemini/gemini-extension.json"]) {
+      const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as { description?: string };
+      expect(manifest.description, manifestPath).toContain("dashboard-at-start");
+      expect(manifest.description, manifestPath).toContain("artifacts");
+      expect(manifest.description, manifestPath).toContain("follow-ups");
+      expect(manifest.description, manifestPath).toContain("spike");
+    }
   });
 
   it("builds generated dist before npm packaging", () => {

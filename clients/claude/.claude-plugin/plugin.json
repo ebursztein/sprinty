@@ -1,7 +1,7 @@
 {
   "name": "sprinty",
   "version": "0.1.0",
-  "description": "Disciplined sprint discipline: structured sprint/subsprint/item objects, an immutable git-anchored ledger, programmatic close-gates, and a live dashboard.",
+  "description": "Disciplined sprint workflow: dashboard-at-start, feature subsprints, artifacts, bug-id follow-ups, spike investigations, an immutable git-anchored ledger, and programmatic close gates.",
   "author": { "name": "Elie Bursztein" },
   "homepage": "https://github.com/ebursztein/sprinty",
   "repository": "https://github.com/ebursztein/sprinty",
