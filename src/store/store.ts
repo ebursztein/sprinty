@@ -81,6 +81,7 @@ export class SprintStore {
     const s = this.requireState();
     const sub = s.subsprints.find((x) => x.id === input.subsprint);
     if (!sub) throw new StoreError(`Unknown subsprint ${input.subsprint}.`);
+    if (sub.status !== "open") throw new StoreError(`Cannot add an item to ${sub.status} subsprint ${input.subsprint}.`);
     this.validateGates(input.gates);
     const id = mintItemId(sub.id, sub.items.length);
     const dependencies = input.dependencies ?? [];

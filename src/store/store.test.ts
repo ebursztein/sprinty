@@ -69,6 +69,18 @@ describe("SprintStore lifecycle", () => {
     expect(() => store.addItem({ subsprint: "S99", description: "i", code_locations: ["a.ts"], gates: [{ kind: "command", spec: "true" }] })).toThrow(StoreError);
   });
 
+  it("rejects adding an item to a closed or deprecated subsprint", () => {
+    store.createSprint("g");
+    store.createSubsprint({ description: "d", goals: ["go"], gates: [{ kind: "command", spec: "true" }] });
+    store.addItem({ subsprint: "S01", description: "done", code_locations: ["a.ts"], gates: [{ kind: "command", spec: "true" }] });
+    store.done({ item: "S01-001", commit_id: sha, gate_results: [{ kind: "command", spec: "true", passed: true, evidence: "ok" }], changelog: { verb: "fixed", line: "Fixed closed work." } });
+    expect(() => store.addItem({ subsprint: "S01", description: "reopen", code_locations: ["b.ts"], gates: [{ kind: "command", spec: "true" }] })).toThrow(/closed subsprint/);
+
+    store.createSpike({ description: "try parser", goals: ["learn"], gates: [{ kind: "command", spec: "true" }] });
+    store.deprecateSpike({ subsprint: "S02", reason: "not worth it" });
+    expect(() => store.addItem({ subsprint: "S02", description: "late experiment", code_locations: ["c.ts"], gates: [{ kind: "command", spec: "true" }] })).toThrow(/deprecated subsprint/);
+  });
+
   it("rejects prose-like command gates before they enter the ledger", () => {
     store.createSprint("g");
     expect(() => store.createSubsprint({
