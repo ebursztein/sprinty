@@ -218,6 +218,7 @@ export class SprintStore {
     const s = this.requireState();
     const artifact = s.artifacts.find((a) => a.id === input.artifact);
     if (!artifact) throw new StoreError(`Unknown artifact ${input.artifact}.`);
+    if (artifact.status === "deprecated") throw new StoreError(`Artifact ${input.artifact} is already deprecated.`);
     if (!input.reason.trim()) throw new StoreError("Artifact deprecation requires a reason.");
     this.ledger.append({ type: "artifact_deprecated", artifact_id: input.artifact, reason: input.reason });
     return this.requireState();

@@ -238,6 +238,9 @@ describe("SprintStore lifecycle", () => {
     store.deprecateArtifact({ artifact: "A001", reason: "superseded" });
     expect(store.listArtifacts({}).artifacts).toEqual([]);
     expect(store.listArtifacts({ include_deprecated: true }).artifacts[0]).toMatchObject({ status: "deprecated", deprecation_reason: "superseded" });
+    expect(() => store.amendArtifact({ artifact: "A001", title: "Spec v3" })).toThrow(/deprecated/);
+    expect(() => store.deprecateArtifact({ artifact: "A001", reason: "obsolete" })).toThrow(/already deprecated/);
+    expect(store.listArtifacts({ include_deprecated: true }).artifacts[0]).toMatchObject({ deprecation_reason: "superseded" });
   });
 
   it("creates spike subsprints with normal items and a required conclusion", () => {
