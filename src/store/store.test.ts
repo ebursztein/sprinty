@@ -423,6 +423,21 @@ describe("sprint_close teeth", () => {
     expect(closeEvent?.gate_results.filter((result) => result.spec === gate.spec)).toHaveLength(1);
   });
 
+  it("rejects post-close mutations and duplicate close attempts", () => {
+    store.createSprint("g");
+    store.createSubsprint({ description: "d", goals: ["go"], gates: [{ kind: "command", spec: "true" }] });
+    store.addItem({ subsprint: "S01", description: "i", code_locations: ["a.ts"], gates: [{ kind: "command", spec: "true" }] });
+    store.done({ item: "S01-001", commit_id: sha, gate_results: [{ kind: "command", spec: "true", passed: true, evidence: "ok" }], changelog: { verb: "fixed", line: "Fixed close lifecycle." } });
+    store.closeSprint({ coverage: { not_applicable: "post-close guard test" } });
+
+    expect(() => store.createSubsprint({ description: "late", goals: ["go"], gates: [{ kind: "command", spec: "true" }] })).toThrow(/closed/);
+    expect(() => store.addNote({ element: "S01", text: "late note" })).toThrow(/closed/);
+    expect(() => store.archiveSprint({ reason: "late archive" })).toThrow(/closed/);
+    expect(() => store.closeSprint({ coverage: { not_applicable: "again" } })).toThrow(/already closed/);
+
+    expect(store.createSprint("next").status).toBe("active");
+  });
+
   it("requires coverage evidence by path to close", () => {
     store.createSprint("g");
     store.createSubsprint({ description: "d", goals: ["go"], gates: [{ kind: "command", spec: "true" }] });
