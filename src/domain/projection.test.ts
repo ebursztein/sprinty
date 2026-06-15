@@ -134,4 +134,15 @@ describe("project", () => {
     expect(s.goal).toBe("only");
     expect(s.status).toBe("closed");
   });
+
+  it("reports archived status once a sprint_archived event is present", () => {
+    const events: LedgerEvent[] = [
+      ev({ type: "sprint_created", goal: "only", worktree: "/w", branch: "main", dir: "/r" }, 0),
+      ev({ type: "sprint_archived", reason: "alpha recovery" }, 1),
+    ];
+    const s = project(events)!;
+    expect(s.goal).toBe("only");
+    expect(s.status).toBe("archived");
+    expect(s.closed_at).toBe(t);
+  });
 });

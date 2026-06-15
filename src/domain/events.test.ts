@@ -72,6 +72,16 @@ describe("LedgerEvent", () => {
     expect(e.target_id).toBe("S01-001");
   });
 
+  it("parses sprint archive events", () => {
+    const e = LedgerEvent.parse({
+      ...base,
+      type: "sprint_archived",
+      reason: "alpha recovery",
+    });
+    expect(e.type).toBe("sprint_archived");
+    expect(e.reason).toBe("alpha recovery");
+  });
+
   it("rejects an unknown event type", () => {
     expect(() => LedgerEvent.parse({ ...base, type: "smuggled" })).toThrow();
   });

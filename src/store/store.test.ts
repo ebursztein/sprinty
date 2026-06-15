@@ -63,6 +63,26 @@ describe("SprintStore lifecycle", () => {
     expect(() => store.addItem({ subsprint: "S99", description: "i", code_locations: ["a.ts"], gates: [{ kind: "command", spec: "true" }] })).toThrow(StoreError);
   });
 
+  it("rejects prose-like command gates before they enter the ledger", () => {
+    store.createSprint("g");
+    expect(() => store.createSubsprint({
+      description: "d",
+      goals: ["go"],
+      gates: [{ kind: "command", spec: "bookshop owner accepts the dashboard direction" }],
+    })).toThrow(/Command gate looks like prose/);
+    expect(() => store.createSubsprint({
+      description: "d",
+      goals: ["go"],
+      gates: [{ kind: "manual", spec: "bookshop owner accepts the dashboard direction" }],
+    })).not.toThrow();
+    expect(() => store.addItem({
+      subsprint: "S01",
+      description: "i",
+      code_locations: ["a.ts"],
+      gates: [{ kind: "command", spec: "docs reviewer signs off" }],
+    })).toThrow(/Command gate looks like prose/);
+  });
+
   it("done rejects a fake commit and accepts a real one", () => {
     store.createSprint("g");
     store.createSubsprint({ description: "d", goals: ["go"], gates: [{ kind: "build", spec: "true" }] });
@@ -232,6 +252,26 @@ describe("sprint_close teeth", () => {
       expect(e).toBeInstanceOf(StoreError);
       expect((e as StoreError).blockers.join(" ")).toContain("Coverage report not found");
     }
+  });
+
+  it("allows coverage to be marked not applicable with a reason", () => {
+    store.createSprint("docs");
+    store.createSubsprint({ description: "d", goals: ["go"], gates: [{ kind: "command", spec: "true" }] });
+    store.addItem({ subsprint: "S01", description: "docs only", code_locations: ["README.md"], gates: [{ kind: "command", spec: "true" }] });
+    store.done({ item: "S01-001", commit_id: sha, gate_results: [{ kind: "command", spec: "true", passed: true, evidence: "ok" }], changelog: { verb: "changed", line: "Changed docs-only sprint notes." } });
+    const view = store.closeSprint({ coverage: { not_applicable: "docs-only sprint" } });
+    expect(view.status).toBe("closed");
+    expect(view.coverage).toBeNull();
+  });
+
+  it("archives a sprint with unresolved work when a recovery reason is provided", () => {
+    store.createSprint("alpha recovery");
+    store.createSubsprint({ description: "d", goals: ["go"], gates: [{ kind: "command", spec: "true" }] });
+    store.addItem({ subsprint: "S01", description: "stuck", code_locations: ["src/a.ts"], gates: [{ kind: "command", spec: "true" }] });
+    expect(() => store.archiveSprint({ reason: "" })).toThrow(StoreError);
+    const view = store.archiveSprint({ reason: "alpha recovery after bad ledger state" });
+    expect(view.status).toBe("archived");
+    expect(view.closed_at).toMatch(/^\d{4}-\d{2}-\d{2}T/);
   });
 
   it("returns changelog markdown with file change-map and coverage tables", () => {

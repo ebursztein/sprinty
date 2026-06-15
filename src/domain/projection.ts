@@ -193,6 +193,13 @@ export function project(events: LedgerEvent[]): SprintView | null {
         }
         timeline.push({ seq: e.seq, ts: e.ts, type: e.type, id: "sprint", text: "closed" });
         break;
+      case "sprint_archived":
+        if (sprint) {
+          sprint.status = "archived";
+          sprint.closed_at = e.ts;
+        }
+        timeline.push({ seq: e.seq, ts: e.ts, type: e.type, id: "sprint", text: e.reason });
+        break;
     }
   }
 

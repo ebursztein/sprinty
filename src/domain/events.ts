@@ -85,7 +85,13 @@ export const SprintClosed = z.object({
   coverage: CoverageSummary.nullable().default(null),
 });
 
+export const SprintArchived = z.object({
+  ...base,
+  type: z.literal("sprint_archived"),
+  reason: z.string().min(1),
+});
+
 export const LedgerEvent = z.discriminatedUnion("type", [
-  SprintCreated, SubsprintCreated, ItemAdded, ItemUpdated, ItemResolved, NoteAdded, DependenciesAdded, ArtifactAdded, SprintClosed,
+  SprintCreated, SubsprintCreated, ItemAdded, ItemUpdated, ItemResolved, NoteAdded, DependenciesAdded, ArtifactAdded, SprintClosed, SprintArchived,
 ]);
 export type LedgerEvent = z.infer<typeof LedgerEvent>;

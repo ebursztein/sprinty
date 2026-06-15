@@ -94,6 +94,14 @@ describe("tool handlers", () => {
     expect(current.artifacts).toEqual([{ id: "A001", target_id: "S01-001", kind: "spec", title: "Dashboard design", uri: "docs/superpowers/specs/dashboard.md", description: "Approved dashboard design", created_at: expect.any(String) }]);
   });
 
+  it("archives a sprint through the archive verb", async () => {
+    await tools.sprint_new!.handler({ goal: "g" });
+    await tools.subsprint_new!.handler({ description: "d", goals: ["go"], gates: [{ kind: "command", spec: "true" }] });
+    await tools.add!.handler({ subsprint: "S01", description: "i", code_locations: ["a.ts"], gates: [{ kind: "command", spec: "true" }] });
+    const archived = (await tools.sprint_archive!.handler({ reason: "alpha recovery after bad ledger state" })) as { status: string };
+    expect(archived.status).toBe("archived");
+  });
+
   it("search finds matching ledger entries", async () => {
     await tools.sprint_new!.handler({ goal: "g" });
     await tools.subsprint_new!.handler({ description: "serializer work", goals: ["go"], gates: [{ kind: "command", spec: "true" }] });

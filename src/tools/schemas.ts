@@ -7,12 +7,16 @@ export const CoverageInput = z.object({
   format: z.literal("lcov"),
   command: z.string().min(1).optional(),
 });
+export const CoverageNotApplicableInput = z.object({
+  not_applicable: z.string().min(1),
+});
 
 export const SprintNewInput = z.object({
   goal: z.string().min(1),
   context_notes: z.array(z.string().min(1)).default([]),
 });
-export const SprintCloseInput = z.object({ coverage: CoverageInput.optional() });
+export const SprintCloseInput = z.object({ coverage: z.union([CoverageInput, CoverageNotApplicableInput]).optional() });
+export const SprintArchiveInput = z.object({ reason: z.string().min(1) });
 export const ChangelogInput = z.object({});
 export const InfoInput = z.object({});
 export const CurrentInput = z.object({

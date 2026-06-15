@@ -12,6 +12,10 @@ import { renderChangelogMarkdown } from "../domain/changelog.js";
 import type { ArtifactKind, ChangelogEntry, LedgerEvent } from "../domain/events.js";
 import type { Gate, GateResult } from "../domain/gates.js";
 
+export interface CoverageNotApplicableInput {
+  not_applicable: string;
+}
+
 export class StoreError extends Error {
   constructor(message: string, readonly blockers: string[] = []) {
     super(message);
@@ -55,6 +59,7 @@ export class SprintStore {
 
   createSubsprint(input: { description: string; goals: string[]; gates: Gate[]; dependencies?: string[] }): { id: string; view: SprintView } {
     const s = this.requireState();
+    this.validateGates(input.gates);
     const id = mintSubsprintId(s.subsprints.length);
     const dependencies = input.dependencies ?? [];
     this.validateDependencyAddition(s, id, dependencies, { allowNewTarget: true, newTarget: { id, kind: "subsprint", label: input.description, status: "open" } });
@@ -66,6 +71,7 @@ export class SprintStore {
     const s = this.requireState();
     const sub = s.subsprints.find((x) => x.id === input.subsprint);
     if (!sub) throw new StoreError(`Unknown subsprint ${input.subsprint}.`);
+    this.validateGates(input.gates);
     const id = mintItemId(sub.id, sub.items.length);
     const dependencies = input.dependencies ?? [];
     this.validateDependencyAddition(s, id, dependencies, { allowNewTarget: true, newTarget: { id, kind: "item", label: input.description, status: "open" } });
@@ -122,6 +128,7 @@ export class SprintStore {
   split(input: { item: string; description: string; goals: string[]; gates: Gate[]; dependencies?: string[] }): SprintView {
     const s = this.requireState();
     this.findOpenItem(s, input.item);
+    this.validateGates(input.gates);
     const newId = mintSubsprintId(s.subsprints.length);
     const dependencies = input.dependencies ?? [];
     this.validateDependencyAddition(s, newId, dependencies, { allowNewTarget: true, newTarget: { id: newId, kind: "subsprint", label: input.description, status: "open" } });
@@ -184,7 +191,7 @@ export class SprintStore {
     return renderChangelogMarkdown(this.requireState());
   }
 
-  closeSprint(input: { coverage?: CoverageInput | undefined } = {}): SprintView {
+  closeSprint(input: { coverage?: CoverageInput | CoverageNotApplicableInput | undefined } = {}): SprintView {
     const s = this.requireState();
     const blockers: string[] = [];
     const allItems = s.subsprints.flatMap((x) => x.items);
@@ -203,7 +210,9 @@ export class SprintStore {
 
     if (allItems.some((item) => item.status === "completed")) {
       if (!input.coverage) blockers.push("Coverage evidence is required to close a sprint with completed code items.");
-      else {
+      else if ("not_applicable" in input.coverage) {
+        if (!input.coverage.not_applicable.trim()) blockers.push("Coverage not-applicable reason is required.");
+      } else {
         try { coverage = parseCoverageReport(this.dir, input.coverage); }
         catch (err) { blockers.push((err as Error).message); }
       }
@@ -225,6 +234,21 @@ export class SprintStore {
     if (blockers.length > 0) throw new StoreError("Sprint cannot close.", blockers);
     this.ledger.append({ type: "sprint_closed", gate_results: results, coverage });
     return this.requireState();
+  }
+
+  archiveSprint(input: { reason: string }): SprintView {
+    this.requireState();
+    if (!input.reason.trim()) throw new StoreError("Archive requires a reason.");
+    this.ledger.append({ type: "sprint_archived", reason: input.reason });
+    return this.requireState();
+  }
+
+  private validateGates(gates: Gate[]): void {
+    for (const gate of gates) {
+      if (gate.kind === "command" && looksLikeProse(gate.spec)) {
+        throw new StoreError(`Command gate looks like prose. Use a manual gate or provide a shell command: ${gate.spec}`);
+      }
+    }
   }
 
   private validateDependencyAddition(
@@ -259,4 +283,19 @@ export class SprintStore {
       throw err;
     }
   }
+}
+
+function looksLikeProse(spec: string): boolean {
+  const trimmed = spec.trim();
+  if (!trimmed) return false;
+  if (/[;&|<>()$`*?\[\]{}]/.test(trimmed) || trimmed.includes("./") || trimmed.includes("../") || trimmed.startsWith("/")) return false;
+  const first = trimmed.split(/\s+/)[0]!;
+  const commandWords = new Set([
+    "awk", "bash", "bun", "cargo", "cat", "cd", "cp", "curl", "deno", "echo", "false", "find", "git", "go",
+    "ls", "make", "mkdir", "mv", "node", "npm", "npx", "pnpm", "python", "python3", "pytest", "rg", "rm",
+    "sed", "sh", "true", "tsc", "uv", "vitest", "yarn",
+  ]);
+  if (commandWords.has(first)) return false;
+  const words = trimmed.split(/\s+/);
+  return words.length >= 3 && words.every((word) => /^[A-Za-z][A-Za-z'-]*[.,:]?$/.test(word));
 }

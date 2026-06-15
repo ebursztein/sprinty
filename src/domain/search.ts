@@ -13,6 +13,7 @@ export function renderEvent(e: LedgerEvent): string {
     case "dependencies_added": return `[${e.target_id}] dependencies: ${e.dependencies.join(", ")}`;
     case "artifact_added": return `[${e.target_id}] artifact ${e.artifact_id}: ${e.kind} ${e.title} @ ${e.uri}${e.description ? ` | ${e.description}` : ""}`;
     case "sprint_closed": return `[sprint] closed`;
+    case "sprint_archived": return `[sprint] archived: ${e.reason}`;
   }
 }
 

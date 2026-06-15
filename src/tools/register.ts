@@ -25,6 +25,8 @@ export function buildToolHandlers(store: SprintStore, openDashboard: () => Promi
       (i) => ({ ...store.createSprint(i.goal, i.context_notes), orientation: orientation() })),
     sprint_close: def(S.SprintCloseInput, "Close the sprint after a programmatic re-check of all gates.",
       (i) => store.closeSprint(i)),
+    sprint_archive: def(S.SprintArchiveInput, "Archive the sprint with a recovery reason, bypassing normal close gates.",
+      (i) => store.archiveSprint(i)),
     info: def(S.InfoInput, "The one status read: sprint, subsprints, statuses.",
       () => store.read()),
     current: def(S.CurrentInput, "Focus window: last closed item + next N, notes scoped to current subsprint.",

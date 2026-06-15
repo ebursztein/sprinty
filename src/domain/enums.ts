@@ -15,11 +15,11 @@ export type ChangelogVerb = z.infer<typeof ChangelogVerb>;
 export const SubsprintStatus = z.enum(["open", "closed"]);
 export type SubsprintStatus = z.infer<typeof SubsprintStatus>;
 
-export const SprintStatus = z.enum(["active", "closed"]);
+export const SprintStatus = z.enum(["active", "closed", "archived"]);
 export type SprintStatus = z.infer<typeof SprintStatus>;
 
 export const EventType = z.enum([
   "sprint_created", "subsprint_created", "item_added",
-  "item_updated", "item_resolved", "note_added", "dependencies_added", "sprint_closed",
+  "item_updated", "item_resolved", "note_added", "dependencies_added", "artifact_added", "sprint_closed", "sprint_archived",
 ]);
 export type EventType = z.infer<typeof EventType>;
