@@ -12,13 +12,17 @@
   let selectedSubId: string | null = null;
   let expandedItemIds: string[] = [];
   let ledgerPage = 0;
-  let dark = true;
+  let theme: "light" | "dark" = "dark";
+  let themeMounted = false;
 
   const pageSize = 8;
+  const themeKey = "sprinty-dashboard-theme";
 
   $: model = sprint ? deriveDashboardModel(sprint) : null;
   $: if (model && !selectedSubId) selectedSubId = model.activeSubsprint?.id ?? model.sprint.subsprints[0]?.id ?? null;
   $: selectedSub = model?.sprint.subsprints.find((sub) => sub.id === selectedSubId) ?? model?.activeSubsprint ?? null;
+  $: isDark = theme === "dark";
+  $: if (themeMounted) applyTheme(theme);
   $: ledgerRows = model?.ledger ?? [];
   $: ledgerPages = Math.max(1, Math.ceil(ledgerRows.length / pageSize));
   $: if (ledgerPage > ledgerPages - 1) ledgerPage = ledgerPages - 1;
@@ -27,10 +31,28 @@
   $: selectedExpandedCount = selectedSub?.items.filter((item) => expandedItemIds.includes(item.id)).length ?? 0;
 
   onMount(() => {
+    const saved = window.localStorage.getItem(themeKey);
+    const prefersLight = window.matchMedia?.("(prefers-color-scheme: light)").matches ?? false;
+    theme = saved === "light" || saved === "dark" ? saved : prefersLight ? "light" : "dark";
+    themeMounted = true;
+    applyTheme(theme);
     void tick();
     const timer = setInterval(() => void tick(), 2000);
     return () => clearInterval(timer);
   });
+
+  function applyTheme(next: "light" | "dark"): void {
+    document.documentElement.dataset.theme = next;
+    document.documentElement.classList.toggle("dark", next === "dark");
+    document.documentElement.style.colorScheme = next;
+    document.body.dataset.theme = next;
+    document.body.classList.toggle("dark", next === "dark");
+    window.localStorage.setItem(themeKey, next);
+  }
+
+  function toggleTheme(): void {
+    theme = isDark ? "light" : "dark";
+  }
 
   async function tick(): Promise<void> {
     try {
@@ -151,7 +173,7 @@
     </div>
   </main>
 {:else}
-  <div class:dark class="dashboard-frame" data-theme={dark ? "sprintydark" : "sprinty"}>
+  <div class:dark={isDark} class="dashboard-frame" data-theme={theme}>
     <div class="dashboard-canvas">
       <header class="topbar">
         <div class="min-w-0">
@@ -168,30 +190,22 @@
         <div class="topbar-actions">
           <span class={statusClass(model.sprint.status)}>{model.sprint.status}</span>
           <span class="coverage-chip badge badge-outline">{model.sprint.coverage?.lines.percent ?? "--"}% cov</span>
-          <button class="theme-toggle btn btn-outline btn-sm" on:click={() => dark = !dark} aria-label="Toggle theme">{dark ? "Light" : "Dark"}</button>
+          <button
+            class="theme-switch"
+            on:click={toggleTheme}
+            aria-label={`Switch to ${isDark ? "light" : "dark"} theme`}
+            aria-pressed={isDark}
+            title={`Switch to ${isDark ? "light" : "dark"} theme`}
+          >
+            <span class="theme-switch-icon theme-switch-sun" aria-hidden="true"></span>
+            <span class="theme-switch-icon theme-switch-moon" aria-hidden="true"></span>
+            <span class="theme-switch-thumb" aria-hidden="true"></span>
+          </button>
         </div>
       </header>
 
       <main class="dashboard-main">
         <section class="overview-band" data-testid="stats-strip">
-          <div class="artifact-strip" data-testid="artifact-shelf">
-            <div class="section-title">
-              <span>Artifacts</span>
-              <span>{model.artifacts.active.length} active</span>
-            </div>
-            <div class="artifact-list">
-              {#each model.artifacts.recent as artifact}
-                <a class="artifact-token" href={artifact.uri} title={artifact.uri}>
-                  <span>{artifact.kind}</span>
-                  <strong>{artifact.title}</strong>
-                  <small>{targetLabel(artifact)}</small>
-                </a>
-              {:else}
-                <div class="empty-inline">No artifacts recorded yet.</div>
-              {/each}
-            </div>
-          </div>
-
           <div class="metrics-grid">
             <div class="metric-panel metric-progress">
               <div class="metric-heading">
@@ -312,6 +326,24 @@
               {/each}
             </div>
           </section>
+        </section>
+
+        <section class="artifact-strip" data-testid="artifact-shelf">
+          <div class="section-title">
+            <span>Artifacts</span>
+            <span>{model.artifacts.active.length} active</span>
+          </div>
+          <div class="artifact-list">
+            {#each model.artifacts.recent as artifact}
+              <a class="artifact-token" href={artifact.uri} title={artifact.uri}>
+                <span>{artifact.kind}</span>
+                <strong>{artifact.title}</strong>
+                <small>{targetLabel(artifact)}</small>
+              </a>
+            {:else}
+              <div class="empty-inline">No artifacts recorded yet.</div>
+            {/each}
+          </div>
         </section>
 
         <section class="timeline-panel" data-testid="timeline-panel">

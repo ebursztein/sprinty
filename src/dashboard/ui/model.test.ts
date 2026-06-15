@@ -146,7 +146,7 @@ describe("deriveDashboardModel", () => {
     expect(model.tree[1]!.defaultOpen).toBe(true);
     expect(model.tree[1]!.items.map((item) => item.tone)).toEqual(["current", "next"]);
     expect(model.timeline[0]!.id).toBe("S02-001");
-    expect(model.ledger[0]!.seq).toBe(0);
+    expect(model.ledger[0]!.seq).toBe(1);
   });
 
   it("selects current and next items using dependency graph order", () => {

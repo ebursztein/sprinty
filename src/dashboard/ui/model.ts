@@ -91,7 +91,7 @@ export function deriveDashboardModel(sprint: SprintView): DashboardModel {
     },
     tree: sprint.subsprints.map((sub) => treeSubsprint(sub, activeSubsprint, currentItem, nextItem, blockedIds)),
     timeline: sprint.timeline.slice().reverse().map(timelineRow),
-    ledger: sprint.timeline.map(timelineRow),
+    ledger: sprint.timeline.slice().reverse().map(timelineRow),
   };
 }
 
