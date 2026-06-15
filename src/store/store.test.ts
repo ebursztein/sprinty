@@ -264,9 +264,16 @@ describe("SprintStore lifecycle", () => {
   it("deprecates spike subsprints with a reason", () => {
     store.createSprint("g");
     store.createSpike({ description: "try parser", goals: ["learn"], gates: [{ kind: "command", spec: "true" }] });
+    store.addItem({ subsprint: "S01", description: "run experiment", code_locations: ["a.ts"], gates: [{ kind: "command", spec: "true" }] });
     const view = store.deprecateSpike({ subsprint: "S01", reason: "not worth it" });
     expect(view.subsprints[0]!.status).toBe("deprecated");
     expect(view.subsprints[0]!.spike_deprecation_reason).toBe("not worth it");
+    expect(view.subsprints[0]!.items[0]).toMatchObject({
+      status: "deprecated",
+      reason: "Spike S01 deprecated: not worth it",
+    });
+    const closed = store.closeSprint({ coverage: { not_applicable: "spike was deprecated before code changed" } });
+    expect(closed.status).toBe("closed");
   });
 });
 

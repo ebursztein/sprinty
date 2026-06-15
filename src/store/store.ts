@@ -252,6 +252,19 @@ export class SprintStore {
     if (!sub) throw new StoreError(`Unknown subsprint ${input.subsprint}.`);
     if (sub.kind !== "spike") throw new StoreError(`Subsprint ${input.subsprint} is not a spike.`);
     if (!input.reason.trim()) throw new StoreError("Spike deprecation requires a reason.");
+    for (const item of sub.items.filter((child) => child.status === "open")) {
+      this.ledger.append({
+        type: "item_resolved",
+        item_id: item.id,
+        disposition: "deprecated",
+        commit_id: null,
+        gate_results: [],
+        spawned_subsprint: null,
+        reason: `Spike ${input.subsprint} deprecated: ${input.reason}`,
+        changelog: null,
+        change_map: emptyChangeMap(),
+      });
+    }
     this.ledger.append({ type: "spike_deprecated", subsprint_id: input.subsprint, reason: input.reason });
     return this.requireState();
   }
