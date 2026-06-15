@@ -204,4 +204,15 @@ describe("deriveDashboardModel", () => {
     expect(model.blockedItems.map((item) => item.id)).toEqual(["S02-002"]);
     expect(model.tree[1]!.items.map((item) => item.tone)).toEqual(["blocked", "current", "next"]);
   });
+
+  it("derives a readable item label for legacy items without titles", () => {
+    const sprint = sprintView();
+    const legacy = sprint.subsprints[1]!.items[0]! as Partial<typeof sprint.subsprints[1]!.items[0]>;
+    delete legacy.title;
+    legacy.description = "Choose and codify Svelte Tailwind dashboard component primitives for agents.";
+
+    const model = deriveDashboardModel(sprint);
+
+    expect(model.tree[1]!.items[0]!.label).toBe("Choose and codify Svelte Tailwind dashboard component primitives for agents.");
+  });
 });

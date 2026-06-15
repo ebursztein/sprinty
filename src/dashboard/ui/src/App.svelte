@@ -123,6 +123,12 @@
   function targetLabel(artifact: ArtifactView): string {
     return artifact.target_id === "sprint" ? "sprint" : artifact.target_id;
   }
+
+  function itemTitle(item: ItemView): string {
+    const title = (item as ItemView & { title?: string | null }).title;
+    if (title?.trim()) return title;
+    return item.description.split(/\s+/).slice(0, 10).join(" ");
+  }
 </script>
 
 <svelte:head>
@@ -138,7 +144,7 @@
     </div>
   </main>
 {:else}
-  <div class:dark class="dashboard-frame">
+  <div class:dark class="dashboard-frame" data-theme={dark ? "sprintydark" : "sprinty"}>
     <aside class="app-rail" aria-label="Sprinty navigation">
       <div class="rail-logo">S</div>
       <div class="rail-stack">
@@ -146,7 +152,7 @@
         <span class="rail-icon rail-icon-tree" title="Tree" aria-hidden="true"></span>
         <span class="rail-icon rail-icon-ledger" title="Ledger" aria-hidden="true"></span>
       </div>
-      <button class="theme-toggle" on:click={() => dark = !dark} aria-label="Toggle theme">{dark ? "L" : "D"}</button>
+      <button class="theme-toggle btn btn-ghost btn-sm" on:click={() => dark = !dark} aria-label="Toggle theme">{dark ? "L" : "D"}</button>
     </aside>
 
     <div class="dashboard-canvas">
@@ -157,14 +163,14 @@
           <div class="meta-line">
             <span>{model.sprint.branch || "detached"}</span>
             <span class="truncate">git {model.sprint.dir || model.sprint.worktree}</span>
-            <span class="truncate">data {model.sprint.data_dir}</span>
+            <span class="truncate">data {model.sprint.data_dir || "not configured"}</span>
             <span>started {fmt(model.sprint.created_at)}</span>
             {#if stale}<span class="warning-text">stale connection</span>{/if}
           </div>
         </div>
         <div class="topbar-actions">
           <span class={statusClass(model.sprint.status)}>{model.sprint.status}</span>
-          <span class="coverage-chip">{model.sprint.coverage?.lines.percent ?? "--"}% cov</span>
+          <span class="coverage-chip badge badge-outline">{model.sprint.coverage?.lines.percent ?? "--"}% cov</span>
         </div>
       </header>
 
@@ -219,6 +225,8 @@
                 <span><b>{model.progress.code.deletions}</b> deleted</span>
                 <span><b>{model.progress.code.files}</b> files</span>
                 <span><b>{model.progress.code.hotspots}</b> hotspots</span>
+                <span><b>{model.progress.gates.passed}</b> gates passed</span>
+                <span><b>{model.progress.gates.pending}</b> gates pending</span>
               </div>
             </div>
           </div>
@@ -276,7 +284,7 @@
                   <button class="todo-button" on:click={() => toggleItem(item)} aria-expanded={expandedItemId === item.id}>
                     <span class={statusDot(item.status)}></span>
                     <span class="todo-id">{item.id}</span>
-                    <span class="todo-title">{item.title}</span>
+                    <span class="todo-title">{itemTitle(item)}</span>
                     <span class={statusClass(item.status)}>{item.status}</span>
                     <span class:todo-expand-open={expandedItemId === item.id} class="todo-expand" aria-hidden="true"></span>
                   </button>

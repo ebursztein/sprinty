@@ -1,4 +1,7 @@
 import { describe, it, expect, afterEach } from "vitest";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { startDashboard, type Dashboard } from "./server.js";
 import type { SprintView } from "../domain/projection.js";
 
@@ -38,5 +41,26 @@ describe("dashboard", () => {
     const asset = await fetch(`${dash.url}${script}`);
     expect(asset.status).toBe(200);
     expect(asset.headers.get("content-type")).toContain("text/javascript");
+  });
+
+  it("prefers the current worktree dashboard build over the packaged fallback", async () => {
+    const previousCwd = process.cwd();
+    const temp = await mkdtemp(join(tmpdir(), "sprinty-dashboard-"));
+    try {
+      const root = join(temp, "dist", "dashboard-ui");
+      await mkdir(join(root, "assets"), { recursive: true });
+      await writeFile(join(root, "index.html"), '<!doctype html><div id="app">local-worktree-dashboard</div><script type="module" src="/assets/local.js"></script>');
+      await writeFile(join(root, "assets", "local.js"), 'console.log("local-worktree-dashboard");');
+      process.chdir(temp);
+
+      dash = await startDashboard(() => view);
+      const html = await (await fetch(`${dash.url}/`)).text();
+      expect(html).toContain("local-worktree-dashboard");
+      const asset = await (await fetch(`${dash.url}/assets/local.js`)).text();
+      expect(asset).toContain("local-worktree-dashboard");
+    } finally {
+      process.chdir(previousCwd);
+      await rm(temp, { recursive: true, force: true });
+    }
   });
 });

@@ -77,8 +77,8 @@ function contentType(path: string): string {
 function dashboardStaticRoot(): string {
   const here = dirname(fileURLToPath(import.meta.url));
   const candidates = [
-    join(here, "..", "dashboard-ui"),
     join(process.cwd(), "dist", "dashboard-ui"),
+    join(here, "..", "dashboard-ui"),
   ];
   return candidates.find((candidate) => existsSync(join(candidate, "index.html"))) ?? candidates[0]!;
 }

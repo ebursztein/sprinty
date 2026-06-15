@@ -133,7 +133,7 @@ function treeSubsprint(
     progress: { done, total, percent: percent(done, total) },
     items: sub.items.map((item) => ({
       id: item.id,
-      label: item.title,
+      label: itemTitle(item),
       status: item.status,
       tone: item.id === current?.id ? "current" : item.id === next?.id ? "next" : blockedIds.has(item.id) ? "blocked" : item.status === "open" ? "normal" : "muted",
       gateSummary: gateSummary(item),
@@ -177,6 +177,12 @@ function gateSummary(item: ItemView): string {
   const failed = item.gate_results.filter((gate) => !gate.passed).length;
   const pending = Math.max(0, item.gates.length - passed - failed);
   return `${passed}/${item.gates.length} pass${failed ? `, ${failed} fail` : ""}${pending ? `, ${pending} pending` : ""}`;
+}
+
+function itemTitle(item: ItemView): string {
+  const title = (item as ItemView & { title?: string | null }).title;
+  if (title?.trim()) return title;
+  return item.description.split(/\s+/).slice(0, 10).join(" ");
 }
 
 function timelineRow(entry: TimelineEntry): TimelineRow {
