@@ -24,8 +24,8 @@ function view(): SprintView {
       changelog: [],
       change_map: { by_file: [], by_directory: [], by_language: [], hotspots: [] },
       items: [
-        { id: "S01-001", subsprint_id: "S01", description: "done one", created_at: "2026-06-14T00:00:00.000Z", resolved_at: "2026-06-14T00:01:00.000Z", code_locations: ["a"], gates: [], status: "completed", disposition: "completed", commit_id: "abc", gate_results: [], reason: null, spawned_subsprint: null, updates: [], notes: [], dependencies: [], changelog: { verb: "fixed", line: "Fixed one thing." }, change_map: { by_file: [], by_directory: [], by_language: [], hotspots: [] }, artifacts: [], follow_ups: [] },
-        { id: "S01-002", subsprint_id: "S01", description: "open one", created_at: "2026-06-14T00:02:00.000Z", resolved_at: null, code_locations: ["b"], gates: [], status: "open", disposition: null, commit_id: null, gate_results: [], reason: null, spawned_subsprint: null, updates: [], notes: [], dependencies: ["S01-001"], changelog: null, change_map: { by_file: [], by_directory: [], by_language: [], hotspots: [] }, artifacts: [{ id: "A003", target_id: "S01-002", kind: "spec", title: "Item spec", uri: "docs/spec.md", description: null, created_at: "2026-06-14T00:00:00.000Z", updated_at: null, deprecated_at: null, deprecation_reason: null, status: "active" }], follow_ups: [{ id: "F001", target_id: "S01-002", description: "fix it", bug_ids: ["BUG-1"], created_at: "2026-06-14T00:01:00.000Z" }] },
+        { id: "S01-001", subsprint_id: "S01", title: "Done one", description: "done one", created_at: "2026-06-14T00:00:00.000Z", resolved_at: "2026-06-14T00:01:00.000Z", code_locations: ["a"], gates: [], status: "completed", disposition: "completed", commit_id: "abc", gate_results: [], reason: null, spawned_subsprint: null, updates: [], notes: [], dependencies: [], changelog: { verb: "fixed", line: "Fixed one thing." }, change_map: { by_file: [], by_directory: [], by_language: [], hotspots: [] }, artifacts: [], follow_ups: [] },
+        { id: "S01-002", subsprint_id: "S01", title: "Open one", description: "open one", created_at: "2026-06-14T00:02:00.000Z", resolved_at: null, code_locations: ["b"], gates: [], status: "open", disposition: null, commit_id: null, gate_results: [], reason: null, spawned_subsprint: null, updates: [], notes: [], dependencies: ["S01-001"], changelog: null, change_map: { by_file: [], by_directory: [], by_language: [], hotspots: [] }, artifacts: [{ id: "A003", target_id: "S01-002", kind: "spec", title: "Item spec", uri: "docs/spec.md", description: null, created_at: "2026-06-14T00:00:00.000Z", updated_at: null, deprecated_at: null, deprecation_reason: null, status: "active" }], follow_ups: [{ id: "F001", target_id: "S01-002", description: "fix it", bug_ids: ["BUG-1"], created_at: "2026-06-14T00:01:00.000Z" }] },
       ],
     }],
     changelog: [],
@@ -68,7 +68,44 @@ describe("windowCurrent", () => {
 
     const w = windowCurrent(v, 1, 2);
 
-    expect(w.next.map((item) => item.id)).toEqual(["S01-003", "S01-002"]);
+    expect(w.next.map((item) => item.id)).toEqual(["S01-003"]);
+    expect(w.blocked_open.map((item) => item.id)).toEqual(["S01-002"]);
     expect(w.current_subsprint?.id).toBe("S01");
+  });
+
+  it("keeps blocked open dependents out of current and returns relation context", () => {
+    const v = view();
+    const sub = v.subsprints[0]!;
+    sub.items = [
+      { ...sub.items[1]!, id: "S01-002", title: "Refresh tool", description: "refresh tool", dependencies: [] },
+      { ...sub.items[1]!, id: "S01-003", title: "Docs bundle", description: "docs bundle", dependencies: ["S01-004", "S01-005"] },
+      { ...sub.items[1]!, id: "S01-004", title: "List tool", description: "list tool", dependencies: [] },
+      { ...sub.items[1]!, id: "S01-005", title: "Search tool", description: "search tool", dependencies: ["S01-004"] },
+    ];
+    v.graph = {
+      nodes: [
+        { id: "S01-002", kind: "item", label: "Refresh tool", status: "open" },
+        { id: "S01-003", kind: "item", label: "Docs bundle", status: "open" },
+        { id: "S01-004", kind: "item", label: "List tool", status: "open" },
+        { id: "S01-005", kind: "item", label: "Search tool", status: "open" },
+      ],
+      edges: [
+        { from: "S01-003", to: "S01-004" },
+        { from: "S01-003", to: "S01-005" },
+        { from: "S01-005", to: "S01-004" },
+      ],
+      blocked_by: { "S01-002": [], "S01-003": ["S01-004", "S01-005"], "S01-004": [], "S01-005": ["S01-004"] },
+      unblocks: { "S01-002": [], "S01-003": [], "S01-004": ["S01-003", "S01-005"], "S01-005": ["S01-003"] },
+      topological_order: ["S01-002", "S01-004", "S01-005", "S01-003"],
+      cycles: [],
+    };
+
+    const w = windowCurrent(v, 1, 4);
+
+    expect(w.current?.id).toBe("S01-002");
+    expect(w.next.map((item) => item.id)).toEqual(["S01-002", "S01-004"]);
+    expect(w.blocked_open.map((item) => item.id)).toEqual(["S01-005", "S01-003"]);
+    expect(w.relations.find((row) => row.id === "S01-003")?.blocked_by.map((node) => node.id)).toEqual(["S01-004", "S01-005"]);
+    expect(w.relations.find((row) => row.id === "S01-004")?.unblocks.map((node) => node.id)).toEqual(["S01-003", "S01-005"]);
   });
 });

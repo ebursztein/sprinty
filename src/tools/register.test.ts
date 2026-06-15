@@ -26,6 +26,17 @@ function sprintInput(goal: string, context_notes?: string[]) {
   return { goal, git_dir: dir, data_dir: join(dir, ".sprinty"), ...(context_notes ? { context_notes } : {}) };
 }
 
+function addInput(input: { subsprint?: string; title?: string; description?: string; code_locations?: string[]; gates?: Array<{ kind: string; spec: string }>; dependencies?: string[] } = {}) {
+  return {
+    subsprint: input.subsprint ?? "S01",
+    title: input.title ?? "Atomic item",
+    description: input.description ?? "Implement one independently verifiable Sprinty item.",
+    code_locations: input.code_locations ?? ["a.ts"],
+    gates: input.gates ?? [{ kind: "command", spec: "true" }],
+    ...(input.dependencies ? { dependencies: input.dependencies } : {}),
+  };
+}
+
 beforeEach(() => {
   ({ dir, sha } = initRepo());
   tools = buildToolHandlers(
@@ -53,7 +64,7 @@ describe("tool handlers", () => {
     await tools.sprint_new!.handler(sprintInput("g"));
     const sub = (await tools.subsprint_new!.handler({ description: "d", goals: ["go"], gates: [{ kind: "command", spec: "true" }] })) as { id: string };
     expect(sub.id).toBe("S01");
-    const item = (await tools.add!.handler({ subsprint: "S01", description: "i", code_locations: ["a.ts"], gates: [{ kind: "command", spec: "true" }] })) as { id: string };
+    const item = (await tools.add!.handler(addInput())) as { id: string };
     expect(item.id).toBe("S01-001");
     await tools.done!.handler({
       item: "S01-001",
@@ -65,10 +76,24 @@ describe("tool handlers", () => {
     expect(closed.status).toBe("closed");
   });
 
+  it("rejects add calls without atomic title and bounded description", async () => {
+    await tools.sprint_new!.handler(sprintInput("g"));
+    await tools.subsprint_new!.handler({ description: "d", goals: ["go"], gates: [{ kind: "command", spec: "true" }] });
+    await expect(tools.add!.handler({
+      subsprint: "S01",
+      description: "Implement one independently verifiable Sprinty item.",
+      code_locations: ["a.ts"],
+      gates: [{ kind: "command", spec: "true" }],
+    })).rejects.toThrow();
+    await expect(tools.add!.handler(addInput({ title: "Everything", description: "too broad" }))).rejects.toThrow();
+    await expect(tools.add!.handler(addInput({ title: "A".repeat(81) }))).rejects.toThrow(/split\(\)/);
+    await expect(tools.add!.handler(addInput({ description: "x".repeat(501) }))).rejects.toThrow(/split\(\)/);
+  });
+
   it("renders changelog markdown through the handler", async () => {
     await tools.sprint_new!.handler(sprintInput("g"));
     await tools.subsprint_new!.handler({ description: "d", goals: ["go"], gates: [{ kind: "command", spec: "true" }] });
-    await tools.add!.handler({ subsprint: "S01", description: "i", code_locations: ["a.ts"], gates: [{ kind: "command", spec: "true" }] });
+    await tools.add!.handler(addInput());
     await tools.done!.handler({
       item: "S01-001",
       commit_id: sha,
@@ -84,8 +109,8 @@ describe("tool handlers", () => {
   it("records dependency edges through the dependencies verb", async () => {
     await tools.sprint_new!.handler(sprintInput("g"));
     await tools.subsprint_new!.handler({ description: "d", goals: ["go"], gates: [{ kind: "command", spec: "true" }] });
-    await tools.add!.handler({ subsprint: "S01", description: "first", code_locations: ["a.ts"], gates: [{ kind: "command", spec: "true" }] });
-    await tools.add!.handler({ subsprint: "S01", description: "second", code_locations: ["b.ts"], gates: [{ kind: "command", spec: "true" }] });
+    await tools.add!.handler(addInput({ title: "First item", description: "Implement the first dependency graph item." }));
+    await tools.add!.handler(addInput({ title: "Second item", description: "Implement the second dependency graph item.", code_locations: ["b.ts"] }));
     const res = (await tools.dependencies!.handler({ target: "S01-002", dependencies: ["S01-001"] })) as { graph: { edges: Array<{ from: string; to: string }> } };
     expect(res.graph.edges).toContainEqual({ from: "S01-002", to: "S01-001" });
   });
@@ -93,7 +118,7 @@ describe("tool handlers", () => {
   it("records artifacts through the artifact verb and exposes them through current", async () => {
     await tools.sprint_new!.handler(sprintInput("g"));
     await tools.subsprint_new!.handler({ description: "d", goals: ["go"], gates: [{ kind: "command", spec: "true" }] });
-    await tools.add!.handler({ subsprint: "S01", description: "i", code_locations: ["a.ts"], gates: [{ kind: "command", spec: "true" }] });
+    await tools.add!.handler(addInput());
     const artifact = (await tools.artifact!.handler({
       target: "S01-001",
       kind: "spec",
@@ -117,7 +142,7 @@ describe("tool handlers", () => {
   it("records follow-ups with required bug ids", async () => {
     await tools.sprint_new!.handler(sprintInput("g"));
     await tools.subsprint_new!.handler({ description: "d", goals: ["go"], gates: [{ kind: "command", spec: "true" }] });
-    await tools.add!.handler({ subsprint: "S01", description: "i", code_locations: ["a.ts"], gates: [{ kind: "command", spec: "true" }] });
+    await tools.add!.handler(addInput());
     await expect(tools.follow_up!.handler({ target: "S01-001", description: "needs bug" })).rejects.toThrow();
     const followUp = (await tools.follow_up!.handler({ target: "S01-001", description: "file the dashboard polish bug", bug_id: "BUG-42" })) as { id: string; view: { follow_ups: Array<{ bug_ids: string[] }> } };
     expect(followUp.id).toBe("F001");
@@ -128,7 +153,7 @@ describe("tool handlers", () => {
     await tools.sprint_new!.handler(sprintInput("g"));
     const spike = (await tools.spike!.handler({ description: "investigate parser", goals: ["choose"], gates: [{ kind: "command", spec: "true" }] })) as { id: string };
     expect(spike.id).toBe("S01");
-    await tools.add!.handler({ subsprint: "S01", description: "try parser", code_locations: ["a.ts"], gates: [{ kind: "command", spec: "true" }] });
+    await tools.add!.handler(addInput({ title: "Try parser", description: "Run one parser experiment with recorded evidence." }));
     await tools.done!.handler({
       item: "S01-001",
       commit_id: sha,
@@ -152,7 +177,7 @@ describe("tool handlers", () => {
   it("archives a sprint through the archive verb", async () => {
     await tools.sprint_new!.handler(sprintInput("g"));
     await tools.subsprint_new!.handler({ description: "d", goals: ["go"], gates: [{ kind: "command", spec: "true" }] });
-    await tools.add!.handler({ subsprint: "S01", description: "i", code_locations: ["a.ts"], gates: [{ kind: "command", spec: "true" }] });
+    await tools.add!.handler(addInput());
     const archived = (await tools.sprint_archive!.handler({ reason: "alpha recovery after bad ledger state" })) as { status: string };
     expect(archived.status).toBe("archived");
   });

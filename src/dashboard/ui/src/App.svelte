@@ -99,6 +99,7 @@
     const classes = ["todo-row"];
     if (item.id === model?.currentItem?.id) classes.push("todo-current");
     else if (item.id === model?.nextItem?.id) classes.push("todo-next");
+    else if (model?.blockedItems.some((blocked) => blocked.id === item.id)) classes.push("todo-blocked");
     if (item.status !== "open") classes.push("todo-terminal");
     return classes.join(" ");
   }
@@ -275,7 +276,7 @@
                   <button class="todo-button" on:click={() => toggleItem(item)} aria-expanded={expandedItemId === item.id}>
                     <span class={statusDot(item.status)}></span>
                     <span class="todo-id">{item.id}</span>
-                    <span class="todo-title">{item.description}</span>
+                    <span class="todo-title">{item.title}</span>
                     <span class={statusClass(item.status)}>{item.status}</span>
                     <span class:todo-expand-open={expandedItemId === item.id} class="todo-expand" aria-hidden="true"></span>
                   </button>

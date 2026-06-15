@@ -8,6 +8,7 @@ import { buildDependencyGraph, type DependencyGraph } from "./graph.js";
 export interface ItemView {
   id: string;
   subsprint_id: string;
+  title: string;
   description: string;
   created_at: string;
   resolved_at: string | null;
@@ -141,7 +142,7 @@ export function project(events: LedgerEvent[]): SprintView | null {
       }
       case "item_added": {
         const item: ItemView = {
-          id: e.item_id, subsprint_id: e.subsprint_id, description: e.description,
+          id: e.item_id, subsprint_id: e.subsprint_id, title: e.title ?? titleFromDescription(e.description), description: e.description,
           created_at: e.ts, resolved_at: null,
           code_locations: e.code_locations, gates: e.gates, status: "open",
           disposition: null, dependencies: e.dependencies ?? [], commit_id: null, gate_results: [], reason: null,
@@ -150,7 +151,7 @@ export function project(events: LedgerEvent[]): SprintView | null {
         };
         items.set(item.id, item);
         subsprints.get(e.subsprint_id)?.items.push(item);
-        timeline.push({ seq: e.seq, ts: e.ts, type: e.type, id: e.item_id, text: e.description });
+        timeline.push({ seq: e.seq, ts: e.ts, type: e.type, id: e.item_id, text: item.title });
         break;
       }
       case "item_updated":
@@ -310,7 +311,7 @@ export function project(events: LedgerEvent[]): SprintView | null {
   if (sprint) {
     const nodes = [
       ...sprint.subsprints.map((sub) => ({ id: sub.id, kind: "subsprint" as const, label: sub.description, status: sub.status })),
-      ...sprint.subsprints.flatMap((sub) => sub.items.map((item) => ({ id: item.id, kind: "item" as const, label: item.description, status: item.status }))),
+      ...sprint.subsprints.flatMap((sub) => sub.items.map((item) => ({ id: item.id, kind: "item" as const, label: item.title, status: item.status }))),
     ];
     const edges = [
       ...sprint.subsprints.flatMap((sub) => (sub.dependencies ?? []).map((dep) => ({ from: sub.id, to: dep }))),
@@ -327,4 +328,11 @@ export function project(events: LedgerEvent[]): SprintView | null {
 
 function unique(values: string[]): string[] {
   return [...new Set(values)];
+}
+
+function titleFromDescription(description: string): string {
+  const firstLine = description.trim().split(/\r?\n/, 1)[0] ?? "";
+  const firstSentence = firstLine.match(/^(.+?[.!?])(?:\s|$)/)?.[1] ?? firstLine;
+  const title = firstSentence.trim();
+  return title.length > 80 ? `${title.slice(0, 77).trimEnd()}...` : title || "Untitled item";
 }

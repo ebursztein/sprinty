@@ -21,7 +21,7 @@ Expected agent loop:
 
 1. Call `info()` first to orient to the current sprint and repository binding.
 2. Start or continue the Sprinty sprint, then call `dashboard()` and show the localhost URL to the human.
-3. Track each feature as a `subsprint_new(...)` unit, then add normal items with `add(...)`.
+3. Track each feature as a `subsprint_new(...)` unit, then add atomic items with `add(...)`; each item needs a short title, bounded description, code locations, and gates.
 4. Record durable outputs with `artifact_add/list/amend/deprecate`.
 5. Record follow-up bugs with `follow_up(...)` and at least one bug id.
 6. Use `spike(...)` for investigations; spikes are still subsprints with normal child items, but they close only through `spike_conclude(...)` or `spike_deprecate(...)`.

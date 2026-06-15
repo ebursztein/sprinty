@@ -42,6 +42,7 @@ function sprintView(): SprintView {
           {
             id: "S01-001",
             subsprint_id: "S01",
+            title: "Done work",
             description: "Done work",
             created_at: baseTime,
             resolved_at: baseTime,
@@ -80,6 +81,7 @@ function sprintView(): SprintView {
           {
             id: "S02-001",
             subsprint_id: "S02",
+            title: "Current work",
             description: "Current work",
             created_at: baseTime,
             resolved_at: null,
@@ -101,6 +103,7 @@ function sprintView(): SprintView {
           {
             id: "S02-002",
             subsprint_id: "S02",
+            title: "Next work",
             description: "Next work",
             created_at: baseTime,
             resolved_at: null,
@@ -167,7 +170,37 @@ describe("deriveDashboardModel", () => {
     const model = deriveDashboardModel(sprint);
 
     expect(model.currentItem?.id).toBe("S02-001");
-    expect(model.nextItem?.id).toBe("S02-002");
-    expect(model.tree[1]!.items.map((item) => item.tone)).toEqual(["next", "current"]);
+    expect(model.nextItem).toBeNull();
+    expect(model.blockedItems.map((item) => item.id)).toEqual(["S02-002"]);
+    expect(model.tree[1]!.items.map((item) => item.tone)).toEqual(["blocked", "current"]);
+  });
+
+  it("does not highlight blocked open dependents as current or next", () => {
+    const sprint = sprintView();
+    const active = sprint.subsprints[1]!;
+    active.items = [
+      { ...active.items[0]!, id: "S02-002", title: "Blocked docs", description: "Blocked docs", dependencies: ["S02-003"] },
+      { ...active.items[1]!, id: "S02-003", title: "Ready tool", description: "Ready tool", dependencies: [] },
+      { ...active.items[1]!, id: "S02-004", title: "Also ready", description: "Also ready", dependencies: [] },
+    ];
+    sprint.graph = {
+      nodes: [
+        { id: "S02-002", kind: "item", label: "Blocked docs", status: "open" },
+        { id: "S02-003", kind: "item", label: "Ready tool", status: "open" },
+        { id: "S02-004", kind: "item", label: "Also ready", status: "open" },
+      ],
+      edges: [{ from: "S02-002", to: "S02-003" }],
+      blocked_by: { "S02-002": ["S02-003"], "S02-003": [], "S02-004": [] },
+      unblocks: { "S02-002": [], "S02-003": ["S02-002"], "S02-004": [] },
+      topological_order: ["S02-003", "S02-002", "S02-004"],
+      cycles: [],
+    };
+
+    const model = deriveDashboardModel(sprint);
+
+    expect(model.currentItem?.id).toBe("S02-003");
+    expect(model.nextItem?.id).toBe("S02-004");
+    expect(model.blockedItems.map((item) => item.id)).toEqual(["S02-002"]);
+    expect(model.tree[1]!.items.map((item) => item.tone)).toEqual(["blocked", "current", "next"]);
   });
 });

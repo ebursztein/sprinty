@@ -50,6 +50,17 @@ function sprintInput(repoDir: string, input: { goal: string; context_notes?: str
   return { ...input, git_dir: repoDir, data_dir: dataDir };
 }
 
+function addInput(input: { subsprint?: string; title?: string; description?: string; code_locations?: string[]; gates?: Array<{ kind: string; spec: string }>; dependencies?: string[] } = {}) {
+  return {
+    subsprint: input.subsprint ?? "S01",
+    title: input.title ?? "Do thing",
+    description: input.description ?? "Implement one small independently verifiable thing.",
+    code_locations: input.code_locations ?? ["src/x.ts"],
+    gates: input.gates ?? [{ kind: "command", spec: "true" }],
+    ...(input.dependencies ? { dependencies: input.dependencies } : {}),
+  };
+}
+
 let client: Client, dir: string, sha: string;
 
 beforeAll(async () => {
@@ -86,7 +97,7 @@ describe("sprinty e2e over MCP", () => {
   it("runs a full sprint and closes it", async () => {
     await call(client, "sprint_new", sprintInput(dir, { goal: "ship it" }));
     await call(client, "subsprint_new", { description: "core", goals: ["build core"], gates: [{ kind: "command", spec: "true" }] });
-    await call(client, "add", { subsprint: "S01", description: "do thing", code_locations: ["src/x.ts"], gates: [{ kind: "command", spec: "true" }] });
+    await call(client, "add", addInput());
     await call(client, "done", { item: "S01-001", commit_id: sha, gate_results: [{ kind: "command", spec: "true", passed: true, evidence: "ok" }], changelog: { verb: "added", line: "Added the thing." } });
     const closed = await call(client, "sprint_close", { coverage: { path: writeCoverage(dir), format: "lcov", command: "npm run test:coverage" } });
     expect(closed.json.status).toBe("closed");
@@ -105,7 +116,7 @@ describe("sprinty e2e over MCP", () => {
       expect(created.json.data_dir).toBe(dataDir);
       expect(created.json.branch).toBe("main");
       await call(c, "subsprint_new", { description: "core", goals: ["build core"], gates: [{ kind: "command", spec: "true" }] });
-      await call(c, "add", { subsprint: "S01", description: "do thing", code_locations: ["src/x.ts"], gates: [{ kind: "command", spec: "true" }] });
+      await call(c, "add", addInput());
       const done = await call(c, "done", {
         item: "S01-001",
         commit_id: fresh.sha,
@@ -135,7 +146,7 @@ describe("sprinty e2e over MCP", () => {
       expect(info.json.data_dir).toBe(dataDir);
       expect(info.json.branch).toBe("main");
       await call(c, "subsprint_new", { description: "core", goals: ["build core"], gates: [{ kind: "command", spec: "true" }] });
-      await call(c, "add", { subsprint: "S01", description: "do thing", code_locations: ["src/x.ts"], gates: [{ kind: "command", spec: "true" }] });
+      await call(c, "add", addInput());
       const done = await call(c, "done", {
         item: "S01-001",
         commit_id: fresh.sha,
@@ -167,7 +178,7 @@ describe("sprinty e2e over MCP", () => {
     const c = await connect(fresh.dir);
     await call(c, "sprint_new", sprintInput(fresh.dir, { goal: "g" }));
     await call(c, "subsprint_new", { description: "d", goals: ["go"], gates: [{ kind: "command", spec: "true" }] });
-    await call(c, "add", { subsprint: "S01", description: "i", code_locations: ["a.ts"], gates: [{ kind: "command", spec: "true" }] });
+    await call(c, "add", addInput({ code_locations: ["a.ts"] }));
     const res = await call(c, "sprint_close", {});
     expect(res.isError).toBe(true);
     expect(res.text).toContain("S01-001");
@@ -180,8 +191,8 @@ describe("sprinty e2e over MCP", () => {
     try {
       await call(c, "sprint_new", sprintInput(fresh.dir, { goal: "dependency teeth" }));
       await call(c, "subsprint_new", { description: "graph", goals: ["track graph"], gates: [{ kind: "command", spec: "true" }] });
-      await call(c, "add", { subsprint: "S01", description: "base", code_locations: ["a.ts"], gates: [{ kind: "command", spec: "true" }] });
-      await call(c, "add", { subsprint: "S01", description: "dependent", code_locations: ["b.ts"], gates: [{ kind: "command", spec: "true" }], dependencies: ["S01-001"] });
+      await call(c, "add", addInput({ title: "Base item", description: "Implement the base dependency graph item.", code_locations: ["a.ts"] }));
+      await call(c, "add", addInput({ title: "Dependent item", description: "Implement the dependent dependency graph item.", code_locations: ["b.ts"], dependencies: ["S01-001"] }));
 
       const unknownTarget = await call(c, "dependencies", { target: "S99-001", dependencies: ["S01-001"] });
       expect(unknownTarget.isError).toBe(true);
@@ -231,6 +242,7 @@ describe("sprinty e2e over MCP", () => {
 
       const added = await call(c, "add", {
         subsprint: "S01",
+        title: "Shape catalog slice",
         description: "Shape the first catalog slice for staff-curated inventory",
         code_locations: ["src/bookshop/catalog.ts"],
         gates: [
@@ -262,6 +274,7 @@ describe("sprinty e2e over MCP", () => {
 
       const searchItem = await call(c, "add", {
         subsprint: "S02",
+        title: "Search book listing",
         description: "Add searchable book listing for staff-curated inventory",
         code_locations: ["src/bookshop/catalog.ts", "src/bookshop/search.ts"],
         gates: [
@@ -274,6 +287,7 @@ describe("sprinty e2e over MCP", () => {
 
       const preorderItem = await call(c, "add", {
         subsprint: "S02",
+        title: "Sketch preorders",
         description: "Sketch preorder notifications for out-of-stock paperbacks",
         code_locations: ["src/bookshop/preorders.ts"],
         gates: [{ kind: "manual", spec: "owner confirms preorder scope" }],
@@ -282,7 +296,10 @@ describe("sprinty e2e over MCP", () => {
       expect(preorderItem.json.id).toBe("S02-002");
 
       const current = await call(c, "current", { past: 1, future: 3 });
-      expect(current.json.next.map((i: { id: string }) => i.id)).toEqual(["S02-001", "S02-002"]);
+      expect(current.json.current.id).toBe("S02-001");
+      expect(current.json.next.map((i: { id: string }) => i.id)).toEqual(["S02-001"]);
+      expect(current.json.blocked_open.map((i: { id: string }) => i.id)).toEqual(["S02-002"]);
+      expect(current.json.relations.find((r: { id: string }) => r.id === "S02-002").blocked_by.map((node: { id: string }) => node.id)).toEqual(["S02-001"]);
       expect(current.json.graph.edges).toContainEqual({ from: "S02-001", to: "S01-001" });
       expect(current.json.graph.edges).toContainEqual({ from: "S02-002", to: "S02-001" });
       expect(current.json.graph.topological_order.indexOf("S02-001")).toBeLessThan(current.json.graph.topological_order.indexOf("S02-002"));

@@ -1,12 +1,13 @@
 import type { ArtifactView, ItemView, SprintView, SubsprintView, TimelineEntry } from "../../domain/projection.js";
 
-export type TreeTone = "done" | "active" | "current" | "next" | "muted" | "normal";
+export type TreeTone = "done" | "active" | "current" | "next" | "blocked" | "muted" | "normal";
 
 export interface DashboardModel {
   sprint: SprintView;
   activeSubsprint: SubsprintView | null;
   currentItem: ItemView | null;
   nextItem: ItemView | null;
+  blockedItems: ItemView[];
   progress: {
     items: { total: number; done: number; open: number; percent: number };
     statuses: { total: number; completed: number; open: number; split: number; deprecated: number };
@@ -38,6 +39,7 @@ export interface TreeItem {
   tone: TreeTone;
   gateSummary: string;
   dependencies: string[];
+  blocked: boolean;
 }
 
 export interface TimelineRow {
@@ -52,9 +54,10 @@ export interface LedgerRow extends TimelineRow {}
 
 export function deriveDashboardModel(sprint: SprintView): DashboardModel {
   const items = sprint.subsprints.flatMap((sub) => sub.items);
-  const openItems = orderOpenItems(sprint, items);
-  const currentItem = openItems[0] ?? null;
-  const nextItem = openItems[1] ?? null;
+  const { available, blocked } = orderOpenItems(sprint, items);
+  const blockedIds = new Set(blocked.map((item) => item.id));
+  const currentItem = available[0] ?? null;
+  const nextItem = available[1] ?? null;
   const activeSubsprint = currentItem
     ? sprint.subsprints.find((sub) => sub.id === currentItem.subsprint_id) ?? null
     : sprint.subsprints.find((sub) => sub.status === "open") ?? null;
@@ -73,8 +76,9 @@ export function deriveDashboardModel(sprint: SprintView): DashboardModel {
     activeSubsprint,
     currentItem,
     nextItem,
+    blockedItems: blocked,
     progress: {
-      items: { total: items.length, done, open: openItems.length, percent: percent(done, items.length) },
+      items: { total: items.length, done, open: items.length - done, percent: percent(done, items.length) },
       statuses: statusTotals,
       gates: gateTotals,
       subsprints: subsprintProgress,
@@ -85,19 +89,28 @@ export function deriveDashboardModel(sprint: SprintView): DashboardModel {
       recent: sprint.artifacts.filter((artifact) => artifact.status === "active").slice(-6).reverse(),
       deprecated: sprint.artifacts.filter((artifact) => artifact.status === "deprecated"),
     },
-    tree: sprint.subsprints.map((sub) => treeSubsprint(sub, activeSubsprint, currentItem, nextItem)),
+    tree: sprint.subsprints.map((sub) => treeSubsprint(sub, activeSubsprint, currentItem, nextItem, blockedIds)),
     timeline: sprint.timeline.slice().reverse().map(timelineRow),
     ledger: sprint.timeline.map(timelineRow),
   };
 }
 
-function orderOpenItems(sprint: SprintView, items: ItemView[]): ItemView[] {
+function orderOpenItems(sprint: SprintView, items: ItemView[]): { available: ItemView[]; blocked: ItemView[] } {
   const openById = new Map(items.filter((item) => item.status === "open").map((item) => [item.id, item]));
+  const statusById = new Map(sprint.graph.nodes.map((node) => [node.id, node.status]));
   const ordered = (sprint.graph.topological_order ?? [])
     .map((id) => openById.get(id))
     .filter((item): item is ItemView => Boolean(item));
   const seen = new Set(ordered.map((item) => item.id));
-  return [...ordered, ...items.filter((item) => item.status === "open" && !seen.has(item.id))];
+  const allOpen = [...ordered, ...items.filter((item) => item.status === "open" && !seen.has(item.id))];
+  const available: ItemView[] = [];
+  const blocked: ItemView[] = [];
+  for (const item of allOpen) {
+    const blockers = sprint.graph.blocked_by?.[item.id] ?? item.dependencies;
+    if (blockers.some((id) => statusById.get(id) === "open")) blocked.push(item);
+    else available.push(item);
+  }
+  return { available, blocked };
 }
 
 function treeSubsprint(
@@ -105,6 +118,7 @@ function treeSubsprint(
   active: SubsprintView | null,
   current: ItemView | null,
   next: ItemView | null,
+  blockedIds: Set<string>,
 ): TreeSubsprint {
   const total = sub.items.length;
   const done = sub.items.filter((item) => item.status !== "open").length;
@@ -119,11 +133,12 @@ function treeSubsprint(
     progress: { done, total, percent: percent(done, total) },
     items: sub.items.map((item) => ({
       id: item.id,
-      label: item.description,
+      label: item.title,
       status: item.status,
-      tone: item.id === current?.id ? "current" : item.id === next?.id ? "next" : item.status === "open" ? "normal" : "muted",
+      tone: item.id === current?.id ? "current" : item.id === next?.id ? "next" : blockedIds.has(item.id) ? "blocked" : item.status === "open" ? "normal" : "muted",
       gateSummary: gateSummary(item),
       dependencies: item.dependencies,
+      blocked: blockedIds.has(item.id),
     })),
   };
 }

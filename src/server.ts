@@ -17,7 +17,7 @@ const INSTRUCTIONS = `Sprinty enforces a disciplined sprint.
 One sprint per explicit git/data binding. sprint_new requires git_dir and data_dir so Sprinty never guesses from the MCP process cwd.
 The data_dir/current pointer keeps exactly one open sprint for that binding. Call info() to orient after binding.
 Build is item-driven: sprint_new(goal, git_dir, data_dir, context_notes?) -> dashboard() for the human -> subsprint_new(..., dependencies?)
--> add(description + code_locations + gates, dependencies?) -> done(commit + passing gates + changelog)
+-> add(title + description + code_locations + gates, dependencies?) -> done(commit + passing gates + changelog)
 | split(promote to a subsprint) | deprecate(reason). Use dependencies(target, dependencies[]) to add graph edges later.
 Each subsprint should be one feature. Use spike() for feature investigations; spikes reuse subsprint mechanics and require spike_conclude() or spike_deprecate().
 Use artifact_add/list/amend/deprecate for durable outputs, and follow_up() with bug ids for bugs found while moving fast.

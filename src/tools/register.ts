@@ -45,7 +45,7 @@ export function buildToolHandlers(
       async (i) => (await getStore()).concludeSpike(i)),
     spike_deprecate: def(S.SpikeDeprecateInput, "Deprecate a spike with a reason; spikes are never deleted.",
       async (i) => (await getStore()).deprecateSpike(i)),
-    add: def(S.AddInput, "Add an item (description, code locations, gates — all required).",
+    add: def(S.AddInput, "Add an atomic item (bounded title, bounded description, code locations, gates — all required).",
       async (i) => (await getStore()).addItem(i)),
     update: def(S.UpdateInput, "Attach intermediate info to an item or subsprint.",
       async (i) => (await getStore()).updateItem(i)),
@@ -86,7 +86,7 @@ function orientation(): { skills: string[]; how: string } {
     how:
       "One sprint per session. Build item-driven: subsprint_new -> add -> done/split/deprecate. " +
       "Start with explicit git_dir and data_dir so Sprinty cannot bind to a temp MCP cwd. " +
-      "Items need description + code_locations + gates. Each subsprint should represent one feature. " +
+      "Items need a short title, bounded description, code_locations, and gates; keep them atomic. Each subsprint should represent one feature. " +
       "After sprint_new, call dashboard() and show the localhost URL to the human. Resolve every item, then sprint_close re-runs gates.",
   };
 }

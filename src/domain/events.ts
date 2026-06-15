@@ -37,7 +37,9 @@ export const SubsprintCreated = z.object({
 
 export const ItemAdded = z.object({
   ...base, type: z.literal("item_added"),
-  item_id: z.string(), subsprint_id: z.string(), description: z.string().min(1),
+  item_id: z.string(), subsprint_id: z.string(),
+  title: z.string().min(1).max(80).optional(),
+  description: z.string().min(1),
   code_locations: z.array(z.string().min(1)).min(1),
   gates: z.array(Gate).min(1),
   dependencies: z.array(z.string().min(1)).default([]),

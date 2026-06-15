@@ -97,7 +97,7 @@ sprint_new(goal, git_dir, data_dir, context_notes?)
   -> dashboard()
   -> subsprint_new(description, goals[], gates[], dependencies?)
   -> spike(description, goals[], gates[], dependencies?)
-  -> add(subsprint, description, code_locations[], gates[], dependencies?)
+  -> add(subsprint, title, description, code_locations[], gates[], dependencies?)
   -> artifact_add/list/amend/deprecate(...)
   -> follow_up(target, description, bug_id|bug_ids)
   -> dependencies(target, dependencies[])
@@ -136,12 +136,20 @@ Git-backed change map for the commit: file, language, directory, additions, dele
 churn, item ids, and commit ids. `changelog()` renders a Markdown release note with semver sections,
 coverage, and change-map tables. `done()` also requires passing evidence for every declared item
 gate, including manual gates. Dependencies are stored as a real graph: `current()` returns nodes,
-edges, adjacency indexes, topological order, and cycle information; writes reject cycles. At close,
-executable gates are re-run by Sprinty and `sprint_close()` requires an LCOV coverage report path.
+edges, adjacency indexes, topological order, cycle information, the first actionable `current`
+item, actionable `next` items, `blocked_open` items, and enriched relation rows that name direct
+blockers/unblocked work with statuses. Writes reject cycles. At close, executable gates are re-run
+by Sprinty and `sprint_close()` requires an LCOV coverage report path.
 Artifacts are append-only too: amendments and deprecations are separate ledger events, never
 in-place edits or deletes. Follow-ups require bug ids. Spikes are subsprints with a `spike` flag:
 they can have normal items, but must be concluded or deprecated with a reason, and spike work is
 kept out of release changelog output.
+
+Items have two text fields by design: `title` is a short one-line label for the tree/dashboard, and
+`description` is bounded detail for the expanded item body. Use one item per independently
+verifiable behavior, tool, endpoint, component, or migration step. If an item needs a list of
+unrelated deliverables in the title, split it before adding it. Oversized `add()` calls return a
+validation nudge to use `split()` or smaller atomic items.
 
 ## Storage
 

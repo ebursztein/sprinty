@@ -24,14 +24,20 @@ write prose plans, you create structured items the sprinty MCP records in an imm
    Use **`spike(description, goals[], gates[], dependencies?)`** when the feature needs an
    investigation branch; a spike is still a subsprint, can have normal items, and must end with
    **`spike_conclude(subsprint, conclusion)`** or **`spike_deprecate(subsprint, reason)`**.
-3. **`add(subsprint, description, code_locations[], gates[], dependencies?)`** — add an item. All three are
-   required. The item's gates are what proves it; a `test`-kind gate is the test you must write.
+3. **`add(subsprint, title, description, code_locations[], gates[], dependencies?)`** — add an
+   atomic item. `title` is the short tree label (3-80 chars); `description` is bounded detail
+   (20-500 chars). The item should be one tool, one endpoint, one component, one migration, or one
+   independently verifiable behavior. For MCP work, prefer one item per tool; for UI work, prefer
+   one item per real component or screen behavior. The item's gates are what proves it; a
+   `test`-kind gate is the test you must write.
 4. Work the item. Use **`update(target, note)`** to record intermediate discoveries,
    **`note(element, text)`** for observations, and **`dependencies(target, dependencies[])`** to
    add graph edges. Use **`artifact_add/list/amend/deprecate`** for durable outputs and
    **`follow_up(target, description, bug_id|bug_ids)`** when you discover a bug. `current()`
    returns the dependency graph with topological order, relevant artifacts, recent artifacts, and
-   recent activity.
+   recent activity. Trust `current.current`, `current.next`, `current.blocked_open`, and
+   `current.relations` for what is actionable and how items relate; do not infer the next item from
+   a raw open-item list.
 5. Resolve every item exactly one way:
    - **`done(item, commit_id, gate_results[], changelog)`** — completed. Requires a *real*
      commit, passing evidence for every declared item gate, and a semver changelog line. Sprinty
@@ -51,7 +57,9 @@ write prose plans, you create structured items the sprinty MCP records in an imm
 - Never invent an id. The server mints `S01`, `S01-001`. Read them back from tool results.
 - Start with explicit `git_dir` and `data_dir`; if `info()` reports the wrong paths, stop before
   adding items.
-- No item without a description, at least one code location, and at least one gate.
+- No item without a short title, bounded description, at least one code location, and at least one gate.
+- Keep items atomic. If the title needs "and", "plus", or multiple deliverables, split it before
+  adding it. Oversized `add()` calls are rejected with a nudge to use `split()` or smaller items.
 - Don't go out of order: orient with `info()`/`current()` before adding or resolving.
 - Use dependency ids when work is blocked. Sprinty rejects unknown ids and cycles.
 - Generate coverage before close and pass the report path, usually `coverage/lcov.info`.

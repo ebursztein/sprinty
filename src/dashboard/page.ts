@@ -111,7 +111,8 @@ function renderItem(item){
   if(item.changelog)head.append(text("span","status",item.changelog.verb+": "+item.changelog.line));
   head.append(text("span","status",fmt(item.created_at)));
   node.append(head);
-  node.append(text("div","title",item.description));
+  node.append(text("div","title",item.title||item.description));
+  if(item.title&&item.description&&item.title!==item.description)node.append(text("div","desc",item.description));
   if(item.code_locations&&item.code_locations.length)node.append(text("div","desc",item.code_locations.join(", ")));
   renderGateResults(item,node);
   return node;

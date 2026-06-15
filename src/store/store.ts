@@ -83,16 +83,17 @@ export class SprintStore {
     return { id, view: this.requireState() };
   }
 
-  addItem(input: { subsprint: string; description: string; code_locations: string[]; gates: Gate[]; dependencies?: string[] }): { id: string; view: SprintView } {
+  addItem(input: { subsprint: string; title?: string; description: string; code_locations: string[]; gates: Gate[]; dependencies?: string[] }): { id: string; view: SprintView } {
     const s = this.requireState();
     const sub = s.subsprints.find((x) => x.id === input.subsprint);
     if (!sub) throw new StoreError(`Unknown subsprint ${input.subsprint}.`);
     if (sub.status !== "open") throw new StoreError(`Cannot add an item to ${sub.status} subsprint ${input.subsprint}.`);
+    const title = normalizeOptionalTitle(input.title, input.description);
     this.validateGates(input.gates);
     const id = mintItemId(sub.id, sub.items.length);
     const dependencies = input.dependencies ?? [];
-    this.validateDependencyAddition(s, id, dependencies, { allowNewTarget: true, newTarget: { id, kind: "item", label: input.description, status: "open" } });
-    this.ledger.append({ type: "item_added", item_id: id, subsprint_id: sub.id, description: input.description, code_locations: input.code_locations, gates: input.gates, dependencies });
+    this.validateDependencyAddition(s, id, dependencies, { allowNewTarget: true, newTarget: { id, kind: "item", label: title, status: "open" } });
+    this.ledger.append({ type: "item_added", item_id: id, subsprint_id: sub.id, title, description: input.description, code_locations: input.code_locations, gates: input.gates, dependencies });
     return { id, view: this.requireState() };
   }
 
@@ -416,4 +417,9 @@ function looksLikeProse(spec: string): boolean {
   if (commandWords.has(first)) return false;
   const words = trimmed.split(/\s+/);
   return words.length >= 3 && words.every((word) => /^[A-Za-z][A-Za-z'-]*[.,:]?$/.test(word));
+}
+
+function normalizeOptionalTitle(title: string | undefined, description: string): string {
+  const candidate = title?.trim() || description.trim().split(/\r?\n/, 1)[0] || "Untitled item";
+  return candidate.length > 80 ? `${candidate.slice(0, 77).trimEnd()}...` : candidate;
 }
