@@ -7,6 +7,7 @@ const files = [
   "clients/codex/README.md",
   "skills/how-to-run-a-sprint/SKILL.md",
   "skills/using-sprinty/SKILL.md",
+  "plugins/sprinty/README.md",
 ];
 
 describe("client guidance", () => {
@@ -24,6 +25,20 @@ describe("client guidance", () => {
 
     const codex = readFileSync("clients/codex/README.md", "utf8");
     expect(codex).toContain("top-level `skills/` directory");
+
+    const plugin = JSON.parse(readFileSync("plugins/sprinty/.codex-plugin/plugin.json", "utf8")) as {
+      description?: string;
+      interface?: { longDescription?: string; defaultPrompt?: string[] };
+    };
+    const pluginText = [
+      plugin.description,
+      plugin.interface?.longDescription,
+      ...(plugin.interface?.defaultPrompt ?? []),
+    ].join("\n");
+    expect(pluginText).toContain("dashboard()");
+    expect(pluginText).toContain("artifact_add/list/amend/deprecate");
+    expect(pluginText).toContain("follow_up");
+    expect(pluginText).toContain("spike_conclude");
   });
 
   it("builds generated dist before npm packaging", () => {

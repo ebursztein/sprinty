@@ -17,6 +17,16 @@ Then start a new Codex CLI thread. The plugin provides:
 - `skills/how-to-run-a-sprint`
 - `skills/using-sprinty`
 
+Expected agent loop:
+
+1. Call `info()` first to orient to the current sprint and repository binding.
+2. Start or continue the Sprinty sprint, then call `dashboard()` and show the localhost URL to the human.
+3. Track each feature as a `subsprint_new(...)` unit, then add normal items with `add(...)`.
+4. Record durable outputs with `artifact_add/list/amend/deprecate`.
+5. Record follow-up bugs with `follow_up(...)` and at least one bug id.
+6. Use `spike(...)` for investigations; spikes are still subsprints with normal child items, but they close only through `spike_conclude(...)` or `spike_deprecate(...)`.
+7. Resolve each item with `done(...)`, passing gate evidence, and a Git commit before `sprint_close(...)`.
+
 For MCP-only setup without plugin skills:
 
 ```bash

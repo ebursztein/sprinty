@@ -1,7 +1,7 @@
 {
   "name": "sprinty",
   "version": "0.1.0",
-  "description": "Disciplined sprint workflow for Codex CLI: structured sprint items, dependency graphs, change maps, coverage gates, changelog tables, and a dashboard.",
+  "description": "Disciplined sprint workflow for Codex CLI: dashboard-at-start, feature subsprints, artifacts, follow-ups, spikes, dependency graphs, coverage gates, changelogs, and change maps.",
   "author": {
     "name": "Elie Bursztein",
     "url": "https://github.com/ebursztein"
@@ -14,15 +14,17 @@
   "mcpServers": "./.mcp.json",
   "interface": {
     "displayName": "Sprinty",
-    "shortDescription": "Run disciplined, ledgered development sprints from Codex CLI.",
-    "longDescription": "Sprinty gives Codex CLI a sprint workflow with server-minted IDs, subsprints, item gates, dependency graphs with cycle detection, Git-backed change maps, Markdown changelogs, coverage-required close gates, and a local dashboard.",
+    "shortDescription": "Run dashboard-backed, ledgered development sprints from Codex CLI.",
+    "longDescription": "Sprinty gives Codex CLI a sprint workflow with server-minted IDs, feature subsprints, normal item gates, dashboard-at-start guidance, sprint artifacts, bug-id follow-ups, spike subsprints with conclusions, dependency graphs with cycle detection, Git-backed change maps, Markdown changelogs, and coverage-required close gates.",
     "developerName": "Elie Bursztein",
     "category": "Developer Tools",
     "capabilities": ["Interactive", "Read", "Write"],
     "websiteURL": "https://github.com/ebursztein/sprinty",
     "defaultPrompt": [
       "Use Sprinty to run this implementation as a disciplined sprint.",
-      "Start a Sprinty sprint, track items, then close with coverage."
+      "Call Sprinty info first, start or continue the repo-local sprint, then call dashboard() and share the local URL.",
+      "Track each feature as a subsprint, use artifact_add/list/amend/deprecate for durable outputs, record follow_up entries with bug ids, and use spike/spike_conclude for investigations.",
+      "Resolve every item with passing gates and a commit, then close with coverage."
     ],
     "brandColor": "#2563EB",
     "screenshots": []
