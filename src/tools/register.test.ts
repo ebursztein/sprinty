@@ -32,7 +32,13 @@ describe("tool handlers", () => {
     const res = (await tools.sprint_new!.handler({ goal: "g", context_notes: ["human can watch dashboard"] })) as { goal: string; context_notes: string[] };
     expect(res.goal).toBe("g");
     expect(res.context_notes).toEqual(["human can watch dashboard"]);
+    expect((res as { orientation: { how: string } }).orientation.how).toContain("dashboard()");
     await expect(tools.sprint_new!.handler({ goal: "" })).rejects.toThrow();
+  });
+
+  it("describes current as including artifacts and recent activity", () => {
+    expect(tools.current!.description).toContain("relevant artifacts");
+    expect(tools.current!.description).toContain("recent activity");
   });
 
   it("drives a full happy path through the handlers", async () => {

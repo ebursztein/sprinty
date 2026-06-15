@@ -29,7 +29,7 @@ export function buildToolHandlers(store: SprintStore, openDashboard: () => Promi
       (i) => store.archiveSprint(i)),
     info: def(S.InfoInput, "The one status read: sprint, subsprints, statuses.",
       () => store.read()),
-    current: def(S.CurrentInput, "Focus window: last closed item + next N, notes scoped to current subsprint.",
+    current: def(S.CurrentInput, "Focus window: last closed item + next N, current subsprint notes, relevant artifacts, recent artifacts, recent activity, and dependency graph.",
       (i) => windowCurrent(store.read(), i.past, i.future)),
     subsprint_new: def(S.SubsprintNewInput, "Create a subsprint (description, goals, gates).",
       (i) => store.createSubsprint(i)),
