@@ -19,10 +19,12 @@
   $: model = sprint ? deriveDashboardModel(sprint) : null;
   $: if (model && !selectedSubId) selectedSubId = model.activeSubsprint?.id ?? model.sprint.subsprints[0]?.id ?? null;
   $: selectedSub = model?.sprint.subsprints.find((sub) => sub.id === selectedSubId) ?? model?.activeSubsprint ?? null;
-  $: if (model && !expandedItemId) expandedItemId = model.currentItem?.id ?? selectedSub?.items[0]?.id ?? null;
+  $: if (model && selectedSub && !selectedSub.items.some((item) => item.id === expandedItemId)) expandedItemId = model.currentItem?.subsprint_id === selectedSub.id ? model.currentItem.id : selectedSub.items[0]?.id ?? null;
   $: ledgerRows = model?.ledger ?? [];
   $: ledgerPages = Math.max(1, Math.ceil(ledgerRows.length / pageSize));
+  $: if (ledgerPage > ledgerPages - 1) ledgerPage = ledgerPages - 1;
   $: visibleLedger = ledgerRows.slice(ledgerPage * pageSize, ledgerPage * pageSize + pageSize);
+  $: recentTimeline = model?.timeline.slice(0, 6) ?? [];
 
   onMount(() => {
     void tick();
@@ -45,7 +47,7 @@
 
   function selectSub(sub: TreeSubsprint): void {
     selectedSubId = sub.id;
-    expandedItemId = sub.items[0]?.id ?? null;
+    expandedItemId = model?.currentItem?.subsprint_id === sub.id ? model.currentItem.id : sub.items[0]?.id ?? null;
   }
 
   function toggleItem(item: ItemView): void {
@@ -62,12 +64,50 @@
     return Number.isNaN(date.valueOf()) ? ts : date.toLocaleString();
   }
 
+  function compactTime(ts: string | null | undefined): string {
+    if (!ts) return "";
+    const date = new Date(ts);
+    return Number.isNaN(date.valueOf()) ? ts : date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  }
+
   function statusClass(status: string): string {
-    if (status === "completed" || status === "closed") return "bg-emerald-500/15 text-emerald-700 ring-emerald-500/25 dark:text-emerald-300";
-    if (status === "open") return "bg-sky-500/15 text-sky-700 ring-sky-500/25 dark:text-sky-300";
-    if (status === "split") return "bg-amber-500/15 text-amber-700 ring-amber-500/25 dark:text-amber-300";
-    if (status === "deprecated") return "bg-zinc-500/15 text-zinc-600 ring-zinc-500/25 dark:text-zinc-400";
-    return "bg-zinc-500/15 text-zinc-600 ring-zinc-500/25 dark:text-zinc-400";
+    if (status === "completed" || status === "closed") return "status-pill status-done";
+    if (status === "open" || status === "active") return "status-pill status-open";
+    if (status === "split") return "status-pill status-split";
+    if (status === "deprecated") return "status-pill status-deprecated";
+    return "status-pill status-neutral";
+  }
+
+  function statusDot(status: string): string {
+    if (status === "completed" || status === "closed") return "dot dot-done";
+    if (status === "open" || status === "active") return "dot dot-open";
+    if (status === "split") return "dot dot-split";
+    if (status === "deprecated") return "dot dot-deprecated";
+    return "dot dot-neutral";
+  }
+
+  function treeRowClass(sub: TreeSubsprint): string {
+    const classes = ["tree-row"];
+    if (selectedSubId === sub.id) classes.push("tree-row-selected");
+    if (sub.tone === "done") classes.push("tree-row-done");
+    if (sub.tone === "active") classes.push("tree-row-active");
+    if (sub.tone === "muted") classes.push("tree-row-muted");
+    return classes.join(" ");
+  }
+
+  function itemRowClass(item: ItemView): string {
+    const classes = ["todo-row"];
+    if (item.id === model?.currentItem?.id) classes.push("todo-current");
+    else if (item.id === model?.nextItem?.id) classes.push("todo-next");
+    if (item.status !== "open") classes.push("todo-terminal");
+    return classes.join(" ");
+  }
+
+  function gateSummary(item: ItemView): string {
+    const passed = item.gate_results.filter((gate) => gate.passed).length;
+    const failed = item.gate_results.filter((gate) => !gate.passed).length;
+    const pending = Math.max(0, item.gates.length - passed - failed);
+    return `${passed}/${item.gates.length} passed${failed ? `, ${failed} failed` : ""}${pending ? `, ${pending} pending` : ""}`;
   }
 
   function statusDonut(model: DashboardModel): string {
@@ -76,7 +116,7 @@
     const open = model.progress.statuses.open / total * 100;
     const split = model.progress.statuses.split / total * 100;
     const deprecated = model.progress.statuses.deprecated / total * 100;
-    return `conic-gradient(#10b981 0 ${done}%, #0ea5e9 ${done}% ${done + open}%, #f59e0b ${done + open}% ${done + open + split}%, #71717a ${done + open + split}% ${done + open + split + deprecated}%, #e4e4e7 0)`;
+    return `conic-gradient(#22c55e 0 ${done}%, #3b82f6 ${done}% ${done + open}%, #f59e0b ${done + open}% ${done + open + split}%, #71717a ${done + open + split}% ${done + open + split + deprecated}%, #27272a 0)`;
   }
 
   function targetLabel(artifact: ArtifactView): string {
@@ -89,198 +129,224 @@
 </svelte:head>
 
 {#if !model}
-  <main class="grid min-h-screen place-items-center bg-zinc-950 px-6 text-zinc-100">
-    <div class="max-w-md rounded-lg border border-zinc-800 bg-zinc-900 p-6">
-      <div class="text-sm text-zinc-400">sprinty dashboard</div>
-      <h1 class="mt-2 text-2xl font-semibold">Loading sprint</h1>
-      {#if error}<p class="mt-3 text-sm text-rose-300">{error}</p>{/if}
+  <main class="loading-screen">
+    <div class="loading-panel">
+      <div class="brand-mark">S</div>
+      <h1>Loading Sprinty</h1>
+      {#if error}<p>{error}</p>{/if}
     </div>
   </main>
 {:else}
-  <div class:dark class="dashboard-shell min-h-screen bg-zinc-50 text-zinc-950 dark:bg-zinc-950 dark:text-zinc-100">
-    <header class="border-b border-zinc-200 bg-white/95 px-5 py-4 dark:border-zinc-800 dark:bg-zinc-950/95">
-      <div class="mx-auto max-w-7xl">
-        <div class="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-          <div class="min-w-0">
-            <div class="text-xs font-semibold uppercase text-sky-600 dark:text-sky-400">Sprinty</div>
-            <h1 class="mt-1 text-balance text-2xl font-semibold tracking-normal">{model.sprint.goal}</h1>
-            <div class="mt-2 flex flex-wrap gap-2 text-xs text-zinc-500 dark:text-zinc-400">
-              <span>{model.sprint.branch || "no branch"}</span>
-              <span class="max-w-full truncate">{model.sprint.worktree || model.sprint.dir}</span>
-              <span>{fmt(model.sprint.created_at)}</span>
-              {#if stale}<span class="text-amber-600 dark:text-amber-300">stale connection</span>{/if}
-            </div>
-          </div>
-          <div class="flex items-center gap-2">
-            <span class={`rounded-full px-3 py-1 text-sm ring-1 ${statusClass(model.sprint.status)}`}>{model.sprint.status}</span>
-            <button class="rounded-md border border-zinc-300 px-3 py-1.5 text-sm text-zinc-700 hover:border-sky-500 dark:border-zinc-700 dark:text-zinc-200" on:click={() => dark = !dark}>
-              {dark ? "Light" : "Dark"}
-            </button>
-          </div>
-        </div>
+  <div class:dark class="dashboard-frame">
+    <aside class="app-rail" aria-label="Sprinty navigation">
+      <div class="rail-logo">S</div>
+      <div class="rail-stack">
+        <span class="rail-icon rail-icon-active" title="Dashboard">D</span>
+        <span class="rail-icon" title="Tree">T</span>
+        <span class="rail-icon" title="Ledger">L</span>
       </div>
-    </header>
+      <button class="theme-toggle" on:click={() => dark = !dark} aria-label="Toggle theme">{dark ? "L" : "D"}</button>
+    </aside>
 
-    <main class="mx-auto grid w-full max-w-7xl gap-5 px-5 py-5">
-      <section class="artifact-shelf" data-testid="artifact-shelf">
-        <div class="flex items-center justify-between gap-3">
-          <h2 class="text-sm font-semibold">Artifacts</h2>
-          <div class="text-xs text-zinc-500 dark:text-zinc-400">{model.artifacts.active.length} active</div>
+    <div class="dashboard-canvas">
+      <header class="topbar">
+        <div class="min-w-0">
+          <div class="eyebrow">Sprinty dashboard</div>
+          <h1>{model.sprint.goal}</h1>
+          <div class="meta-line">
+            <span>{model.sprint.branch || "detached"}</span>
+            <span class="truncate">{model.sprint.worktree || model.sprint.dir}</span>
+            <span>started {fmt(model.sprint.created_at)}</span>
+            {#if stale}<span class="warning-text">stale connection</span>{/if}
+          </div>
         </div>
-        <div class="mt-3 grid gap-3 md:grid-cols-3">
-          {#each model.artifacts.recent as artifact}
-            <a class="artifact-card" href={artifact.uri} title={artifact.uri}>
-              <div class="flex items-center justify-between gap-2">
-                <span class="rounded bg-sky-500/10 px-2 py-0.5 text-xs font-medium text-sky-700 dark:text-sky-300">{artifact.kind}</span>
-                <span class="truncate text-xs text-zinc-500 dark:text-zinc-400">{targetLabel(artifact)}</span>
-              </div>
-              <div class="mt-2 truncate text-sm font-semibold">{artifact.title}</div>
-              {#if artifact.description}<div class="mt-1 line-clamp-2 text-xs text-zinc-500 dark:text-zinc-400">{artifact.description}</div>{/if}
-            </a>
-          {:else}
-            <div class="rounded-lg border border-dashed border-zinc-300 p-4 text-sm text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">No artifacts recorded yet.</div>
-          {/each}
+        <div class="topbar-actions">
+          <span class={statusClass(model.sprint.status)}>{model.sprint.status}</span>
+          <span class="coverage-chip">{model.sprint.coverage?.lines.percent ?? "--"}% cov</span>
         </div>
-      </section>
+      </header>
 
-      <section class="stats-grid" data-testid="stats-strip">
-        <div class="stat-panel md:col-span-2">
-          <div class="flex items-center justify-between">
-            <div>
-              <div class="text-xs text-zinc-500 dark:text-zinc-400">Sprint progress</div>
-              <div class="mt-1 text-2xl font-semibold">{model.progress.items.percent}%</div>
-            </div>
-            <div class="text-sm text-zinc-500 dark:text-zinc-400">{model.progress.items.done}/{model.progress.items.total} terminal</div>
+      <main class="dashboard-main">
+        <section class="artifact-strip" data-testid="artifact-shelf">
+          <div class="section-title">
+            <span>Artifacts</span>
+            <span>{model.artifacts.active.length} active</span>
           </div>
-          <div class="mt-4 h-3 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800">
-            <div class="h-full rounded-full bg-sky-500" style={`width:${model.progress.items.percent}%`}></div>
-          </div>
-        </div>
-        <div class="stat-panel">
-          <div class="flex items-center gap-4">
-            <div class="donut" style={`background:${statusDonut(model)}`}></div>
-            <div class="grid gap-1 text-xs">
-              <span><b class="text-emerald-600 dark:text-emerald-300">{model.progress.statuses.completed}</b> done</span>
-              <span><b class="text-sky-600 dark:text-sky-300">{model.progress.statuses.open}</b> todo</span>
-              <span><b class="text-amber-600 dark:text-amber-300">{model.progress.statuses.split}</b> split</span>
-              <span><b class="text-zinc-500">{model.progress.statuses.deprecated}</b> deprecated</span>
-            </div>
-          </div>
-        </div>
-        <div class="stat-panel">
-          <div class="text-xs text-zinc-500 dark:text-zinc-400">Code stats</div>
-          <div class="mt-2 grid grid-cols-2 gap-2 text-sm">
-            <div><b>{model.progress.code.additions}</b><span class="ml-1 text-zinc-500">added</span></div>
-            <div><b>{model.progress.code.deletions}</b><span class="ml-1 text-zinc-500">deleted</span></div>
-            <div><b>{model.progress.code.churn}</b><span class="ml-1 text-zinc-500">churn</span></div>
-            <div><b>{model.progress.code.hotspots}</b><span class="ml-1 text-zinc-500">hotspots</span></div>
-          </div>
-        </div>
-      </section>
-
-      <section class="workspace-grid">
-        <aside class="sidebar-panel" data-testid="subsprint-sidebar">
-          <div class="mb-3 flex items-center justify-between">
-            <h2 class="text-sm font-semibold">Subsprints</h2>
-            <span class="text-xs text-zinc-500">{model.sprint.subsprints.length}</span>
-          </div>
-          <div class="grid gap-2">
-            {#each model.tree as sub}
-              <button class:selected-sub={selectedSubId === sub.id} class="sub-row" on:click={() => selectSub(sub)}>
-                <div class="flex items-center justify-between gap-2">
-                  <span class="min-w-0 truncate text-left">
-                    <span class="font-mono text-xs text-sky-600 dark:text-sky-300">{sub.id}</span>
-                    <span class="ml-2 text-sm font-medium">{sub.label}</span>
-                  </span>
-                  <span class={`shrink-0 rounded-full px-2 py-0.5 text-xs ring-1 ${statusClass(sub.status)}`}>{sub.status}</span>
-                </div>
-                <div class="mt-2 flex items-center gap-2">
-                  <div class="h-1.5 flex-1 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800">
-                    <div class="h-full rounded-full bg-sky-500" style={`width:${sub.progress.percent}%`}></div>
-                  </div>
-                  <span class="text-xs text-zinc-500">{sub.progress.done}/{sub.progress.total}</span>
-                </div>
-              </button>
+          <div class="artifact-list">
+            {#each model.artifacts.recent as artifact}
+              <a class="artifact-token" href={artifact.uri} title={artifact.uri}>
+                <span>{artifact.kind}</span>
+                <strong>{artifact.title}</strong>
+                <small>{targetLabel(artifact)}</small>
+              </a>
+            {:else}
+              <div class="empty-inline">No artifacts recorded yet.</div>
             {/each}
           </div>
-        </aside>
+        </section>
 
-        <section class="min-w-0" data-testid="item-core">
-          <div class="content-panel">
-            <div class="flex flex-col gap-2 border-b border-zinc-200 p-4 dark:border-zinc-800 md:flex-row md:items-center md:justify-between">
-              <div>
-                <h2 class="text-base font-semibold">{selectedSub?.description ?? "No subsprint"}</h2>
+        <section class="metrics-grid" data-testid="stats-strip">
+          <div class="metric-panel metric-progress">
+            <div class="metric-heading">
+              <span>Sprint progress</span>
+              <strong>{model.progress.items.percent}%</strong>
+            </div>
+            <div class="progress-track">
+              <div class="progress-fill" style={`width:${model.progress.items.percent}%`}></div>
+            </div>
+            <div class="metric-foot">{model.progress.items.done}/{model.progress.items.total} items terminal</div>
+          </div>
+
+          <div class="metric-panel metric-status">
+            <div class="donut" style={`background:${statusDonut(model)}`}></div>
+            <div class="status-legend">
+              <span><b class="legend-done">{model.progress.statuses.completed}</b> done</span>
+              <span><b class="legend-open">{model.progress.statuses.open}</b> todo</span>
+              <span><b class="legend-split">{model.progress.statuses.split}</b> split</span>
+              <span><b class="legend-muted">{model.progress.statuses.deprecated}</b> deprecated</span>
+            </div>
+          </div>
+
+          <div class="metric-panel code-metrics">
+            <div class="metric-heading"><span>Code stats</span><strong>{model.progress.code.churn}</strong></div>
+            <div class="code-grid">
+              <span><b>{model.progress.code.additions}</b> added</span>
+              <span><b>{model.progress.code.deletions}</b> deleted</span>
+              <span><b>{model.progress.code.files}</b> files</span>
+              <span><b>{model.progress.code.hotspots}</b> hotspots</span>
+            </div>
+          </div>
+        </section>
+
+        <section class="workbench">
+          <aside class="tree-panel" data-testid="subsprint-sidebar">
+            <div class="tree-header">
+              <h2>Subsprints</h2>
+              <span>{model.sprint.subsprints.length}</span>
+            </div>
+            <div class="tree-list">
+              {#each model.tree as sub}
+                <button class={treeRowClass(sub)} on:click={() => selectSub(sub)}>
+                  <div class="tree-row-main">
+                    <span class={statusDot(sub.status)}></span>
+                    <span class="tree-id">{sub.id}</span>
+                    <span class="tree-label">{sub.label}</span>
+                  </div>
+                  <div class="tree-row-progress">
+                    <span><b>{sub.progress.done}</b>/{sub.progress.total}</span>
+                    <div class="mini-track"><div style={`width:${sub.progress.percent}%`}></div></div>
+                  </div>
+                </button>
+              {/each}
+            </div>
+          </aside>
+
+          <section class="core-panel" data-testid="item-core">
+            <div class="core-header">
+              <div class="min-w-0">
+                <div class="eyebrow">{selectedSub?.id ?? "No subsprint"}</div>
+                <h2>{selectedSub?.description ?? "No subsprint selected"}</h2>
                 {#if selectedSub}
-                  <div class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{selectedSub.kind}{selectedSub.spike_conclusion ? ` · ${selectedSub.spike_conclusion}` : ""}</div>
+                  <p>{selectedSub.kind}{selectedSub.spike_conclusion ? `: ${selectedSub.spike_conclusion}` : ""}</p>
                 {/if}
               </div>
-              {#if selectedSub}
-                <span class={`w-fit rounded-full px-3 py-1 text-xs ring-1 ${statusClass(selectedSub.status)}`}>{selectedSub.status}</span>
-              {/if}
+              {#if selectedSub}<span class={statusClass(selectedSub.status)}>{selectedSub.status}</span>{/if}
             </div>
 
-            <div class="divide-y divide-zinc-200 dark:divide-zinc-800">
+            {#if selectedSub?.goals.length}
+              <details class="goals-fold">
+                <summary>Goals</summary>
+                <ul>
+                  {#each selectedSub.goals as goal}
+                    <li>{goal}</li>
+                  {/each}
+                </ul>
+              </details>
+            {/if}
+
+            <div class="todo-list">
               {#each selectedSub?.items ?? [] as item}
-                <article class="item-row" data-testid="item-row">
-                  <button class="flex w-full items-center justify-between gap-3 p-4 text-left" on:click={() => toggleItem(item)} aria-expanded={expandedItemId === item.id}>
-                    <div class="min-w-0">
-                      <div class="flex items-center gap-2">
-                        <span class="font-mono text-xs text-sky-600 dark:text-sky-300">{item.id}</span>
-                        <span class={`rounded-full px-2 py-0.5 text-xs ring-1 ${statusClass(item.status)}`}>{item.status}</span>
-                      </div>
-                      <div class="mt-1 truncate text-sm font-medium">{item.description}</div>
-                    </div>
-                    <span class="text-xl text-zinc-400">{expandedItemId === item.id ? "-" : "+"}</span>
+                <article class={itemRowClass(item)} data-testid="item-row">
+                  <button class="todo-button" on:click={() => toggleItem(item)} aria-expanded={expandedItemId === item.id}>
+                    <span class={statusDot(item.status)}></span>
+                    <span class="todo-id">{item.id}</span>
+                    <span class="todo-title">{item.description}</span>
+                    <span class={statusClass(item.status)}>{item.status}</span>
+                    <span class="todo-expand">{expandedItemId === item.id ? "-" : "+"}</span>
                   </button>
+
                   {#if expandedItemId === item.id}
-                    <div class="grid gap-4 px-4 pb-4 md:grid-cols-[minmax(0,1fr)_18rem]">
-                      <div class="detail-markdown prose prose-zinc max-w-none text-sm dark:prose-invert">{@html markdown(item.description)}</div>
-                      <div class="grid gap-3 rounded-lg bg-zinc-100 p-3 text-xs dark:bg-zinc-900">
-                        <div><span class="text-zinc-500">Files</span><div class="mt-1 font-mono">{item.code_locations.join(", ")}</div></div>
-                        <div><span class="text-zinc-500">Gates</span><div class="mt-1">{item.gate_results.filter((g) => g.passed).length}/{item.gates.length} passed</div></div>
-                        {#if item.commit_id}<div><span class="text-zinc-500">Commit</span><div class="mt-1 font-mono">{item.commit_id}</div></div>{/if}
-                        {#if item.artifacts.length}<div><span class="text-zinc-500">Artifacts</span>{#each item.artifacts as artifact}<div class="mt-1 truncate">{artifact.title}</div>{/each}</div>{/if}
-                        {#if item.follow_ups.length}<div><span class="text-zinc-500">Follow-ups</span>{#each item.follow_ups as follow}<div class="mt-1">{follow.bug_ids.join(", ")} · {follow.description}</div>{/each}</div>{/if}
+                    <div class="todo-detail">
+                      <div class="detail-copy prose prose-zinc max-w-none dark:prose-invert">{@html markdown(item.description)}</div>
+                      <div class="detail-grid">
+                        <div><span>Files</span><strong>{item.code_locations.join(", ")}</strong></div>
+                        <div><span>Gates</span><strong>{gateSummary(item)}</strong></div>
+                        {#if item.dependencies.length}<div><span>Depends on</span><strong>{item.dependencies.join(", ")}</strong></div>{/if}
+                        {#if item.commit_id}<div><span>Commit</span><strong>{item.commit_id}</strong></div>{/if}
+                        {#if item.changelog}<div><span>Changelog</span><strong>{item.changelog.verb}: {item.changelog.line}</strong></div>{/if}
+                        {#if item.artifacts.length}<div><span>Artifacts</span><strong>{item.artifacts.map((artifact) => artifact.title).join(", ")}</strong></div>{/if}
+                        {#if item.follow_ups.length}<div><span>Follow-ups</span><strong>{item.follow_ups.map((follow) => `${follow.bug_ids.join(", ")}: ${follow.description}`).join("; ")}</strong></div>{/if}
                       </div>
                     </div>
                   {/if}
                 </article>
               {:else}
-                <div class="p-4 text-sm text-zinc-500 dark:text-zinc-400">No items in this subsprint yet.</div>
+                <div class="empty-panel">No items in this subsprint yet.</div>
               {/each}
-            </div>
-          </div>
-
-          <section class="content-panel mt-5" data-testid="ledger-table">
-            <div class="flex items-center justify-between border-b border-zinc-200 p-4 dark:border-zinc-800">
-              <h2 class="text-sm font-semibold">Ledger</h2>
-              <div class="flex items-center gap-2 text-xs text-zinc-500">
-                <button class="pager-button" disabled={ledgerPage === 0} on:click={() => ledgerPage = Math.max(0, ledgerPage - 1)}>Prev</button>
-                <span>{ledgerPage + 1}/{ledgerPages}</span>
-                <button class="pager-button" disabled={ledgerPage >= ledgerPages - 1} on:click={() => ledgerPage = Math.min(ledgerPages - 1, ledgerPage + 1)}>Next</button>
-              </div>
-            </div>
-            <div class="overflow-x-auto">
-              <table class="w-full min-w-[44rem] text-left text-sm">
-                <thead class="bg-zinc-100 text-xs text-zinc-500 dark:bg-zinc-900 dark:text-zinc-400">
-                  <tr><th class="px-4 py-2">Seq</th><th>Type</th><th>Target</th><th>Text</th><th>Time</th></tr>
-                </thead>
-                <tbody>
-                  {#each visibleLedger as row}
-                    <tr class="border-t border-zinc-200 hover:bg-sky-500/5 dark:border-zinc-800">
-                      <td class="px-4 py-2 font-mono text-xs text-zinc-500">{row.seq}</td>
-                      <td>{row.type}</td>
-                      <td class="font-mono text-xs text-sky-600 dark:text-sky-300">{row.id}</td>
-                      <td class="max-w-[26rem] truncate">{row.text}</td>
-                      <td class="text-xs text-zinc-500">{fmt(row.time)}</td>
-                    </tr>
-                  {/each}
-                </tbody>
-              </table>
             </div>
           </section>
         </section>
-      </section>
-    </main>
+
+        <section class="timeline-panel" data-testid="timeline-panel">
+          <div class="section-title">
+            <span>Timeline</span>
+            <span>{model.timeline.length} events</span>
+          </div>
+          <div class="timeline-list">
+            {#each recentTimeline as row}
+              <div class="timeline-event">
+                <span>{compactTime(row.time)}</span>
+                <strong>{row.type}</strong>
+                <p>{row.text}</p>
+              </div>
+            {:else}
+              <div class="empty-inline">No events yet.</div>
+            {/each}
+          </div>
+        </section>
+
+        <section class="ledger-panel" data-testid="ledger-table">
+          <div class="ledger-header">
+            <div class="section-title">
+              <span>Ledger</span>
+              <span>{ledgerRows.length} rows</span>
+            </div>
+            <div class="pager">
+              <button disabled={ledgerPage === 0} on:click={() => ledgerPage = Math.max(0, ledgerPage - 1)}>Prev</button>
+              <span>{ledgerPage + 1}/{ledgerPages}</span>
+              <button disabled={ledgerPage >= ledgerPages - 1} on:click={() => ledgerPage = Math.min(ledgerPages - 1, ledgerPage + 1)}>Next</button>
+            </div>
+          </div>
+          <div class="table-scroll">
+            <table>
+              <thead>
+                <tr><th>Seq</th><th>Type</th><th>Target</th><th>Text</th><th>Time</th></tr>
+              </thead>
+              <tbody>
+                {#each visibleLedger as row}
+                  <tr>
+                    <td>{row.seq}</td>
+                    <td>{row.type}</td>
+                    <td>{row.id}</td>
+                    <td>{row.text}</td>
+                    <td>{fmt(row.time)}</td>
+                  </tr>
+                {/each}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </main>
+    </div>
   </div>
 {/if}
