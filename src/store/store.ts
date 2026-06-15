@@ -24,6 +24,10 @@ export class StoreError extends Error {
   }
 }
 
+function gateKey(gate: Gate): string {
+  return JSON.stringify({ kind: gate.kind, spec: gate.spec, cwd: gate.cwd ?? "" });
+}
+
 export class SprintStore {
   private readonly book: SprintBook;
   readonly dataDir: string;
@@ -355,16 +359,22 @@ export class SprintStore {
     }
 
     // Re-run executable gates: every completed item's gates + every subsprint's gates.
-    const toRun: Array<{ owner: string; gate: Gate }> = [];
-    for (const item of allItems) if (item.status === "completed") for (const g of item.gates) toRun.push({ owner: item.id, gate: g });
-    for (const sub of s.subsprints) for (const g of sub.gates) toRun.push({ owner: sub.id, gate: g });
+    const toRun = new Map<string, { owners: string[]; gate: Gate }>();
+    const queueGate = (owner: string, gate: Gate): void => {
+      if (!isExecutable(gate)) return;
+      const key = gateKey(gate);
+      const existing = toRun.get(key);
+      if (existing) existing.owners.push(owner);
+      else toRun.set(key, { owners: [owner], gate });
+    };
+    for (const item of allItems) if (item.status === "completed") for (const g of item.gates) queueGate(item.id, g);
+    for (const sub of s.subsprints) for (const g of sub.gates) queueGate(sub.id, g);
 
     const results: GateResult[] = [];
-    for (const { owner, gate } of toRun) {
-      if (!isExecutable(gate)) continue;
+    for (const { owners, gate } of toRun.values()) {
       const r = runGate(gate, this.dir);
       results.push(r);
-      if (!r.passed) blockers.push(`Gate failed for ${owner}: ${gate.spec}`);
+      if (!r.passed) blockers.push(`Gate failed for ${owners.join(", ")}: ${gate.spec}`);
     }
 
     if (blockers.length > 0) throw new StoreError("Sprint cannot close.", blockers);

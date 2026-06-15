@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { SprintStore, StoreError } from "./store.js";
@@ -404,6 +404,23 @@ describe("sprint_close teeth", () => {
       status: "reported",
       summary: { lines: { covered: 9, total: 10, percent: 90 } },
     });
+  });
+
+  it("deduplicates identical executable gates at close time", () => {
+    store.createSprint("g");
+    const gate = { kind: "command" as const, spec: "node -e \"require('fs').appendFileSync('gate.log','x')\"" };
+    store.createSubsprint({ description: "d", goals: ["go"], gates: [gate] });
+    store.addItem({ subsprint: "S01", description: "i one", code_locations: ["a.ts"], gates: [gate] });
+    store.addItem({ subsprint: "S01", description: "i two", code_locations: ["b.ts"], gates: [gate] });
+    store.done({ item: "S01-001", commit_id: sha, gate_results: [{ ...gate, passed: true, evidence: "ok" }], changelog: { verb: "added", line: "Added first close gate." } });
+    store.done({ item: "S01-002", commit_id: sha, gate_results: [{ ...gate, passed: true, evidence: "ok" }], changelog: { verb: "added", line: "Added second close gate." } });
+
+    const view = store.closeSprint({ coverage: { not_applicable: "close gate dedupe test" } });
+    const closeEvent = new Ledger(join(dir, ".sprinty", "001.jsonl")).read().findLast((event) => event.type === "sprint_closed");
+
+    expect(view.status).toBe("closed");
+    expect(readFileSync(join(dir, "gate.log"), "utf8")).toBe("x");
+    expect(closeEvent?.gate_results.filter((result) => result.spec === gate.spec)).toHaveLength(1);
   });
 
   it("requires coverage evidence by path to close", () => {
