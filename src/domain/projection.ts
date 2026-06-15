@@ -292,7 +292,7 @@ export function project(events: LedgerEvent[]): SprintView | null {
   for (const sub of subsprints.values()) {
     if (sub.status !== "deprecated") {
       const itemsClosed = sub.items.length > 0 && sub.items.every((i) => i.status !== "open");
-      if (sub.kind === "spike") sub.status = sub.spike_conclusion || itemsClosed ? "closed" : "open";
+      if (sub.kind === "spike") sub.status = sub.spike_conclusion ? "closed" : "open";
       else sub.status = itemsClosed ? "closed" : "open";
     }
     if (sub.status === "closed" && !sub.closed_at) {
@@ -301,7 +301,7 @@ export function project(events: LedgerEvent[]): SprintView | null {
         return latest && latest > item.resolved_at ? latest : item.resolved_at;
       }, null);
     }
-    sub.changelog = sub.items
+    sub.changelog = sub.kind === "spike" ? [] : sub.items
       .filter((item) => item.changelog)
       .map((item) => ({ item: item.id, verb: item.changelog!.verb, line: item.changelog!.line }));
     sub.change_map = aggregateChangeMaps(sub.items.map((item) => item.change_map));

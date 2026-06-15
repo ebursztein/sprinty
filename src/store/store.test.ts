@@ -246,11 +246,13 @@ describe("SprintStore lifecycle", () => {
     expect(spike.id).toBe("S01");
     expect(spike.view.subsprints[0]!.kind).toBe("spike");
     store.addItem({ subsprint: "S01", description: "run experiment", code_locations: ["a.ts"], gates: [{ kind: "command", spec: "true" }] });
-    store.done({ item: "S01-001", commit_id: sha, gate_results: [{ kind: "command", spec: "true", passed: true, evidence: "ok" }], changelog: { verb: "added", line: "Added spike-only finding." } });
+    const afterItem = store.done({ item: "S01-001", commit_id: sha, gate_results: [{ kind: "command", spec: "true", passed: true, evidence: "ok" }], changelog: { verb: "added", line: "Added spike-only finding." } });
+    expect(afterItem.subsprints[0]!).toMatchObject({ kind: "spike", status: "open", changelog: [] });
+    expect(afterItem.subsprints[0]!.items[0]!.status).toBe("completed");
     try { store.closeSprint({ coverage: { path: writeCoverage(dir), format: "lcov" } }); throw new Error("should have thrown"); }
     catch (e) {
       expect(e).toBeInstanceOf(StoreError);
-      expect((e as StoreError).blockers.join(" ")).toContain("conclusion");
+      expect((e as StoreError).blockers.join(" ")).toContain("spike_conclude");
     }
     const concluded = store.concludeSpike({ subsprint: "S01", conclusion: "Use the parser behind a small adapter." });
     expect(concluded.subsprints[0]!.spike_conclusion).toBe("Use the parser behind a small adapter.");

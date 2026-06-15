@@ -286,7 +286,7 @@ export class SprintStore {
       }
     }
     for (const sub of s.subsprints) {
-      if (sub.kind === "spike" && sub.status === "open") blockers.push(`Spike ${sub.id} is unresolved.`);
+      if (sub.kind === "spike" && sub.status === "open") blockers.push(`Spike ${sub.id} is unresolved and requires a conclusion; use spike_conclude or deprecate it with spike_deprecate.`);
       if (sub.kind === "spike" && sub.status === "closed" && !sub.spike_conclusion) blockers.push(`Spike ${sub.id} closed without a conclusion.`);
     }
 
