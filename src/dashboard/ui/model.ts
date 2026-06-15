@@ -52,10 +52,12 @@ export interface LedgerRow extends TimelineRow {}
 
 export function deriveDashboardModel(sprint: SprintView): DashboardModel {
   const items = sprint.subsprints.flatMap((sub) => sub.items);
-  const openItems = items.filter((item) => item.status === "open");
-  const activeSubsprint = sprint.subsprints.find((sub) => sub.status === "open") ?? null;
+  const openItems = orderOpenItems(sprint, items);
   const currentItem = openItems[0] ?? null;
   const nextItem = openItems[1] ?? null;
+  const activeSubsprint = currentItem
+    ? sprint.subsprints.find((sub) => sub.id === currentItem.subsprint_id) ?? null
+    : sprint.subsprints.find((sub) => sub.status === "open") ?? null;
   const done = items.filter((item) => item.status !== "open").length;
   const statusTotals = statusProgress(items);
   const gateTotals = gateProgress(items);
@@ -87,6 +89,15 @@ export function deriveDashboardModel(sprint: SprintView): DashboardModel {
     timeline: sprint.timeline.slice().reverse().map(timelineRow),
     ledger: sprint.timeline.map(timelineRow),
   };
+}
+
+function orderOpenItems(sprint: SprintView, items: ItemView[]): ItemView[] {
+  const openById = new Map(items.filter((item) => item.status === "open").map((item) => [item.id, item]));
+  const ordered = (sprint.graph.topological_order ?? [])
+    .map((id) => openById.get(id))
+    .filter((item): item is ItemView => Boolean(item));
+  const seen = new Set(ordered.map((item) => item.id));
+  return [...ordered, ...items.filter((item) => item.status === "open" && !seen.has(item.id))];
 }
 
 function treeSubsprint(

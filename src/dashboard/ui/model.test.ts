@@ -144,4 +144,30 @@ describe("deriveDashboardModel", () => {
     expect(model.timeline[0]!.id).toBe("S02-001");
     expect(model.ledger[0]!.seq).toBe(0);
   });
+
+  it("selects current and next items using dependency graph order", () => {
+    const sprint = sprintView();
+    const active = sprint.subsprints[1]!;
+    active.items = [
+      { ...active.items[0]!, id: "S02-002", description: "Dependent work", dependencies: ["S02-001"] },
+      { ...active.items[1]!, id: "S02-001", description: "Prerequisite work", dependencies: [] },
+    ];
+    sprint.graph = {
+      nodes: [
+        { id: "S02-002", kind: "item", label: "Dependent work", status: "open" },
+        { id: "S02-001", kind: "item", label: "Prerequisite work", status: "open" },
+      ],
+      edges: [{ from: "S02-002", to: "S02-001" }],
+      blocked_by: { "S02-002": ["S02-001"], "S02-001": [] },
+      unblocks: { "S02-002": [], "S02-001": ["S02-002"] },
+      topological_order: ["S02-001", "S02-002"],
+      cycles: [],
+    };
+
+    const model = deriveDashboardModel(sprint);
+
+    expect(model.currentItem?.id).toBe("S02-001");
+    expect(model.nextItem?.id).toBe("S02-002");
+    expect(model.tree[1]!.items.map((item) => item.tone)).toEqual(["next", "current"]);
+  });
 });

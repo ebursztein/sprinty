@@ -15,8 +15,10 @@ export interface CurrentWindow {
 export function windowCurrent(view: SprintView, past: number, future: number): CurrentWindow {
   const items = view.subsprints.flatMap((s) => s.items);
   const resolved = items.filter((i) => i.status !== "open");
-  const open = items.filter((i) => i.status === "open");
-  const current = view.subsprints.find((s) => s.status === "open") ?? null;
+  const open = orderOpenItems(view, items);
+  const current = open[0]
+    ? view.subsprints.find((sub) => sub.id === open[0]!.subsprint_id) ?? null
+    : view.subsprints.find((s) => s.status === "open") ?? null;
   return {
     goal: view.goal,
     last_resolved: resolved.slice(-past),
@@ -27,6 +29,15 @@ export function windowCurrent(view: SprintView, past: number, future: number): C
     recent_artifacts: collectArtifacts(view).filter((artifact) => artifact.status === "active").slice(-future),
     recent_activity: view.timeline.slice(-Math.max(5, past + future)),
   };
+}
+
+function orderOpenItems(view: SprintView, items: ItemView[]): ItemView[] {
+  const openById = new Map(items.filter((item) => item.status === "open").map((item) => [item.id, item]));
+  const ordered = (view.graph.topological_order ?? [])
+    .map((id) => openById.get(id))
+    .filter((item): item is ItemView => Boolean(item));
+  const seen = new Set(ordered.map((item) => item.id));
+  return [...ordered, ...items.filter((item) => item.status === "open" && !seen.has(item.id))];
 }
 
 function collectArtifacts(view: SprintView): ArtifactView[] {

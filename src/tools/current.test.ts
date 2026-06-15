@@ -46,4 +46,29 @@ describe("windowCurrent", () => {
     expect(w.recent_artifacts.map((artifact) => artifact.id)).toEqual(["A001", "A002", "A003"]);
     expect(w.recent_activity.map((entry) => entry.type)).toContain("follow_up_added");
   });
+
+  it("orders next open items by dependency graph topological order", () => {
+    const v = view();
+    const sub = v.subsprints[0]!;
+    sub.items = [
+      { ...sub.items[1]!, id: "S01-002", description: "dependent", dependencies: ["S01-003"] },
+      { ...sub.items[1]!, id: "S01-003", description: "prerequisite", dependencies: [] },
+    ];
+    v.graph = {
+      nodes: [
+        { id: "S01-002", kind: "item", label: "dependent", status: "open" },
+        { id: "S01-003", kind: "item", label: "prerequisite", status: "open" },
+      ],
+      edges: [{ from: "S01-002", to: "S01-003" }],
+      blocked_by: { "S01-002": ["S01-003"], "S01-003": [] },
+      unblocks: { "S01-002": [], "S01-003": ["S01-002"] },
+      topological_order: ["S01-003", "S01-002"],
+      cycles: [],
+    };
+
+    const w = windowCurrent(v, 1, 2);
+
+    expect(w.next.map((item) => item.id)).toEqual(["S01-003", "S01-002"]);
+    expect(w.current_subsprint?.id).toBe("S01");
+  });
 });
