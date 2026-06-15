@@ -24,7 +24,7 @@ function writeCoverage(dir: string): string {
 let dir: string, sha: string, tools: ToolHandlers;
 beforeEach(() => {
   ({ dir, sha } = initRepo());
-  tools = buildToolHandlers(new SprintStore(dir), async () => "http://127.0.0.1:0");
+  tools = buildToolHandlers(() => new SprintStore(dir), async () => "http://127.0.0.1:0");
 });
 
 describe("tool handlers", () => {

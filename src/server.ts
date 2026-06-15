@@ -8,6 +8,8 @@ import { SprintStore } from "./store/store.js";
 import { buildToolHandlers } from "./tools/register.js";
 import { startDashboard, type Dashboard } from "./dashboard/server.js";
 
+interface RootLike { uri: string; name?: string | undefined; }
+
 const INSTRUCTIONS = `Sprinty enforces a disciplined sprint.
 One sprint per repo/session (the .sprinty/current pointer keeps exactly one open). Call info() to orient before acting.
 Build is item-driven: sprint_new(goal, context_notes?) -> dashboard() for the human -> subsprint_new(..., dependencies?)
@@ -22,9 +24,15 @@ it refuses to close if anything is open, uncommitted, missing changelog, missing
 Use search(pattern, context_lines) to query the immutable record. dashboard() returns a live URL.`;
 
 export async function main(): Promise<void> {
-  const store = new SprintStore(resolveRepoDir());
   let dashboard: Dashboard | undefined;
+  let storePromise: Promise<SprintStore> | undefined;
+  const server = new McpServer({ name: "sprinty", version: "0.1.0" }, { instructions: INSTRUCTIONS });
+  const getStore = (): Promise<SprintStore> => {
+    storePromise ??= resolveRepoDirWithRoots(() => server.server.listRoots()).then((dir) => new SprintStore(dir));
+    return storePromise;
+  };
   const openDashboard = async (): Promise<string> => {
+    const store = await getStore();
     if (!dashboard) {
       dashboard = await startDashboard(() => {
         try { return store.read(); } catch { return null; }
@@ -33,8 +41,7 @@ export async function main(): Promise<void> {
     return dashboard.url;
   };
 
-  const server = new McpServer({ name: "sprinty", version: "0.1.0" }, { instructions: INSTRUCTIONS });
-  const handlers = buildToolHandlers(store, openDashboard);
+  const handlers = buildToolHandlers(getStore, openDashboard);
 
   for (const [name, d] of Object.entries(handlers)) {
     server.registerTool(
@@ -71,13 +78,31 @@ export function resolveRepoDir(
   env: NodeJS.ProcessEnv = process.env,
   cwd: string = process.cwd(),
 ): string {
-  const explicit = cliRepoDir(args) ?? env.SPRINTY_REPO_DIR ?? env.SPRINTY_WORKTREE;
+  const explicit = explicitRepoDir(args, env);
   const candidate = resolve(cwd, explicit ?? ".");
   if (!existsSync(candidate)) throw new Error(`Sprinty repo directory does not exist: ${candidate}`);
   if (!statSync(candidate).isDirectory()) throw new Error(`Sprinty repo directory is not a directory: ${candidate}`);
   const real = realpathSync(candidate);
   assertGitWorktree(real, explicit !== undefined);
   return real;
+}
+
+export async function resolveRepoDirWithRoots(
+  listRoots: () => Promise<{ roots: RootLike[] }>,
+  args: string[] = process.argv.slice(2),
+  env: NodeJS.ProcessEnv = process.env,
+  cwd: string = process.cwd(),
+): Promise<string> {
+  if (explicitRepoDir(args, env)) return resolveRepoDir(args, env, cwd);
+
+  try {
+    const fromRoot = firstGitRoot((await listRoots()).roots);
+    if (fromRoot) return fromRoot;
+  } catch {
+    // Roots are optional in MCP clients. Fall back to cwd and produce the normal actionable error.
+  }
+
+  return resolveRepoDir(args, env, cwd);
 }
 
 function cliRepoDir(args: string[]): string | undefined {
@@ -89,13 +114,33 @@ function cliRepoDir(args: string[]): string | undefined {
   return undefined;
 }
 
+function explicitRepoDir(args: string[], env: NodeJS.ProcessEnv): string | undefined {
+  return cliRepoDir(args) ?? env.SPRINTY_REPO_DIR ?? env.SPRINTY_WORKTREE;
+}
+
+function firstGitRoot(roots: RootLike[]): string | undefined {
+  for (const root of roots) {
+    if (!root.uri.startsWith("file:")) continue;
+    const dir = realpathSync(fileURLToPath(root.uri));
+    if (isGitWorktree(dir)) return dir;
+  }
+  return undefined;
+}
+
 function assertGitWorktree(dir: string, explicit: boolean): void {
-  try {
-    execFileSync("git", ["rev-parse", "--show-toplevel"], { cwd: dir, stdio: "ignore" });
-  } catch {
+  if (!isGitWorktree(dir)) {
     const hint = explicit
       ? "Choose a git worktree for --repo-dir/SPRINTY_REPO_DIR."
       : "Set SPRINTY_REPO_DIR=/absolute/path/to/repo or pass --repo-dir /absolute/path/to/repo.";
     throw new Error(`Sprinty repo directory must be a git worktree: ${dir}. ${hint}`);
+  }
+}
+
+function isGitWorktree(dir: string): boolean {
+  try {
+    execFileSync("git", ["rev-parse", "--show-toplevel"], { cwd: dir, stdio: "ignore" });
+    return true;
+  } catch {
+    return false;
   }
 }

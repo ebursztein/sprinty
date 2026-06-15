@@ -3,9 +3,11 @@ import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, realpathSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
-import { resolveRepoDir } from "./server.js";
+import { ListRootsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
+import { resolveRepoDir, resolveRepoDirWithRoots } from "./server.js";
 
 function initRepo(): { dir: string; sha: string } {
   const dir = mkdtempSync(join(tmpdir(), "sprinty-e2e-"));
@@ -43,6 +45,20 @@ function connect(dir: string, options: { cwd?: string; env?: Record<string, stri
     env: { ...process.env, ...options.env },
   });
   const client = new Client({ name: "test", version: "0" });
+  return client.connect(transport).then(() => client);
+}
+
+function connectWithRoot(dir: string, rootDir: string, options: { cwd?: string; env?: Record<string, string> } = {}): Promise<Client> {
+  const transport = new StdioClientTransport({
+    command: "node",
+    args: [entry],
+    cwd: options.cwd ?? dir,
+    env: { ...process.env, ...options.env },
+  });
+  const client = new Client({ name: "test", version: "0" }, { capabilities: { roots: {} } });
+  client.setRequestHandler(ListRootsRequestSchema, () => ({
+    roots: [{ uri: pathToFileURL(rootDir).href, name: "test repo" }],
+  }));
   return client.connect(transport).then(() => client);
 }
 
@@ -106,6 +122,37 @@ describe("sprinty e2e over MCP", () => {
     } finally {
       await c.close();
     }
+  });
+
+  it("uses MCP roots when launched outside the workspace without explicit repo env", async () => {
+    const fresh = initRepo();
+    const repoDir = realpathSync(fresh.dir);
+    const launchDir = mkdtempSync(join(tmpdir(), "sprinty-launch-"));
+    const c = await connectWithRoot(fresh.dir, fresh.dir, { cwd: launchDir });
+    try {
+      const created = await call(c, "sprint_new", { goal: "bind through roots" });
+      expect(created.json.dir).toBe(repoDir);
+      expect(created.json.worktree).toBe(repoDir);
+      expect(created.json.branch).toBe("main");
+      await call(c, "subsprint_new", { description: "core", goals: ["build core"], gates: [{ kind: "command", spec: "true" }] });
+      await call(c, "add", { subsprint: "S01", description: "do thing", code_locations: ["src/x.ts"], gates: [{ kind: "command", spec: "true" }] });
+      const done = await call(c, "done", {
+        item: "S01-001",
+        commit_id: fresh.sha,
+        gate_results: [{ kind: "command", spec: "true", passed: true, evidence: "ok" }],
+        changelog: { verb: "fixed", line: "Fixed roots directory binding." },
+      });
+      expect(done.json.subsprints[0].items[0].commit_id).toBe(fresh.sha);
+    } finally {
+      await c.close();
+    }
+  });
+
+  it("resolves repository directories from MCP roots before falling back to cwd", async () => {
+    const fresh = initRepo();
+    const repoDir = realpathSync(fresh.dir);
+    const launchDir = mkdtempSync(join(tmpdir(), "sprinty-launch-"));
+    await expect(resolveRepoDirWithRoots(async () => ({ roots: [{ uri: pathToFileURL(fresh.dir).href }] }), [], {}, launchDir)).resolves.toBe(repoDir);
   });
 
   it("rejects a non-git launch cwd instead of silently binding to a temp directory", () => {
