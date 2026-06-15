@@ -33,7 +33,10 @@ For MCP-only setup without plugin skills:
 codex mcp add sprinty -- npx -y sprinty-mcp
 ```
 
-If your Codex host starts plugin MCP processes from a temp directory, configure the server with
-`SPRINTY_REPO_DIR=/absolute/path/to/your/repo` or add `--repo-dir /absolute/path/to/your/repo` to
-the MCP command. Sprinty requires the resolved directory to be a git worktree, so accidental
+Sprinty chooses its repository from explicit config first (`--repo-dir`, `SPRINTY_REPO_DIR`, or
+`SPRINTY_WORKTREE`), then MCP workspace roots when the Codex host exposes them, then the MCP process
+cwd when it is already a git worktree. If your Codex host starts plugin MCP processes from a temp
+directory and roots are unavailable, configure the server with
+`SPRINTY_REPO_DIR=/absolute/path/to/your/repo` or add `--repo-dir /absolute/path/to/your/repo` to the
+MCP command. Sprinty requires the resolved directory to be a git worktree, so accidental
 `/private/tmp` launch directories fail fast instead of becoming the sprint ledger.

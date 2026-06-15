@@ -55,11 +55,12 @@ describe("client guidance", () => {
     expect(pkg.scripts?.prepack).toBe("npm run build");
   });
 
-  it("documents explicit repo binding for temp-launched MCP hosts", () => {
+  it("documents repo binding precedence for temp-launched MCP hosts", () => {
     for (const file of ["README.md", "clients/codex/README.md", "plugins/sprinty/README.md"]) {
       const text = readFileSync(file, "utf8");
       expect(text, file).toContain("SPRINTY_REPO_DIR");
       expect(text, file).toContain("--repo-dir");
+      expect(text, file).toContain("MCP workspace roots");
       expect(text, file).toContain("/private/tmp");
     }
   });

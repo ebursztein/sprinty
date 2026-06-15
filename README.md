@@ -47,17 +47,23 @@ command = "npx"
 args = ["-y", "sprinty-mcp"]
 ```
 
-If your MCP host launches servers from a temp directory, bind Sprinty to the active repo explicitly:
+Sprinty binds to a repository in this order:
+
+1. an explicit `--repo-dir`, `SPRINTY_REPO_DIR`, or `SPRINTY_WORKTREE`;
+2. MCP workspace roots from clients that support `roots/list`;
+3. the MCP server process cwd when it is already a git worktree.
+
+If your MCP host launches servers from a temp directory and does not expose workspace roots, bind
+Sprinty to the active repo explicitly:
 
 ```toml
 [mcp_servers.sprinty.env]
 SPRINTY_REPO_DIR = "/absolute/path/to/your/repo"
 ```
 
-You can also pass `--repo-dir /absolute/path/to/your/repo` to the server command. Without an
-explicit repo directory, Sprinty uses the MCP server process cwd and requires it to be a git
-worktree. This prevents accidental `.sprinty/` ledgers and dashboards rooted in temporary launch
-directories such as `/private/tmp`.
+You can also pass `--repo-dir /absolute/path/to/your/repo` to the server command. Sprinty requires
+the resolved directory to be a git worktree. This prevents accidental `.sprinty/` ledgers and
+dashboards rooted in temporary launch directories such as `/private/tmp`.
 
 Codex CLI plugin path: install the repo-local marketplace from a repository checkout:
 
