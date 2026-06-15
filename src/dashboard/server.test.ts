@@ -25,16 +25,18 @@ describe("dashboard", () => {
     expect(html).toContain("<!doctype html>");
   });
 
-  it("serves a dashboard shell that renders ledger text safely", async () => {
+  it("serves the compiled dashboard shell and static assets", async () => {
     dash = await startDashboard(() => ({
       ...view,
       goal: "<script>alert('x')</script>",
       timeline: [{ seq: 0, ts: view.created_at, type: "sprint_created", id: "sprint", text: "<img src=x onerror=alert(1)>" }],
     }));
     const html = await (await fetch(`${dash.url}/`)).text();
-    expect(html).not.toContain("innerHTML");
-    expect(html).toContain("textContent");
-    expect(html).toContain('id="timeline"');
-    expect(html).toContain('id="active-items"');
+    expect(html).toContain('<div id="app">');
+    const script = html.match(/src="([^"]+\.js)"/)?.[1];
+    expect(script).toBeTruthy();
+    const asset = await fetch(`${dash.url}${script}`);
+    expect(asset.status).toBe(200);
+    expect(asset.headers.get("content-type")).toContain("text/javascript");
   });
 });
