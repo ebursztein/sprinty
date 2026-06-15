@@ -1,0 +1,30 @@
+{
+  "name": "sprinty",
+  "version": "0.1.0",
+  "description": "Disciplined sprint workflow for Codex CLI: structured sprint items, dependency graphs, change maps, coverage gates, changelog tables, and a dashboard.",
+  "author": {
+    "name": "Elie Bursztein",
+    "url": "https://github.com/ebursztein"
+  },
+  "homepage": "https://github.com/ebursztein/sprinty",
+  "repository": "https://github.com/ebursztein/sprinty",
+  "license": "Apache-2.0",
+  "keywords": ["sprint", "codex", "mcp", "ledger", "changelog", "coverage"],
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "Sprinty",
+    "shortDescription": "Run disciplined, ledgered development sprints from Codex CLI.",
+    "longDescription": "Sprinty gives Codex CLI a sprint workflow with server-minted IDs, subsprints, item gates, dependency graphs with cycle detection, Git-backed change maps, Markdown changelogs, coverage-required close gates, and a local dashboard.",
+    "developerName": "Elie Bursztein",
+    "category": "Developer Tools",
+    "capabilities": ["Interactive", "Read", "Write"],
+    "websiteURL": "https://github.com/ebursztein/sprinty",
+    "defaultPrompt": [
+      "Use Sprinty to run this implementation as a disciplined sprint.",
+      "Start a Sprinty sprint, track items, then close with coverage."
+    ],
+    "brandColor": "#2563EB",
+    "screenshots": []
+  }
+}

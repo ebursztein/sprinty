@@ -44,10 +44,17 @@ command = "npx"
 args = ["-y", "sprinty-mcp"]
 ```
 
-Plugin path: `clients/codex/` contains `.codex-plugin/plugin.json`, `.mcp.json`, and `AGENTS.md`.
-The Codex manifest points at the shared top-level `skills/` directory. If you use a local Codex marketplace, point it at
-`clients/codex/marketplace.json`; the plugin entry in that marketplace resolves to the
-`clients/codex/` directory.
+Codex CLI plugin path: install the repo-local marketplace from a repository checkout:
+
+```bash
+codex plugin marketplace add .
+codex plugin add sprinty@sprinty-local
+```
+
+The installable plugin bundle is `plugins/sprinty/`, and the marketplace index is
+`.agents/plugins/marketplace.json`. This marketplace layout is for Git/repo installs, not the npm
+tarball. The plugin uses a `plugins/sprinty/skills` symlink to the canonical top-level `skills/`
+directory; there is no duplicated Codex-only skill copy.
 
 After installation, ask Codex to use Sprinty for a non-trivial task. It should call `sprint_new`
 before implementation and `sprint_close` before claiming the sprint is done.
@@ -60,8 +67,8 @@ before implementation and `sprint_close` before claiming the sprint is done.
 gemini extensions install ./clients/gemini
 ```
 
-The skills are authored once in `skills/` and symlinked into each client, so all three share one
-body of guidance.
+The skill guidance is authored once in `skills/`. Client packages should reference or symlink that
+content rather than copying it.
 
 ## The loop
 
