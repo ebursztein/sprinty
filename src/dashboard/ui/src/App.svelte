@@ -116,7 +116,7 @@
     const open = model.progress.statuses.open / total * 100;
     const split = model.progress.statuses.split / total * 100;
     const deprecated = model.progress.statuses.deprecated / total * 100;
-    return `conic-gradient(#22c55e 0 ${done}%, #3b82f6 ${done}% ${done + open}%, #f59e0b ${done + open}% ${done + open + split}%, #71717a ${done + open + split}% ${done + open + split + deprecated}%, #27272a 0)`;
+    return `conic-gradient(#16a34a 0 ${done}%, #2563eb ${done}% ${done + open}%, #d97706 ${done + open}% ${done + open + split}%, #71717a ${done + open + split}% ${done + open + split + deprecated}%, #d4d4d8 0)`;
   }
 
   function targetLabel(artifact: ArtifactView): string {
@@ -141,9 +141,9 @@
     <aside class="app-rail" aria-label="Sprinty navigation">
       <div class="rail-logo">S</div>
       <div class="rail-stack">
-        <span class="rail-icon rail-icon-active" title="Dashboard">D</span>
-        <span class="rail-icon" title="Tree">T</span>
-        <span class="rail-icon" title="Ledger">L</span>
+        <span class="rail-icon rail-icon-active" title="Dashboard" aria-hidden="true"></span>
+        <span class="rail-icon rail-icon-tree" title="Tree" aria-hidden="true"></span>
+        <span class="rail-icon rail-icon-ledger" title="Ledger" aria-hidden="true"></span>
       </div>
       <button class="theme-toggle" on:click={() => dark = !dark} aria-label="Toggle theme">{dark ? "L" : "D"}</button>
     </aside>
@@ -167,53 +167,57 @@
       </header>
 
       <main class="dashboard-main">
-        <section class="artifact-strip" data-testid="artifact-shelf">
-          <div class="section-title">
-            <span>Artifacts</span>
-            <span>{model.artifacts.active.length} active</span>
-          </div>
-          <div class="artifact-list">
-            {#each model.artifacts.recent as artifact}
-              <a class="artifact-token" href={artifact.uri} title={artifact.uri}>
-                <span>{artifact.kind}</span>
-                <strong>{artifact.title}</strong>
-                <small>{targetLabel(artifact)}</small>
-              </a>
-            {:else}
-              <div class="empty-inline">No artifacts recorded yet.</div>
-            {/each}
-          </div>
-        </section>
-
-        <section class="metrics-grid" data-testid="stats-strip">
-          <div class="metric-panel metric-progress">
-            <div class="metric-heading">
-              <span>Sprint progress</span>
-              <strong>{model.progress.items.percent}%</strong>
+        <section class="overview-band" data-testid="stats-strip">
+          <div class="artifact-strip" data-testid="artifact-shelf">
+            <div class="section-title">
+              <span>Artifacts</span>
+              <span>{model.artifacts.active.length} active</span>
             </div>
-            <div class="progress-track">
-              <div class="progress-fill" style={`width:${model.progress.items.percent}%`}></div>
-            </div>
-            <div class="metric-foot">{model.progress.items.done}/{model.progress.items.total} items terminal</div>
-          </div>
-
-          <div class="metric-panel metric-status">
-            <div class="donut" style={`background:${statusDonut(model)}`}></div>
-            <div class="status-legend">
-              <span><b class="legend-done">{model.progress.statuses.completed}</b> done</span>
-              <span><b class="legend-open">{model.progress.statuses.open}</b> todo</span>
-              <span><b class="legend-split">{model.progress.statuses.split}</b> split</span>
-              <span><b class="legend-muted">{model.progress.statuses.deprecated}</b> deprecated</span>
+            <div class="artifact-list">
+              {#each model.artifacts.recent as artifact}
+                <a class="artifact-token" href={artifact.uri} title={artifact.uri}>
+                  <span>{artifact.kind}</span>
+                  <strong>{artifact.title}</strong>
+                  <small>{targetLabel(artifact)}</small>
+                </a>
+              {:else}
+                <div class="empty-inline">No artifacts recorded yet.</div>
+              {/each}
             </div>
           </div>
 
-          <div class="metric-panel code-metrics">
-            <div class="metric-heading"><span>Code stats</span><strong>{model.progress.code.churn}</strong></div>
-            <div class="code-grid">
-              <span><b>{model.progress.code.additions}</b> added</span>
-              <span><b>{model.progress.code.deletions}</b> deleted</span>
-              <span><b>{model.progress.code.files}</b> files</span>
-              <span><b>{model.progress.code.hotspots}</b> hotspots</span>
+          <div class="metrics-grid">
+            <div class="metric-panel metric-progress">
+              <div class="metric-heading">
+                <span>Sprint progress</span>
+                <strong>{model.progress.items.percent}%</strong>
+              </div>
+              <div class="progress-track">
+                <div class="progress-fill" style={`width:${model.progress.items.percent}%`}></div>
+              </div>
+              <div class="metric-foot">{model.progress.items.done}/{model.progress.items.total} items terminal</div>
+            </div>
+
+            <div class="metric-panel metric-status">
+              <div class="donut" style={`background:${statusDonut(model)}`}>
+                <span>{model.progress.statuses.total}</span>
+              </div>
+              <div class="status-legend">
+                <span><b class="legend-done">{model.progress.statuses.completed}</b> done</span>
+                <span><b class="legend-open">{model.progress.statuses.open}</b> todo</span>
+                <span><b class="legend-split">{model.progress.statuses.split}</b> split</span>
+                <span><b class="legend-muted">{model.progress.statuses.deprecated}</b> deprecated</span>
+              </div>
+            </div>
+
+            <div class="metric-panel code-metrics">
+              <div class="metric-heading"><span>Code stats</span><strong>{model.progress.code.churn}</strong></div>
+              <div class="code-grid">
+                <span><b>{model.progress.code.additions}</b> added</span>
+                <span><b>{model.progress.code.deletions}</b> deleted</span>
+                <span><b>{model.progress.code.files}</b> files</span>
+                <span><b>{model.progress.code.hotspots}</b> hotspots</span>
+              </div>
             </div>
           </div>
         </section>
@@ -272,7 +276,7 @@
                     <span class="todo-id">{item.id}</span>
                     <span class="todo-title">{item.description}</span>
                     <span class={statusClass(item.status)}>{item.status}</span>
-                    <span class="todo-expand">{expandedItemId === item.id ? "-" : "+"}</span>
+                    <span class:todo-expand-open={expandedItemId === item.id} class="todo-expand" aria-hidden="true"></span>
                   </button>
 
                   {#if expandedItemId === item.id}

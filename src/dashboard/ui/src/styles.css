@@ -4,8 +4,8 @@
 
 :root {
   color-scheme: light dark;
-  background: #f4f6f8;
-  color: #171717;
+  background: #eef2f7;
+  color: #18181b;
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   letter-spacing: 0;
 }
@@ -14,7 +14,8 @@ body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
-  background: #f4f6f8;
+  background: #eef2f7;
+  overflow-x: hidden;
 }
 
 button {
@@ -40,20 +41,20 @@ button {
 
   .brand-mark,
   .rail-logo {
-    @apply grid h-10 w-10 place-items-center rounded-lg bg-white text-lg font-black text-zinc-950;
+    @apply grid h-10 w-10 place-items-center rounded-md bg-white text-lg font-black text-zinc-950 shadow-sm;
   }
 
   .dashboard-frame {
-    @apply flex min-h-screen bg-[#eef1f5] text-zinc-950 dark:bg-[#0d0f12] dark:text-zinc-100;
+    @apply flex min-h-screen bg-[#eef2f7] text-zinc-950 dark:bg-[#090b0f] dark:text-zinc-100;
   }
 
   .dashboard-frame.dark {
-    background: #0d0f12;
+    background: #090b0f;
     color: #f4f4f5;
   }
 
   .app-rail {
-    @apply sticky top-0 flex h-screen w-[4.25rem] shrink-0 flex-col items-center border-r border-zinc-200 bg-[#252932] px-3 py-4 text-zinc-300 dark:border-zinc-800 dark:bg-[#111318];
+    @apply sticky top-0 flex h-screen w-16 shrink-0 flex-col items-center border-r border-zinc-200 bg-[#1f2430] px-3 py-4 text-zinc-300 dark:border-zinc-800 dark:bg-[#11151c];
   }
 
   .rail-stack {
@@ -61,31 +62,60 @@ button {
   }
 
   .rail-icon {
-    @apply grid h-10 w-10 place-items-center rounded-md border border-transparent text-xs font-semibold text-zinc-400;
+    @apply relative grid h-10 w-10 place-items-center rounded-md border border-transparent text-zinc-400 transition;
+  }
+
+  .rail-icon::before {
+    content: "";
+    @apply h-4 w-4 rounded-sm border border-current;
   }
 
   .rail-icon-active {
-    @apply border-sky-400/30 bg-sky-500 text-white shadow-lg shadow-sky-950/30;
+    @apply border-blue-400/35 bg-blue-500 text-white shadow-lg shadow-blue-950/30;
+  }
+
+  .rail-icon-active::before {
+    @apply h-4 w-4 rounded-sm border border-current;
+    box-shadow: inset 6px 0 0 rgba(255, 255, 255, .28);
+  }
+
+  .rail-icon-tree::before {
+    @apply absolute left-[15px] h-5 w-px rounded-none border-0 bg-current;
+  }
+
+  .rail-icon-tree::after {
+    content: "";
+    @apply absolute left-[21px] top-[11px] h-1.5 w-1.5 rounded-full bg-current;
+    box-shadow: 0 8px 0 currentColor, 0 16px 0 currentColor;
+  }
+
+  .rail-icon-ledger::before {
+    @apply h-3 w-5 rounded-none border-x-0;
+  }
+
+  .rail-icon-ledger::after {
+    content: "";
+    @apply absolute h-px w-5 bg-current;
   }
 
   .theme-toggle {
-    @apply mt-auto grid h-9 w-9 place-items-center rounded-md border border-zinc-700 text-xs font-semibold text-zinc-200 hover:border-sky-400 hover:text-white;
+    @apply mt-auto grid h-9 w-9 place-items-center rounded-md border border-white/10 text-xs font-semibold text-zinc-200 transition hover:border-blue-300 hover:text-white;
   }
 
   .dashboard-canvas {
-    @apply min-w-0 flex-1;
+    @apply min-w-0 flex-1 overflow-x-hidden;
   }
 
   .topbar {
-    @apply sticky top-0 z-20 flex flex-col gap-3 border-b border-zinc-200 bg-white/95 px-5 py-4 shadow-sm backdrop-blur dark:border-zinc-800 dark:bg-[#15171d]/95 md:flex-row md:items-center md:justify-between;
+    @apply sticky top-0 z-20 flex flex-col gap-3 border-b border-zinc-200 bg-white/95 px-6 py-4 shadow-sm backdrop-blur dark:border-zinc-800 dark:bg-[#10141b]/95 md:flex-row md:items-center md:justify-between;
   }
 
   .topbar h1 {
-    @apply mt-1 max-w-5xl truncate text-xl font-semibold md:text-2xl;
+    @apply mt-1 max-w-5xl truncate text-xl font-semibold text-zinc-950 dark:text-zinc-50 md:text-2xl;
   }
 
   .eyebrow {
-    @apply text-xs font-semibold uppercase text-sky-600 dark:text-sky-300;
+    @apply text-xs font-semibold uppercase text-blue-700 dark:text-blue-300;
   }
 
   .meta-line {
@@ -93,7 +123,7 @@ button {
   }
 
   .warning-text {
-    @apply text-amber-600 dark:text-amber-300;
+    @apply text-amber-700 dark:text-amber-300;
   }
 
   .topbar-actions {
@@ -105,20 +135,23 @@ button {
   }
 
   .dashboard-main {
-    @apply mx-auto grid w-full max-w-[1480px] gap-4 px-5 py-5;
+    @apply mx-auto grid w-full max-w-[1520px] gap-4 px-6 py-5;
   }
 
-  .artifact-strip,
-  .metric-panel,
+  .overview-band,
   .tree-panel,
   .core-panel,
   .timeline-panel,
   .ledger-panel {
-    @apply rounded-lg border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-[#15171d];
+    @apply rounded-lg border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-[#11161e];
+  }
+
+  .overview-band {
+    @apply grid gap-0 overflow-hidden xl:grid-cols-[minmax(18rem,0.82fr)_minmax(0,1.8fr)];
   }
 
   .artifact-strip {
-    @apply p-3;
+    @apply min-w-0 border-b border-zinc-200 p-4 dark:border-zinc-800 xl:border-b-0 xl:border-r;
   }
 
   .section-title {
@@ -126,19 +159,19 @@ button {
   }
 
   .artifact-list {
-    @apply mt-3 flex gap-2 overflow-x-auto pb-1;
+    @apply mt-3 flex gap-2 overflow-x-auto pb-1 xl:grid xl:max-h-32 xl:grid-cols-1 xl:overflow-y-auto xl:overflow-x-hidden xl:pr-1;
   }
 
   .artifact-token {
-    @apply grid min-w-56 gap-1 rounded-md border border-zinc-200 bg-zinc-50 px-3 py-2 text-inherit no-underline hover:border-sky-500 hover:bg-sky-50 dark:border-zinc-800 dark:bg-[#101216] dark:hover:border-sky-400 dark:hover:bg-sky-950/30;
+    @apply grid min-w-52 gap-1 rounded-md border border-zinc-200 bg-zinc-50 px-3 py-2 text-inherit no-underline transition hover:border-blue-500 hover:bg-blue-50 dark:border-zinc-800 dark:bg-[#0c1016] dark:hover:border-blue-400 dark:hover:bg-blue-950/25;
   }
 
   .artifact-token span {
-    @apply text-xs font-semibold uppercase text-sky-600 dark:text-sky-300;
+    @apply text-xs font-semibold uppercase text-blue-700 dark:text-blue-300;
   }
 
   .artifact-token strong {
-    @apply truncate text-sm font-semibold;
+    @apply truncate text-sm font-semibold text-zinc-900 dark:text-zinc-100;
   }
 
   .artifact-token small,
@@ -147,15 +180,19 @@ button {
   }
 
   .metrics-grid {
-    @apply grid gap-3 lg:grid-cols-[minmax(0,1.3fr)_minmax(18rem,0.8fr)_minmax(18rem,0.8fr)];
+    @apply grid gap-0 md:grid-cols-3;
   }
 
   .metric-panel {
-    @apply p-4;
+    @apply min-h-36 border-b border-zinc-200 p-4 dark:border-zinc-800 md:border-b-0 md:border-r;
+  }
+
+  .metric-panel:last-child {
+    @apply border-r-0;
   }
 
   .metric-heading {
-    @apply flex items-center justify-between gap-3;
+    @apply flex items-start justify-between gap-3;
   }
 
   .metric-heading span,
@@ -164,19 +201,23 @@ button {
   }
 
   .metric-heading strong {
-    @apply text-3xl font-semibold;
+    @apply text-3xl font-semibold text-zinc-950 dark:text-zinc-50;
+  }
+
+  .code-metrics .metric-heading strong {
+    @apply text-2xl;
   }
 
   .progress-track {
-    @apply mt-4 h-3 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800;
+    @apply mt-5 h-2.5 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800;
   }
 
   .progress-fill {
-    @apply h-full rounded-full bg-sky-500;
+    @apply h-full rounded-full bg-blue-600 dark:bg-blue-400;
   }
 
   .metric-foot {
-    @apply mt-3;
+    @apply mt-4;
   }
 
   .metric-status {
@@ -184,7 +225,7 @@ button {
   }
 
   .donut {
-    @apply relative h-24 w-24 shrink-0 rounded-full;
+    @apply relative grid h-24 w-24 shrink-0 place-items-center rounded-full;
   }
 
   .donut::after {
@@ -196,11 +237,15 @@ button {
   }
 
   .dark .donut::after {
-    background: #15171d;
+    background: #11161e;
+  }
+
+  .donut span {
+    @apply relative z-10 text-sm font-semibold text-zinc-700 dark:text-zinc-200;
   }
 
   .status-legend {
-    @apply grid gap-1 text-xs text-zinc-500 dark:text-zinc-400;
+    @apply grid gap-1.5 text-xs text-zinc-500 dark:text-zinc-400;
   }
 
   .status-legend b {
@@ -208,15 +253,15 @@ button {
   }
 
   .legend-done {
-    @apply text-emerald-600 dark:text-emerald-300;
+    @apply text-emerald-700 dark:text-emerald-300;
   }
 
   .legend-open {
-    @apply text-sky-600 dark:text-sky-300;
+    @apply text-blue-700 dark:text-blue-300;
   }
 
   .legend-split {
-    @apply text-amber-600 dark:text-amber-300;
+    @apply text-amber-700 dark:text-amber-300;
   }
 
   .legend-muted {
@@ -224,7 +269,7 @@ button {
   }
 
   .code-grid {
-    @apply mt-3 grid grid-cols-2 gap-3 text-sm text-zinc-500 dark:text-zinc-400;
+    @apply mt-4 grid grid-cols-2 gap-3 text-sm text-zinc-500 dark:text-zinc-400;
   }
 
   .code-grid b {
@@ -232,19 +277,19 @@ button {
   }
 
   .workbench {
-    @apply grid gap-4 md:grid-cols-[20rem_minmax(0,1fr)];
+    @apply grid gap-4 lg:grid-cols-[21rem_minmax(0,1fr)];
   }
 
   .tree-panel {
-    @apply h-fit p-3 md:sticky md:top-24;
+    @apply h-fit overflow-hidden lg:sticky lg:top-24;
   }
 
   .tree-header {
-    @apply mb-3 flex items-center justify-between px-1;
+    @apply flex items-center justify-between border-b border-zinc-200 px-4 py-3 dark:border-zinc-800;
   }
 
   .tree-header h2 {
-    @apply text-sm font-semibold;
+    @apply text-sm font-semibold text-zinc-900 dark:text-zinc-100;
   }
 
   .tree-header span {
@@ -252,27 +297,36 @@ button {
   }
 
   .tree-list {
-    @apply grid gap-1;
+    @apply grid p-2;
   }
 
   .tree-row {
-    @apply w-full rounded-md border border-transparent p-3 text-left transition hover:border-zinc-300 hover:bg-zinc-50 dark:hover:border-zinc-700 dark:hover:bg-zinc-900/50;
+    @apply relative w-full rounded-md border border-transparent px-3 py-3 text-left transition hover:bg-zinc-50 dark:hover:bg-zinc-900/50;
+  }
+
+  .tree-row::before {
+    content: "";
+    @apply absolute bottom-2 left-5 top-8 w-px bg-zinc-200 dark:bg-zinc-800;
   }
 
   .tree-row-selected {
-    @apply border-sky-500 bg-sky-50 shadow-sm shadow-sky-950/5 dark:bg-sky-950/30;
+    @apply border-blue-500 bg-blue-50 shadow-sm shadow-blue-950/5 dark:bg-blue-950/30;
+  }
+
+  .tree-row-selected::before {
+    @apply bg-blue-300 dark:bg-blue-600;
   }
 
   .tree-row-done {
-    @apply opacity-70;
+    @apply opacity-60 grayscale;
   }
 
   .tree-row-active:not(.tree-row-selected) {
-    @apply bg-white dark:bg-zinc-900/30;
+    @apply bg-white dark:bg-[#151b24];
   }
 
   .tree-row-muted {
-    @apply opacity-60;
+    @apply opacity-55;
   }
 
   .tree-row-main {
@@ -281,15 +335,15 @@ button {
 
   .tree-id,
   .todo-id {
-    @apply font-mono text-xs font-semibold text-sky-600 dark:text-sky-300;
+    @apply font-mono text-xs font-semibold text-blue-700 dark:text-blue-300;
   }
 
   .tree-label {
-    @apply truncate text-sm font-medium;
+    @apply truncate text-sm font-medium text-zinc-900 dark:text-zinc-100;
   }
 
   .tree-row-progress {
-    @apply mt-2 grid grid-cols-[auto_minmax(0,1fr)] items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400;
+    @apply mt-2 grid grid-cols-[auto_minmax(0,1fr)] items-center gap-2 pl-8 text-xs text-zinc-500 dark:text-zinc-400;
   }
 
   .mini-track {
@@ -297,7 +351,7 @@ button {
   }
 
   .mini-track div {
-    @apply h-full rounded-full bg-sky-500;
+    @apply h-full rounded-full bg-blue-600 dark:bg-blue-400;
   }
 
   .core-panel {
@@ -305,11 +359,11 @@ button {
   }
 
   .core-header {
-    @apply flex flex-col gap-3 border-b border-zinc-200 px-4 py-4 dark:border-zinc-800 md:flex-row md:items-center md:justify-between;
+    @apply flex flex-col gap-3 border-b border-zinc-200 px-5 py-4 dark:border-zinc-800 md:flex-row md:items-center md:justify-between;
   }
 
   .core-header h2 {
-    @apply mt-1 truncate text-xl font-semibold;
+    @apply mt-1 truncate text-xl font-semibold text-zinc-950 dark:text-zinc-50;
   }
 
   .core-header p {
@@ -317,11 +371,11 @@ button {
   }
 
   .goals-fold {
-    @apply border-b border-zinc-200 px-4 py-3 text-sm dark:border-zinc-800;
+    @apply border-b border-zinc-200 px-5 py-3 text-sm dark:border-zinc-800;
   }
 
   .goals-fold summary {
-    @apply cursor-pointer font-medium text-zinc-600 dark:text-zinc-300;
+    @apply cursor-pointer font-medium text-zinc-700 dark:text-zinc-300;
   }
 
   .goals-fold ul {
@@ -333,15 +387,15 @@ button {
   }
 
   .todo-row {
-    @apply bg-white dark:bg-[#15171d];
+    @apply bg-white dark:bg-[#11161e];
   }
 
   .todo-current {
-    @apply bg-sky-50 dark:bg-sky-950/30;
+    @apply bg-blue-50 dark:bg-blue-950/25;
   }
 
   .todo-next {
-    @apply bg-white dark:bg-[#181b22];
+    @apply bg-zinc-50 dark:bg-[#151b24];
   }
 
   .todo-terminal {
@@ -349,27 +403,45 @@ button {
   }
 
   .todo-button {
-    @apply grid w-full grid-cols-[auto_auto_minmax(0,1fr)_auto_auto] items-center gap-3 px-4 py-3 text-left;
+    @apply grid w-full grid-cols-[auto_auto_minmax(0,1fr)_auto_auto] items-center gap-3 px-5 py-3.5 text-left transition hover:bg-zinc-50 dark:hover:bg-zinc-900/40;
   }
 
   .todo-title {
-    @apply truncate text-sm font-medium;
+    @apply truncate text-sm font-medium text-zinc-900 dark:text-zinc-100;
+  }
+
+  .todo-terminal .todo-title {
+    @apply text-zinc-500 line-through decoration-zinc-300 dark:text-zinc-400 dark:decoration-zinc-700;
   }
 
   .todo-expand {
-    @apply grid h-7 w-7 place-items-center rounded border border-zinc-200 text-lg leading-none text-zinc-500 dark:border-zinc-700;
+    @apply relative grid h-7 w-7 place-items-center rounded border border-zinc-200 bg-white text-zinc-500 dark:border-zinc-700 dark:bg-[#0c1016];
+  }
+
+  .todo-expand::before,
+  .todo-expand::after {
+    content: "";
+    @apply absolute h-px w-3 bg-current;
+  }
+
+  .todo-expand::after {
+    transform: rotate(90deg);
+  }
+
+  .todo-expand-open::after {
+    display: none;
   }
 
   .todo-detail {
-    @apply grid gap-4 px-4 pb-4 md:grid-cols-[minmax(0,1fr)_22rem];
+    @apply grid gap-4 px-5 pb-5 md:grid-cols-[minmax(0,1fr)_22rem];
   }
 
   .detail-copy {
-    @apply min-w-0 rounded-md bg-white p-3 text-sm dark:bg-[#111318];
+    @apply min-w-0 rounded-md border border-zinc-200 bg-white p-3 text-sm dark:border-zinc-800 dark:bg-[#0c1016];
   }
 
   .detail-grid {
-    @apply grid gap-2 rounded-md border border-zinc-200 bg-zinc-50 p-3 text-xs dark:border-zinc-800 dark:bg-[#101216];
+    @apply grid gap-2 rounded-md border border-zinc-200 bg-zinc-50 p-3 text-xs dark:border-zinc-800 dark:bg-[#0c1016];
   }
 
   .detail-grid div {
@@ -385,20 +457,20 @@ button {
   }
 
   .empty-panel {
-    @apply p-4 text-sm text-zinc-500 dark:text-zinc-400;
+    @apply p-5 text-sm text-zinc-500 dark:text-zinc-400;
   }
 
   .timeline-panel,
   .ledger-panel {
-    @apply p-4;
+    @apply overflow-hidden p-4;
   }
 
   .timeline-list {
-    @apply mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-3;
+    @apply mt-3 grid gap-0 overflow-hidden rounded-md border border-zinc-200 dark:border-zinc-800 md:grid-cols-2 xl:grid-cols-3;
   }
 
   .timeline-event {
-    @apply grid gap-1 rounded-md border border-zinc-200 bg-zinc-50 p-3 dark:border-zinc-800 dark:bg-[#101216];
+    @apply grid min-w-0 gap-1 border-b border-r border-zinc-200 bg-zinc-50 p-3 last:border-b-0 dark:border-zinc-800 dark:bg-[#0c1016];
   }
 
   .timeline-event span {
@@ -406,11 +478,11 @@ button {
   }
 
   .timeline-event strong {
-    @apply text-xs font-semibold uppercase text-sky-600 dark:text-sky-300;
+    @apply truncate text-xs font-semibold uppercase text-blue-700 dark:text-blue-300;
   }
 
   .timeline-event p {
-    @apply truncate text-sm;
+    @apply truncate text-sm text-zinc-800 dark:text-zinc-200;
   }
 
   .ledger-header {
@@ -422,11 +494,11 @@ button {
   }
 
   .pager button {
-    @apply rounded border border-zinc-300 px-2 py-1 text-zinc-700 disabled:cursor-not-allowed disabled:opacity-40 dark:border-zinc-700 dark:text-zinc-200;
+    @apply rounded border border-zinc-300 px-2 py-1 text-zinc-700 transition hover:border-blue-500 disabled:cursor-not-allowed disabled:opacity-40 dark:border-zinc-700 dark:text-zinc-200;
   }
 
   .table-scroll {
-    @apply mt-3 overflow-x-auto rounded-md border border-zinc-200 dark:border-zinc-800;
+    @apply mt-3 max-w-full overflow-x-auto rounded-md border border-zinc-200 dark:border-zinc-800;
   }
 
   table {
@@ -443,12 +515,12 @@ button {
   }
 
   tbody tr {
-    @apply border-t border-zinc-200 hover:bg-sky-500/5 dark:border-zinc-800;
+    @apply border-t border-zinc-200 hover:bg-blue-500/5 dark:border-zinc-800;
   }
 
   tbody td:first-child,
   tbody td:nth-child(3) {
-    @apply font-mono text-xs text-sky-600 dark:text-sky-300;
+    @apply font-mono text-xs text-blue-700 dark:text-blue-300;
   }
 
   tbody td:nth-child(4) {
@@ -468,7 +540,7 @@ button {
   }
 
   .status-open {
-    @apply bg-sky-500/10 text-sky-700 ring-sky-500/25 dark:text-sky-300;
+    @apply bg-blue-500/10 text-blue-700 ring-blue-500/25 dark:text-blue-300;
   }
 
   .status-split {
@@ -481,19 +553,19 @@ button {
   }
 
   .dot {
-    @apply h-2.5 w-2.5 rounded-full;
+    @apply relative z-10 h-2.5 w-2.5 rounded-full ring-2 ring-white dark:ring-[#11161e];
   }
 
   .dot-done {
-    @apply bg-emerald-500;
+    @apply bg-emerald-600;
   }
 
   .dot-open {
-    @apply bg-sky-500;
+    @apply bg-blue-600;
   }
 
   .dot-split {
-    @apply bg-amber-500;
+    @apply bg-amber-600;
   }
 
   .dot-deprecated,
@@ -511,17 +583,17 @@ button {
   border-radius: 4px;
   background: #f4f4f5;
   padding: .05rem .25rem;
-  color: #0369a1;
+  color: #1d4ed8;
 }
 
 .dark .detail-copy :where(code) {
   border-color: #3f3f46;
   background: #18181b;
-  color: #7dd3fc;
+  color: #93c5fd;
 }
 
 .detail-copy :where(a) {
-  color: #0284c7;
+  color: #2563eb;
 }
 
 @media (max-width: 760px) {
@@ -542,11 +614,26 @@ button {
     display: flex;
   }
 
+  .dashboard-main {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
+    padding: 1rem;
+  }
+
+  .code-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
   .todo-button {
     grid-template-columns: auto auto minmax(0, 1fr) auto;
   }
 
   .todo-button .status-pill {
     display: none;
+  }
+
+  .todo-detail {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
