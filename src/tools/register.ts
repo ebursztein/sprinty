@@ -25,14 +25,23 @@ export function buildToolHandlers(
   getStore: StoreProvider,
   openDashboard: () => Promise<string>,
   bindStore: StoreBinder = async () => getStore(),
+  closeDashboard: () => Promise<void> | void = () => undefined,
 ): ToolHandlers {
   return {
-    sprint_new: def(S.SprintNewInput, "Start a sprint; returns orientation (skills + how this works).",
+    sprint_new: def(S.SprintNewInput, "Start a sprint with explicit git_dir and a worktree-scoped, uncommitted data_dir; returns orientation.",
       async (i) => ({ ...(await bindStore({ git_dir: i.git_dir, data_dir: i.data_dir })).createSprint(i.goal, i.context_notes), orientation: orientation() })),
     sprint_close: def(S.SprintCloseInput, "Close the sprint after a programmatic re-check of all gates.",
-      async (i) => (await getStore()).closeSprint(i)),
+      async (i) => {
+        const view = (await getStore()).closeSprint(i);
+        await closeDashboard();
+        return view;
+      }),
     sprint_archive: def(S.SprintArchiveInput, "Archive the sprint with a recovery reason, bypassing normal close gates.",
-      async (i) => (await getStore()).archiveSprint(i)),
+      async (i) => {
+        const view = (await getStore()).archiveSprint(i);
+        await closeDashboard();
+        return view;
+      }),
     info: def(S.InfoInput, "The one status read: sprint, subsprints, statuses.",
       async () => (await getStore()).read()),
     current: def(S.CurrentInput, "Focus window: last closed item + next N, current subsprint notes, relevant artifacts, recent artifacts, recent activity, and dependency graph.",
@@ -85,7 +94,7 @@ function orientation(): { skills: string[]; how: string } {
     skills: ["how-to-run-a-sprint", "using-sprinty"],
     how:
       "One sprint per session. Build item-driven: subsprint_new -> add -> done/split/deprecate. " +
-      "Start with explicit git_dir and data_dir so Sprinty cannot bind to a temp MCP cwd. " +
+      "Start with explicit git_dir and a worktree-scoped, uncommitted data_dir, such as <git_dir>/.sprinty when it is gitignored, so Sprinty cannot bind to a temp MCP cwd or shared state. " +
       "Items need a short title, bounded description, code_locations, and gates; keep them atomic. Each subsprint should represent one feature. " +
       "After sprint_new, call dashboard() and show the localhost URL to the human. Resolve every item, then sprint_close re-runs gates.",
   };

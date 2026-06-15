@@ -8,7 +8,7 @@ import { isExecutable, runGate } from "../gates/run.js";
 import { searchLedger, type SearchMatch } from "../domain/search.js";
 import { GraphCycleError, buildDependencyGraph } from "../domain/graph.js";
 import { buildItemChangeMap, emptyChangeMap } from "../domain/change-map.js";
-import { parseCoverageReport, type CoverageInput, type CoverageSummary } from "../domain/coverage.js";
+import { parseCoverageReport, type CoverageInput, type CoverageState, type CoverageSummary } from "../domain/coverage.js";
 import { renderChangelogMarkdown } from "../domain/changelog.js";
 import type { ArtifactKind, ChangelogEntry, LedgerEvent } from "../domain/events.js";
 import type { Gate, GateResult } from "../domain/gates.js";
@@ -306,6 +306,8 @@ export class SprintStore {
     const blockers: string[] = [];
     const allItems = s.subsprints.flatMap((x) => x.items);
     let coverage: CoverageSummary | null = null;
+    let coverageState: CoverageState = { status: "not_configured" };
+    const hasCompletedItems = allItems.some((item) => item.status === "completed");
 
     for (const item of allItems) {
       if (item.status === "open") { blockers.push(`Item ${item.id} is unresolved.`); continue; }
@@ -322,14 +324,31 @@ export class SprintStore {
       if (sub.kind === "spike" && sub.status === "closed" && !sub.spike_conclusion) blockers.push(`Spike ${sub.id} closed without a conclusion.`);
     }
 
-    if (allItems.some((item) => item.status === "completed")) {
+    if (hasCompletedItems) {
       if (!input.coverage) blockers.push("Coverage evidence is required to close a sprint with completed code items.");
       else if ("not_applicable" in input.coverage) {
         if (!input.coverage.not_applicable.trim()) blockers.push("Coverage not-applicable reason is required.");
+        else coverageState = { status: "not_applicable", reason: input.coverage.not_applicable };
       } else {
-        try { coverage = parseCoverageReport(this.dir, input.coverage); }
+        try {
+          coverage = parseCoverageReport(this.dir, input.coverage);
+          coverageState = { status: "reported", summary: coverage };
+        }
         catch (err) { blockers.push((err as Error).message); }
       }
+    } else if (input.coverage) {
+      if ("not_applicable" in input.coverage) {
+        if (!input.coverage.not_applicable.trim()) blockers.push("Coverage not-applicable reason is required.");
+        else coverageState = { status: "not_applicable", reason: input.coverage.not_applicable };
+      } else {
+        try {
+          coverage = parseCoverageReport(this.dir, input.coverage);
+          coverageState = { status: "reported", summary: coverage };
+        }
+        catch (err) { blockers.push((err as Error).message); }
+      }
+    } else {
+      coverageState = { status: "not_applicable", reason: "No completed code items required coverage evidence." };
     }
 
     // Re-run executable gates: every completed item's gates + every subsprint's gates.
@@ -346,7 +365,7 @@ export class SprintStore {
     }
 
     if (blockers.length > 0) throw new StoreError("Sprint cannot close.", blockers);
-    this.ledger.append({ type: "sprint_closed", gate_results: results, coverage });
+    this.ledger.append({ type: "sprint_closed", gate_results: results, coverage, coverage_state: coverageState });
     return this.requireState();
   }
 

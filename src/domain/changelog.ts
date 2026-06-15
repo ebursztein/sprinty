@@ -1,5 +1,6 @@
 import type { SprintView } from "./projection.js";
 import type { ChangeFileRow, ChangeMap } from "./change-map.js";
+import type { CoverageState } from "./coverage.js";
 
 const VERB_TITLES: Record<string, string> = {
   added: "Added",
@@ -22,14 +23,19 @@ export function renderChangelogMarkdown(sprint: SprintView): string {
     lines.push("");
   }
 
-  if (sprint.coverage) {
+  const coverageState = coverageStateFor(sprint);
+  if (coverageState.status === "reported") {
+    const coverage = coverageState.summary;
     lines.push("## Coverage", "");
     lines.push("| Metric | Covered/Total | Percent |");
     lines.push("|---|---:|---:|");
-    lines.push(coverageRow("Lines", sprint.coverage.lines));
-    lines.push(coverageRow("Branches", sprint.coverage.branches));
-    lines.push(coverageRow("Functions", sprint.coverage.functions));
+    lines.push(coverageRow("Lines", coverage.lines));
+    lines.push(coverageRow("Branches", coverage.branches));
+    lines.push(coverageRow("Functions", coverage.functions));
     lines.push("");
+  } else if (coverageState.status === "not_applicable") {
+    lines.push("## Coverage", "");
+    lines.push(`Not applicable: ${coverageState.reason}`, "");
   }
 
   lines.push("## Change Map", "");
@@ -41,6 +47,12 @@ export function renderChangelogMarkdown(sprint: SprintView): string {
   }
 
   return `${lines.join("\n").trim()}\n`;
+}
+
+function coverageStateFor(sprint: SprintView): CoverageState {
+  if (sprint.coverage_state) return sprint.coverage_state;
+  if (sprint.coverage) return { status: "reported", summary: sprint.coverage };
+  return { status: "not_configured" };
 }
 
 function appendChangeMap(lines: string[], map: ChangeMap): void {

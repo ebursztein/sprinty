@@ -12,9 +12,10 @@ write prose plans, you create structured items the sprinty MCP records in an imm
 
 1. **`sprint_new(goal, git_dir, data_dir, context_notes?)`** — one sentence of intent plus explicit
    absolute paths. `git_dir` is where commits, gates, coverage, and change maps run. `data_dir` is
-   where Sprinty stores the `current` pointer and JSONL ledgers. Do not guess from the MCP cwd or
-   workspace roots. Returns the skills to use and a primer. Call **`info()`** any time to re-orient
-   after binding; it must show the expected `dir` and `data_dir`. Then call
+   where Sprinty stores the `current` pointer and JSONL ledgers. Make `data_dir` worktree-scoped and
+   uncommitted, such as `<git_dir>/.sprinty` when that path is gitignored; avoid shared temp dirs.
+   Do not guess from the MCP cwd or workspace roots. Returns the skills to use and a primer. Call
+   **`info()`** any time to re-orient after binding; it must show the expected `dir` and `data_dir`. Then call
    **`dashboard()`** and show the localhost URL to the human so they can follow the sprint.
 2. **`subsprint_new(description, goals[], gates[], dependencies?)`** — carve the work into a goal-bearing unit.
    Each subsprint should be one feature, not a loose phase or miscellaneous bucket. A gate is
@@ -50,13 +51,14 @@ write prose plans, you create structured items the sprinty MCP records in an imm
 7. **`sprint_close({ coverage:{ path, format:"lcov", command? } })`** — the teeth. It re-runs every
    executable gate, parses the coverage report path, and refuses to close if any item is open, any
    completed item lacks a commit/changelog, coverage evidence is missing, or any gate fails. Read
-   the blockers, fix them, close again.
+   the blockers, fix them, close again. When close succeeds, Sprinty stops the live dashboard URL
+   for that sprint so localhost dashboard processes do not accumulate.
 
 ## Rules
 
 - Never invent an id. The server mints `S01`, `S01-001`. Read them back from tool results.
-- Start with explicit `git_dir` and `data_dir`; if `info()` reports the wrong paths, stop before
-  adding items.
+- Start with explicit `git_dir` and a worktree-scoped, uncommitted `data_dir`; if `info()` reports
+  the wrong paths, stop before adding items.
 - No item without a short title, bounded description, at least one code location, and at least one gate.
 - Keep items atomic. If the title needs "and", "plus", or multiple deliverables, split it before
   adding it. Oversized `add()` calls are rejected with a nudge to use `split()` or smaller items.

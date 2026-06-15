@@ -1,7 +1,7 @@
 import type { ArtifactKind, ChangelogEntry, LedgerEvent } from "./events.js";
 import type { Gate, GateResult } from "./gates.js";
 import type { Disposition, ItemStatus, SubsprintStatus, SprintStatus } from "./enums.js";
-import type { CoverageSummary } from "./coverage.js";
+import type { CoverageState, CoverageSummary } from "./coverage.js";
 import { aggregateChangeMaps, emptyChangeMap, type ChangeMap } from "./change-map.js";
 import { buildDependencyGraph, type DependencyGraph } from "./graph.js";
 
@@ -97,6 +97,7 @@ export interface SprintView {
   changelog: ChangelogLine[];
   change_map: ChangeMap;
   coverage: CoverageSummary | null;
+  coverage_state: CoverageState;
 }
 
 export interface TimelineEntry {
@@ -123,7 +124,7 @@ export function project(events: LedgerEvent[]): SprintView | null {
           goal: e.goal, worktree: e.worktree, branch: e.branch, dir: e.dir, data_dir: e.data_dir,
           context_notes: e.context_notes ?? [], created_at: e.ts, closed_at: null, status: "active",
           subsprints: [], timeline, graph: buildDependencyGraph([], []), artifacts: [], follow_ups: [],
-          changelog: [], change_map: emptyChangeMap(), coverage: null,
+          changelog: [], change_map: emptyChangeMap(), coverage: null, coverage_state: { status: "not_configured" },
         };
         timeline.push({ seq: e.seq, ts: e.ts, type: e.type, id: "sprint", text: e.goal });
         break;
@@ -275,9 +276,11 @@ export function project(events: LedgerEvent[]): SprintView | null {
       }
       case "sprint_closed":
         if (sprint) {
+          const coverageState = e.coverage_state ?? legacyCoverageState(e.coverage ?? null);
           sprint.status = "closed";
           sprint.closed_at = e.ts;
-          sprint.coverage = e.coverage ?? null;
+          sprint.coverage_state = coverageState;
+          sprint.coverage = coverageState.status === "reported" ? coverageState.summary : null;
         }
         timeline.push({ seq: e.seq, ts: e.ts, type: e.type, id: "sprint", text: "closed" });
         break;
@@ -321,9 +324,13 @@ export function project(events: LedgerEvent[]): SprintView | null {
     sprint.changelog = sprint.subsprints
       .filter((sub) => sub.kind !== "spike")
       .flatMap((sub) => sub.changelog.map((entry) => ({ ...entry, subsprint: sub.id })));
-    sprint.change_map = aggregateChangeMaps(sprint.subsprints.map((sub) => sub.change_map));
+    sprint.change_map = aggregateChangeMaps(sprint.subsprints.flatMap((sub) => sub.items.map((item) => item.change_map)));
   }
   return sprint;
+}
+
+function legacyCoverageState(coverage: CoverageSummary | null): CoverageState {
+  return coverage ? { status: "reported", summary: coverage } : { status: "not_configured" };
 }
 
 function unique(values: string[]): string[] {

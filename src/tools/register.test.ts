@@ -21,7 +21,7 @@ function writeCoverage(dir: string): string {
   return path;
 }
 
-let dir: string, sha: string, tools: ToolHandlers;
+let dir: string, sha: string, tools: ToolHandlers, dashboardCloseCalls: number;
 function sprintInput(goal: string, context_notes?: string[]) {
   return { goal, git_dir: dir, data_dir: join(dir, ".sprinty"), ...(context_notes ? { context_notes } : {}) };
 }
@@ -39,10 +39,12 @@ function addInput(input: { subsprint?: string; title?: string; description?: str
 
 beforeEach(() => {
   ({ dir, sha } = initRepo());
+  dashboardCloseCalls = 0;
   tools = buildToolHandlers(
     () => new SprintStore(dir),
     async () => "http://127.0.0.1:0",
     (binding) => new SprintStore(binding.git_dir, binding.data_dir),
+    async () => { dashboardCloseCalls += 1; },
   );
 });
 
@@ -74,6 +76,17 @@ describe("tool handlers", () => {
     });
     const closed = (await tools.sprint_close!.handler({ coverage: { path: writeCoverage(dir), format: "lcov" } })) as { status: string };
     expect(closed.status).toBe("closed");
+    expect(dashboardCloseCalls).toBe(1);
+  });
+
+  it("keeps the dashboard open when sprint_close fails", async () => {
+    await tools.sprint_new!.handler(sprintInput("g"));
+    await tools.subsprint_new!.handler({ description: "d", goals: ["go"], gates: [{ kind: "command", spec: "true" }] });
+    await tools.add!.handler(addInput());
+
+    await expect(tools.sprint_close!.handler({})).rejects.toThrow();
+
+    expect(dashboardCloseCalls).toBe(0);
   });
 
   it("rejects add calls without atomic title and bounded description", async () => {
@@ -180,6 +193,7 @@ describe("tool handlers", () => {
     await tools.add!.handler(addInput());
     const archived = (await tools.sprint_archive!.handler({ reason: "alpha recovery after bad ledger state" })) as { status: string };
     expect(archived.status).toBe("archived");
+    expect(dashboardCloseCalls).toBe(1);
   });
 
   it("search finds matching ledger entries", async () => {

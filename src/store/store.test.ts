@@ -351,6 +351,10 @@ describe("sprint_close teeth", () => {
     const view = store.closeSprint({ coverage: { path: writeCoverage(dir), format: "lcov", command: "npm run test:coverage" } });
     expect(view.status).toBe("closed");
     expect(view.coverage?.lines).toEqual({ covered: 9, total: 10, percent: 90 });
+    expect(view.coverage_state).toMatchObject({
+      status: "reported",
+      summary: { lines: { covered: 9, total: 10, percent: 90 } },
+    });
   });
 
   it("requires coverage evidence by path to close", () => {
@@ -378,6 +382,7 @@ describe("sprint_close teeth", () => {
     const view = store.closeSprint({ coverage: { not_applicable: "docs-only sprint" } });
     expect(view.status).toBe("closed");
     expect(view.coverage).toBeNull();
+    expect(view.coverage_state).toEqual({ status: "not_applicable", reason: "docs-only sprint" });
   });
 
   it("archives a sprint with unresolved work when a recovery reason is provided", () => {
@@ -407,6 +412,19 @@ describe("sprint_close teeth", () => {
     expect(md).toContain("| catalog.ts | TypeScript | . | S01-001 |");
     expect(md).toContain("## Coverage");
     expect(md).toContain("| Lines | 9/10 | 90% |");
+  });
+
+  it("explains coverage not-applicable in changelog markdown", () => {
+    store.createSprint("docs");
+    store.createSubsprint({ description: "docs", goals: ["go"], gates: [{ kind: "command", spec: "true" }] });
+    store.addItem({ subsprint: "S01", description: "docs", code_locations: ["README.md"], gates: [{ kind: "command", spec: "true" }] });
+    store.done({ item: "S01-001", commit_id: sha, gate_results: [{ kind: "command", spec: "true", passed: true, evidence: "ok" }], changelog: { verb: "changed", line: "Changed docs." } });
+    store.closeSprint({ coverage: { not_applicable: "docs-only sprint" } });
+
+    const md = store.changelog();
+
+    expect(md).toContain("## Coverage");
+    expect(md).toContain("Not applicable: docs-only sprint");
   });
 
   it("refuses to close when a gate re-run fails", () => {

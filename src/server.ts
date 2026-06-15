@@ -15,6 +15,7 @@ export const SERVER_VERSION = packageJson.version;
 
 const INSTRUCTIONS = `Sprinty enforces a disciplined sprint.
 One sprint per explicit git/data binding. sprint_new requires git_dir and data_dir so Sprinty never guesses from the MCP process cwd.
+Use a worktree-scoped, uncommitted data_dir, such as <git_dir>/.sprinty when it is gitignored; avoid shared temp dirs and committed sprint state.
 The data_dir/current pointer keeps exactly one open sprint for that binding. Call info() to orient after binding.
 Build is item-driven: sprint_new(goal, git_dir, data_dir, context_notes?) -> dashboard() for the human -> subsprint_new(..., dependencies?)
 -> add(title + description + code_locations + gates, dependencies?) -> done(commit + passing gates + changelog)
@@ -55,8 +56,14 @@ export async function main(): Promise<void> {
     }
     return dashboard.url;
   };
+  const closeDashboard = async (): Promise<void> => {
+    if (!dashboard) return;
+    const running = dashboard;
+    dashboard = undefined;
+    await running.stop();
+  };
 
-  const handlers = buildToolHandlers(getStore, openDashboard, bindStore);
+  const handlers = buildToolHandlers(getStore, openDashboard, bindStore, closeDashboard);
 
   for (const [name, d] of Object.entries(handlers)) {
     server.registerTool(

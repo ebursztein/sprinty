@@ -335,7 +335,8 @@ describe("sprinty e2e over MCP", () => {
 
       const dashboard = await call(c, "dashboard", {});
       expect(dashboard.json.url).toMatch(/^http:\/\/127\.0\.0\.1:\d+$/);
-      const state = await (await fetch(`${dashboard.json.url}/state`)).json();
+      const dashboardUrl = dashboard.json.url as string;
+      const state = await (await fetch(`${dashboardUrl}/state`)).json();
       expect(state.goal).toBe("Build a neighborhood bookshop catalog");
       expect(state.subsprints.map((s: { id: string }) => s.id)).toEqual(["S01", "S02"]);
       expect(state.graph.edges).toContainEqual({ from: "S02-002", to: "S02" });
@@ -357,6 +358,7 @@ describe("sprinty e2e over MCP", () => {
       expect(closed.json.status).toBe("closed");
       expect(closed.json.coverage.lines.percent).toBe(90);
       expect(closed.json.closed_at).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+      await expect(fetch(`${dashboardUrl}/state`)).rejects.toThrow();
     } finally {
       await c.close();
     }

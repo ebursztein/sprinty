@@ -55,4 +55,41 @@ describe("change maps", () => {
     });
     expect(map.hotspots.map((row) => row.file)).toEqual(["src/a.ts", "docs/readme.md"]);
   });
+
+  it("does not double-count churn when one commit closes multiple items", () => {
+    const one = buildItemChangeMap("S01-001", "abc123", [
+      { file: "src/a.ts", additions: 3, deletions: 1 },
+      { file: "README.md", additions: 2, deletions: 0 },
+    ]);
+    const two = buildItemChangeMap("S01-002", "abc123", [
+      { file: "src/a.ts", additions: 3, deletions: 1 },
+      { file: "README.md", additions: 2, deletions: 0 },
+    ]);
+
+    const map = aggregateChangeMaps([one, two]);
+
+    expect(map.by_file).toContainEqual({
+      file: "src/a.ts",
+      language: "TypeScript",
+      directory: "src",
+      items: ["S01-001", "S01-002"],
+      commits: ["abc123"],
+      additions: 3,
+      deletions: 1,
+      net: 2,
+      churn: 4,
+    });
+    expect(map.by_file).toContainEqual({
+      file: "README.md",
+      language: "Markdown",
+      directory: ".",
+      items: ["S01-001", "S01-002"],
+      commits: ["abc123"],
+      additions: 2,
+      deletions: 0,
+      net: 2,
+      churn: 2,
+    });
+    expect(map.by_directory).toContainEqual({ directory: "src", files: 1, additions: 3, deletions: 1, net: 2, churn: 4 });
+  });
 });

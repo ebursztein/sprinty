@@ -57,18 +57,26 @@ export function aggregateChangeMaps(maps: ChangeMap[]): ChangeMap {
 
 function aggregateRows(rows: ChangeFileRow[]): ChangeMap {
   const byFile = new Map<string, ChangeFileRow>();
+  const countedCommitsByFile = new Map<string, Set<string>>();
   for (const row of rows) {
     const existing = byFile.get(row.file);
     if (!existing) {
       byFile.set(row.file, { ...row, items: [...row.items], commits: [...row.commits] });
+      countedCommitsByFile.set(row.file, new Set(row.commits));
       continue;
     }
+    const countedCommits = countedCommitsByFile.get(row.file) ?? new Set<string>();
+    const newlyCountedCommits = row.commits.filter((commit) => !countedCommits.has(commit));
     existing.items = unique([...existing.items, ...row.items]);
     existing.commits = unique([...existing.commits, ...row.commits]);
-    existing.additions += row.additions;
-    existing.deletions += row.deletions;
-    existing.net = existing.additions - existing.deletions;
-    existing.churn = existing.additions + existing.deletions;
+    if (newlyCountedCommits.length > 0) {
+      existing.additions += row.additions;
+      existing.deletions += row.deletions;
+      existing.net = existing.additions - existing.deletions;
+      existing.churn = existing.additions + existing.deletions;
+      for (const commit of newlyCountedCommits) countedCommits.add(commit);
+    }
+    countedCommitsByFile.set(row.file, countedCommits);
   }
   const fileRows = [...byFile.values()].sort(compareHotspots);
   return {

@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { ChangelogVerb, Disposition } from "./enums.js";
 import { ChangeMap } from "./change-map.js";
-import { CoverageSummary } from "./coverage.js";
+import { CoverageState, CoverageSummary } from "./coverage.js";
 import { Gate, GateResult } from "./gates.js";
 
 const base = {
@@ -122,6 +122,7 @@ export const SprintClosed = z.object({
   ...base, type: z.literal("sprint_closed"),
   gate_results: z.array(GateResult),
   coverage: CoverageSummary.nullable().default(null),
+  coverage_state: CoverageState.optional(),
 });
 
 export const SprintArchived = z.object({

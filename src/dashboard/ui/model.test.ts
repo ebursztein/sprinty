@@ -18,6 +18,7 @@ function sprintView(): SprintView {
     changelog: [],
     change_map: { by_file: [], by_directory: [], by_language: [], hotspots: [] },
     coverage: null,
+    coverage_state: { status: "not_configured" },
     graph: { nodes: [], edges: [], blocked_by: {}, unblocks: {}, topological_order: [], cycles: [] },
     timeline: [
       { seq: 0, ts: baseTime, type: "sprint_created", id: "sprint", text: "Upgrade dashboard" },

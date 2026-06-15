@@ -7,7 +7,7 @@ description: Reference for the sprinty MCP tools — exact inputs, what each ret
 
 | Tool | Input | Returns / Rejects |
 |---|---|---|
-| `sprint_new` | `{ goal, git_dir, data_dir, context_notes?[] }` | sprint view + orientation. `git_dir` is where commits, gates, coverage, and change maps run. `data_dir` is where Sprinty stores `current` and sprint JSONL ledgers. Both should be absolute paths. Rejects if a sprint is already active. After this, call `dashboard()` and show the URL to the human. |
+| `sprint_new` | `{ goal, git_dir, data_dir, context_notes?[] }` | sprint view + orientation. `git_dir` is where commits, gates, coverage, and change maps run. `data_dir` is where Sprinty stores `current` and sprint JSONL ledgers. Both should be absolute paths. Use a worktree-scoped, uncommitted `data_dir`, such as `<git_dir>/.sprinty` when that path is gitignored. Rejects if a sprint is already active. After this, call `dashboard()` and show the URL to the human. |
 | `info` | `{}` | full sprint view (subsprints + items + statuses), including `dir` and `data_dir` so binding mistakes are obvious. Rejects before binding unless the MCP server was started with explicit `SPRINTY_GIT_DIR` and `SPRINTY_DATA_DIR`. |
 | `current` | `{ past?=1, future?=3 }` | last terminal items, `current`, actionable `next`, `blocked_open`, current subsprint notes, dependency graph, and enriched `relations` rows. |
 | `subsprint_new` | `{ description, goals[], gates[], dependencies?[] }` | `{ id: "S0N", … }`. Rejects unknown deps/cycles. |
@@ -28,7 +28,8 @@ description: Reference for the sprinty MCP tools — exact inputs, what each ret
 | `dependencies` | `{ target, dependencies[] }` | view. Adds dependency edges. Rejects unknown ids, duplicates, or cycles. |
 | `search` | `{ pattern, context_lines?=0 }` | regex matches over the current sprint ledger, with context lines. |
 | `changelog` | `{}` | `{ markdown }`. Renders semver changelog sections plus coverage and change-map tables. |
-| `sprint_close` | `{ coverage: { path, format:"lcov", command? } }` | closed view, or an error listing every blocker. Coverage is required when completed code items exist. |
+| `sprint_close` | `{ coverage: { path, format:"lcov", command? } }` | closed view, or an error listing every blocker. Coverage is required when completed code items exist. A successful close stops the live dashboard URL for that sprint. |
+| `sprint_archive` | `{ reason }` | archived view. This is an alpha recovery path and requires a reason. A successful archive also stops the live dashboard URL for that sprint. |
 | `dashboard` | `{}` | `{ url }` — read-only live view. Give this localhost URL to the human. |
 
 **Gate shape:** `{ kind: "test"|"typecheck"|"build"|"command"|"manual", spec, category?, cwd? }`.
@@ -77,4 +78,5 @@ recent artifacts, and recent activity. Sprinty rejects dependency writes that wo
 **Storage:** one append-only JSONL ledger per sprint in `data_dir`, with a `current` pointer in that
 same directory naming the active sprint (this enforces one-open-sprint unicity for the binding).
 Keep `git_dir` and `data_dir` explicit; do not rely on the MCP process cwd, workspace roots, or a
-worktree guess.
+worktree guess. `data_dir` is local agent state, not source code: scope it to the current worktree
+or repo, keep it out of commits, and avoid shared temp directories that could mix sessions.

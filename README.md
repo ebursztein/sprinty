@@ -59,8 +59,10 @@ Sprinty does not guess from the MCP server process cwd. Start a sprint with expl
 ```
 
 `git_dir` is where commits, gates, coverage, and change maps run. `data_dir` is where Sprinty stores
-the `current` pointer and append-only JSONL ledgers. For read-only tools before `sprint_new`, you may
-pre-bind the MCP server with `SPRINTY_GIT_DIR` and `SPRINTY_DATA_DIR` or `--git-dir` and
+the `current` pointer and append-only JSONL ledgers. Use a worktree-scoped, uncommitted `data_dir`,
+such as `<git_dir>/.sprinty` when that path is gitignored; avoid shared temp dirs or any directory
+that will be committed. For read-only tools before `sprint_new`, you may pre-bind the MCP server
+with `SPRINTY_GIT_DIR` and `SPRINTY_DATA_DIR` or `--git-dir` and
 `--data-dir`; both are required together. `SPRINTY_REPO_DIR` and `SPRINTY_WORKTREE` remain accepted
 as legacy aliases for `git_dir` only when a `data_dir` is also supplied.
 
@@ -125,7 +127,8 @@ commit ids and changelog lines for completed items, changed-file hotspots, and a
 from the immutable timeline.
 
 The dashboard server binds to `127.0.0.1` on an ephemeral port and is read-only. It lives only for
-the running MCP server process.
+the running MCP server process, and a successful `sprint_close()` or `sprint_archive()` stops that
+dashboard URL so old sprint dashboards do not pile up.
 
 ## Proof Model
 
@@ -157,7 +160,8 @@ One append-only JSONL ledger file per sprint under the explicit `data_dir`, with
 naming the active sprint (this enforces one-open-sprint unicity for that binding). `git_dir` and
 `data_dir` are intentionally separate so agents can run gates against one checkout while storing
 Sprinty state somewhere deliberate. It is local state — keep it gitignored when `data_dir` lives
-inside a repository.
+inside a repository, and scope it to the active worktree or repo instead of a shared process temp
+directory.
 
 ## Develop
 

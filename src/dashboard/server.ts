@@ -30,6 +30,7 @@ export function startDashboard(getState: () => SprintView | null): Promise<Dashb
         changelog: [],
         change_map: { by_file: [], by_directory: [], by_language: [], hotspots: [] },
         coverage: null,
+        coverage_state: { status: "not_configured" },
       }));
       return;
     }

@@ -19,6 +19,13 @@ export const CoverageSummary = z.object({
 });
 export type CoverageSummary = z.infer<typeof CoverageSummary>;
 
+export const CoverageState = z.discriminatedUnion("status", [
+  z.object({ status: z.literal("not_configured") }),
+  z.object({ status: z.literal("not_applicable"), reason: z.string().min(1) }),
+  z.object({ status: z.literal("reported"), summary: CoverageSummary }),
+]);
+export type CoverageState = z.infer<typeof CoverageState>;
+
 export interface CoverageInput {
   path: string;
   format: "lcov";
