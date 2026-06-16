@@ -159,7 +159,8 @@ Items have two text fields by design: `title` is a short one-line label for the 
 `description` is bounded detail for the expanded item body. Use one item per independently
 verifiable behavior, tool, endpoint, component, or migration step. If an item needs a list of
 unrelated deliverables in the title, split it before adding it. Oversized `add()` calls return a
-validation nudge to use `split()` or smaller atomic items.
+validation nudge to create more than one smaller item. Notes must attach to a specific item id and
+must not be used as a substitute for trackable items.
 
 ## Storage
 

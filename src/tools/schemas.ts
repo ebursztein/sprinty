@@ -49,12 +49,12 @@ export const ITEM_DESCRIPTION_MIN = 20;
 export const ITEM_DESCRIPTION_MAX = 500;
 
 export const ItemTitleInput = z.string().trim().min(ITEM_TITLE_MIN).max(ITEM_TITLE_MAX, {
-  message: `Item title is too large for one tree row; split the work with split() or add smaller atomic items.`,
+  message: `Item title is too large for one tree row; create more than one item with add() or split the work into smaller atomic items.`,
 }).refine((value) => !/[\r\n]/.test(value), {
   message: "Item title must fit on one line.",
 });
 export const ItemDescriptionInput = z.string().trim().min(ITEM_DESCRIPTION_MIN).max(ITEM_DESCRIPTION_MAX, {
-  message: `Item description is too large for one Sprinty item; split the work with split() or add smaller atomic items.`,
+  message: `Item description is too large for one Sprinty item; create more than one item with add() instead of using notes or one oversized item.`,
 });
 
 export const AddInput = z.object({

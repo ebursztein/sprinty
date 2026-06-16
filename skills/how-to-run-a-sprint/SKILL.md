@@ -33,11 +33,14 @@ write prose plans, you create structured items the sprinty MCP records in an imm
    atomic item. `title` is the short tree label (3-80 chars); `description` is bounded detail
    (20-500 chars). The item should be one tool, one endpoint, one component, one migration, or one
    independently verifiable behavior. For MCP work, prefer one item per tool; for UI work, prefer
-   one item per real component or screen behavior. The item's gates are what proves it; a
-   `test`-kind gate is the test you must write.
+   one item per real component or screen behavior. If the title or description is too large, create
+   more than one item instead of moving the extra work into a note. The item's gates are what proves
+   it; a `test`-kind gate is the test you must write.
 4. Work the item. Use **`update(target, note)`** to record intermediate discoveries,
-   **`note(element, text)`** for observations, and **`dependencies(target, dependencies[])`** to
-   add graph edges. Use **`artifact_add/list/amend/deprecate`** for durable outputs and
+   **`note(element, text)`** only for observations attached to a specific item id, and
+   **`dependencies(target, dependencies[])`** to add graph edges. Notes are not a planning surface:
+   if the observation implies work, create one or more real items with `add()`. Use
+   **`artifact_add/list/amend/deprecate`** for durable outputs and
    **`follow_up(target, description, bug_id|bug_ids)`** when you discover a bug. `current()`
    returns the dependency graph with topological order, relevant artifacts, recent artifacts, and
    recent activity. Trust `current.current`, `current.next`, `current.blocked_open`, and
@@ -72,7 +75,8 @@ write prose plans, you create structured items the sprinty MCP records in an imm
 - Use `sprint_detach()` to clear the current MCP process binding before resuming a different sprint.
 - No item without a short title, bounded description, at least one code location, and at least one gate.
 - Keep items atomic. If the title needs "and", "plus", or multiple deliverables, split it before
-  adding it. Oversized `add()` calls are rejected with a nudge to use `split()` or smaller items.
+  adding it. Oversized `add()` calls are rejected with a nudge to create more than one smaller item.
+- Notes must attach to a specific item id. Do not use subsprint notes to avoid creating items.
 - Don't go out of order: orient with `info()`/`current()` before adding or resolving.
 - Use dependency ids when work is blocked. Sprinty rejects unknown ids and cycles.
 - Generate coverage before close and pass the report path, usually `coverage/lcov.info`.

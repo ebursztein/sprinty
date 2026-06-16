@@ -86,7 +86,7 @@ export function buildToolHandlers(
       async (i) => (await getStore()).split(i)),
     deprecate: def(S.DeprecateInput, "Resolve an item as deprecated with a reason.",
       async (i) => (await getStore()).deprecate(i)),
-    note: def(S.NoteInput, "Add a note to an item or subsprint.",
+    note: def(S.NoteInput, "Add a note to a specific item id. Notes are not substitutes for add(); create items for trackable work.",
       async (i) => (await getStore()).addNote(i)),
     artifact: def(S.ArtifactInput, "Record a durable sprint artifact such as a spec, plan, report, dashboard, or log.",
       async (i) => (await getStore()).addArtifact(i)),

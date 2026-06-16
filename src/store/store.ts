@@ -191,8 +191,12 @@ export class SprintStore {
 
   addNote(input: { element: string; text: string }): SprintView {
     const s = this.requireActiveState();
-    const exists = s.subsprints.some((x) => x.id === input.element) || s.subsprints.flatMap((x) => x.items).some((i) => i.id === input.element);
-    if (!exists) throw new StoreError(`Unknown element ${input.element}.`);
+    const item = s.subsprints.flatMap((x) => x.items).find((i) => i.id === input.element);
+    if (!item) {
+      const subsprint = s.subsprints.find((x) => x.id === input.element);
+      if (subsprint) throw new StoreError(`Notes must attach to a specific item, not subsprint ${input.element}. Add one or more atomic items with add() for trackable work, then attach notes to the relevant item id.`);
+      throw new StoreError(`Unknown item ${input.element}. Notes must attach to a specific item id.`);
+    }
     this.ledger.append({ type: "note_added", element_id: input.element, text: input.text });
     return this.requireState();
   }

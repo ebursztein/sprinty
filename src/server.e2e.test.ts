@@ -340,8 +340,8 @@ describe("sprinty e2e over MCP", () => {
       const updated = await call(c, "update", { target: "S01-001", note: "Needs title, author, and shelf availability." });
       expect(updated.json.subsprints[0].items[0].updates).toContain("Needs title, author, and shelf availability.");
 
-      const noted = await call(c, "note", { element: "S01", text: "Owner wants cozy neighborhood language, not marketplace language." });
-      expect(noted.json.subsprints[0].notes).toContain("Owner wants cozy neighborhood language, not marketplace language.");
+      const noted = await call(c, "note", { element: "S01-001", text: "Owner wants cozy neighborhood language, not marketplace language." });
+      expect(noted.json.subsprints[0].items[0].notes).toContain("Owner wants cozy neighborhood language, not marketplace language.");
 
       const split = await call(c, "split", {
         item: "S01-001",

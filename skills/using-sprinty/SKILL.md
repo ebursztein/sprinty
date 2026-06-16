@@ -22,7 +22,7 @@ description: Reference for the sprinty MCP tools — exact inputs, what each ret
 | `done` | `{ item, commit_id, gate_results[], changelog }` | view. Rejects fake commit / missing, extra, mismatched, or failing gate evidence / missing changelog / terminal item. |
 | `split` | `{ item, description, goals[], gates[] }` | view. Item → `split`, new subsprint seeded. |
 | `deprecate` | `{ item, reason }` | view. Requires non-empty reason. |
-| `note` | `{ element, text }` | view. `element` is an item or subsprint id. |
+| `note` | `{ element, text }` | view. `element` must be a specific item id. Rejects subsprint ids so notes cannot replace real `add()` items. |
 | `artifact_add` / `artifact` | `{ target?="sprint", kind, title, uri, description? }` | adds a durable artifact attached to sprint, subsprint, or item. |
 | `artifact_list` | `{ target?, include_deprecated?=false }` | lists active artifacts, optionally scoped or including deprecated artifacts. |
 | `artifact_amend` | `{ artifact, kind?, title?, uri?, description? }` | records an immutable amendment event. |
@@ -49,7 +49,12 @@ release changelog.
 one independently verifiable behavior. Prefer `catalogue_refresh`, `catalogue_list`,
 `catalogue_search`, `catalogue_get`, `catalogue_preview`, and `catalogue_check` as six items over
 "build the catalogue MCP" as one item. If an item title needs "and", "plus", or a comma-separated
-list of outcomes, split it before calling `add()`.
+list of outcomes, split it before calling `add()`. If `add()` rejects a title or description as too
+large, create more than one smaller item; do not move the extra work into `note()`.
+
+**Notes:** `note()` is for observations on a specific item that already exists. It is not a planning
+surface and it does not create trackable work. If the note would describe work, create one or more
+items with `add()` and attach the note to the relevant item id only if extra context is still useful.
 
 **GateResult shape (for `done`):** `{ kind, spec, cwd?, passed, evidence, supersedes?, supersession_reason? }`.
 Results must match the item's declared gates exactly by `kind`, `spec`, and `cwd`; `passed:false`

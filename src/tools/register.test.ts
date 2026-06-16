@@ -198,8 +198,8 @@ describe("tool handlers", () => {
       gates: [{ kind: "command", spec: "true" }],
     })).rejects.toThrow();
     await expect(tools.add!.handler(addInput({ title: "Everything", description: "too broad" }))).rejects.toThrow();
-    await expect(tools.add!.handler(addInput({ title: "A".repeat(81) }))).rejects.toThrow(/split\(\)/);
-    await expect(tools.add!.handler(addInput({ description: "x".repeat(501) }))).rejects.toThrow(/split\(\)/);
+    await expect(tools.add!.handler(addInput({ title: "A".repeat(81) }))).rejects.toThrow(/create more than one item/);
+    await expect(tools.add!.handler(addInput({ description: "x".repeat(501) }))).rejects.toThrow(/create more than one item/);
   });
 
   it("renders changelog markdown through the handler", async () => {
