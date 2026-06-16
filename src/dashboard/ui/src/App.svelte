@@ -2,7 +2,7 @@
   import { onMount } from "svelte";
   import DOMPurify from "dompurify";
   import { marked } from "marked";
-  import { deriveDashboardModel, type DashboardModel, type TreeSubsprint } from "../model";
+  import { deriveDashboardModel, filterLedgerRows, type DashboardModel, type LedgerEntity, type LedgerRow, type LedgerVerb, type TreeSubsprint } from "../model";
   import type { ArtifactView, ItemView, SprintView, SubsprintView } from "../../../domain/projection";
 
   let sprint: SprintView | null = null;
@@ -12,6 +12,9 @@
   let selectedSubId: string | null = null;
   let expandedItemIds: string[] = [];
   let ledgerPage = 0;
+  let ledgerSearch = "";
+  let ledgerEntityFilter: LedgerEntity | "all" = "all";
+  let ledgerVerbFilter: LedgerVerb | "all" = "all";
   let theme: "light" | "dark" = "dark";
   let themeMounted = false;
 
@@ -24,10 +27,12 @@
   $: isDark = theme === "dark";
   $: if (themeMounted) applyTheme(theme);
   $: ledgerRows = model?.ledger ?? [];
-  $: ledgerPages = Math.max(1, Math.ceil(ledgerRows.length / pageSize));
+  $: ledgerEntityOptions = [...new Set(ledgerRows.map((row) => row.entity))].sort();
+  $: ledgerVerbOptions = [...new Set(ledgerRows.map((row) => row.verb))].sort();
+  $: filteredLedgerRows = filterLedgerRows(ledgerRows, { query: ledgerSearch, entity: ledgerEntityFilter, verb: ledgerVerbFilter });
+  $: ledgerPages = Math.max(1, Math.ceil(filteredLedgerRows.length / pageSize));
   $: if (ledgerPage > ledgerPages - 1) ledgerPage = ledgerPages - 1;
-  $: visibleLedger = ledgerRows.slice(ledgerPage * pageSize, ledgerPage * pageSize + pageSize);
-  $: recentTimeline = model?.timeline.slice(0, 6) ?? [];
+  $: visibleLedger = filteredLedgerRows.slice(ledgerPage * pageSize, ledgerPage * pageSize + pageSize);
   $: selectedExpandedCount = selectedSub?.items.filter((item) => expandedItemIds.includes(item.id)).length ?? 0;
 
   onMount(() => {
@@ -77,6 +82,24 @@
       : [...expandedItemIds, item.id];
   }
 
+  function resetLedgerPage(): void {
+    ledgerPage = 0;
+  }
+
+  function inspectLedgerTarget(row: LedgerRow): void {
+    if (!model || !row.clickable) return;
+    if (row.targetKind === "subsprint") {
+      selectedSubId = row.id;
+      return;
+    }
+    if (row.targetKind === "item") {
+      const item = model.sprint.subsprints.flatMap((sub) => sub.items).find((candidate) => candidate.id === row.id);
+      if (!item) return;
+      selectedSubId = item.subsprint_id;
+      if (!expandedItemIds.includes(item.id)) expandedItemIds = [...expandedItemIds, item.id];
+    }
+  }
+
   function collapseSelectedItems(): void {
     if (!selectedSub) return;
     const selectedIds = new Set(selectedSub.items.map((item) => item.id));
@@ -93,12 +116,6 @@
     return Number.isNaN(date.valueOf()) ? ts : date.toLocaleString();
   }
 
-  function compactTime(ts: string | null | undefined): string {
-    if (!ts) return "";
-    const date = new Date(ts);
-    return Number.isNaN(date.valueOf()) ? ts : date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-  }
-
   function statusClass(status: string): string {
     if (status === "completed" || status === "closed") return "status-pill status-done";
     if (status === "open" || status === "active") return "status-pill status-open";
@@ -113,6 +130,18 @@
     if (status === "split") return "dot dot-split";
     if (status === "deprecated") return "dot dot-deprecated";
     return "dot dot-neutral";
+  }
+
+  function ledgerEntityClass(entity: LedgerEntity): string {
+    return `ledger-chip ledger-entity-${entity}`;
+  }
+
+  function ledgerVerbClass(verb: LedgerVerb): string {
+    return `ledger-chip ledger-verb ledger-verb-${verb}`;
+  }
+
+  function ledgerTargetClass(row: LedgerRow): string {
+    return `ledger-target ledger-target-${row.targetKind}`;
   }
 
   function treeRowClass(sub: TreeSubsprint): string {
@@ -346,29 +375,33 @@
           </div>
         </section>
 
-        <section class="timeline-panel" data-testid="timeline-panel">
-          <div class="section-title">
-            <span>Timeline</span>
-            <span>{model.timeline.length} events</span>
-          </div>
-          <div class="timeline-list">
-            {#each recentTimeline as row}
-              <div class="timeline-event">
-                <span>{compactTime(row.time)}</span>
-                <strong>{row.type}</strong>
-                <p>{row.text}</p>
-              </div>
-            {:else}
-              <div class="empty-inline">No events yet.</div>
-            {/each}
-          </div>
-        </section>
-
         <section class="ledger-panel" data-testid="ledger-table">
           <div class="ledger-header">
             <div class="section-title">
               <span>Ledger</span>
-              <span>{ledgerRows.length} rows</span>
+              <span>{filteredLedgerRows.length}/{ledgerRows.length} rows</span>
+            </div>
+            <div class="ledger-controls" aria-label="Ledger filters">
+              <input
+                class="ledger-search"
+                type="search"
+                bind:value={ledgerSearch}
+                on:input={resetLedgerPage}
+                placeholder="Search ledger"
+                aria-label="Search ledger"
+              />
+              <select class="ledger-select" bind:value={ledgerEntityFilter} on:change={resetLedgerPage} aria-label="Filter ledger entity">
+                <option value="all">All types</option>
+                {#each ledgerEntityOptions as entity}
+                  <option value={entity}>{entity.replace("_", " ")}</option>
+                {/each}
+              </select>
+              <select class="ledger-select" bind:value={ledgerVerbFilter} on:change={resetLedgerPage} aria-label="Filter ledger verb">
+                <option value="all">All verbs</option>
+                {#each ledgerVerbOptions as verb}
+                  <option value={verb}>{verb}</option>
+                {/each}
+              </select>
             </div>
             <div class="pager">
               <button disabled={ledgerPage === 0} on:click={() => ledgerPage = Math.max(0, ledgerPage - 1)}>Prev</button>
@@ -379,16 +412,28 @@
           <div class="table-scroll">
             <table>
               <thead>
-                <tr><th>Seq</th><th>Type</th><th>Target</th><th>Text</th><th>Time</th></tr>
+                <tr><th>Seq</th><th>Type</th><th>Verb</th><th>Target</th><th>Event</th><th>Text</th><th>Time</th></tr>
               </thead>
               <tbody>
                 {#each visibleLedger as row}
                   <tr>
                     <td>{row.seq}</td>
-                    <td>{row.type}</td>
-                    <td>{row.id}</td>
+                    <td><span class={ledgerEntityClass(row.entity)}>{row.entity.replace("_", " ")}</span></td>
+                    <td><span class={ledgerVerbClass(row.verb)}>{row.verb}</span></td>
+                    <td>
+                      {#if row.clickable}
+                        <button class={ledgerTargetClass(row)} on:click={() => inspectLedgerTarget(row)}>{row.id}</button>
+                      {:else}
+                        <span class={ledgerTargetClass(row)}>{row.id}</span>
+                      {/if}
+                    </td>
+                    <td><code>{row.type}</code></td>
                     <td>{row.text}</td>
                     <td>{fmt(row.time)}</td>
+                  </tr>
+                {:else}
+                  <tr>
+                    <td colspan="7" class="ledger-empty">No matching ledger rows.</td>
                   </tr>
                 {/each}
               </tbody>

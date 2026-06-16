@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { deriveDashboardModel } from "./model.js";
+import { deriveDashboardModel, filterLedgerRows } from "./model.js";
 import type { SprintView } from "../../domain/projection.js";
 
 const baseTime = "2026-06-14T00:00:00.000Z";
@@ -23,6 +23,8 @@ function sprintView(): SprintView {
     timeline: [
       { seq: 0, ts: baseTime, type: "sprint_created", id: "sprint", text: "Upgrade dashboard" },
       { seq: 1, ts: baseTime, type: "item_added", id: "S02-001", text: "Current work" },
+      { seq: 2, ts: baseTime, type: "note_added", id: "S02-001", text: "Important implementation note" },
+      { seq: 3, ts: baseTime, type: "item_resolved", id: "S01-001", text: "completed" },
     ],
     subsprints: [
       {
@@ -130,7 +132,7 @@ function sprintView(): SprintView {
 }
 
 describe("deriveDashboardModel", () => {
-  it("derives progress, active tree state, timeline rows, and ledger rows", () => {
+  it("derives progress, active tree state, and ledger rows without a duplicate timeline model", () => {
     const model = deriveDashboardModel(sprintView());
     expect(model.activeSubsprint?.id).toBe("S02");
     expect(model.currentItem?.id).toBe("S02-001");
@@ -145,8 +147,28 @@ describe("deriveDashboardModel", () => {
     expect(model.tree[1]!.tone).toBe("active");
     expect(model.tree[1]!.defaultOpen).toBe(true);
     expect(model.tree[1]!.items.map((item) => item.tone)).toEqual(["current", "next"]);
-    expect(model.timeline[0]!.id).toBe("S02-001");
-    expect(model.ledger[0]!.seq).toBe(1);
+    expect("timeline" in model).toBe(false);
+    expect(model.ledger[0]).toMatchObject({ seq: 3, id: "S01-001", entity: "item", verb: "close", targetKind: "item", clickable: true });
+  });
+
+  it("labels ledger rows by entity and verb so event types are scannable", () => {
+    const model = deriveDashboardModel(sprintView());
+
+    expect(model.ledger.map((row) => [row.type, row.entity, row.verb, row.id])).toEqual([
+      ["item_resolved", "item", "close", "S01-001"],
+      ["note_added", "note", "add", "S02-001"],
+      ["item_added", "item", "add", "S02-001"],
+      ["sprint_created", "sprint", "create", "sprint"],
+    ]);
+  });
+
+  it("filters ledger rows by search text, entity, and verb", () => {
+    const ledger = deriveDashboardModel(sprintView()).ledger;
+
+    expect(filterLedgerRows(ledger, { query: "implementation", entity: "all", verb: "all" }).map((row) => row.seq)).toEqual([2]);
+    expect(filterLedgerRows(ledger, { query: "", entity: "item", verb: "all" }).map((row) => row.seq)).toEqual([3, 1]);
+    expect(filterLedgerRows(ledger, { query: "", entity: "all", verb: "add" }).map((row) => row.seq)).toEqual([2, 1]);
+    expect(filterLedgerRows(ledger, { query: "S02", entity: "note", verb: "add" }).map((row) => row.seq)).toEqual([2]);
   });
 
   it("selects current and next items using dependency graph order", () => {
