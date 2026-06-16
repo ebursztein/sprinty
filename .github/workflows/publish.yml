@@ -1,7 +1,7 @@
 name: Publish
 
 # Publishes to npm when a GitHub Release is published.
-# Requires an NPM_TOKEN secret with publish rights to "sprinty".
+# npmjs.com trusts ebursztein/sprinty + publish.yml via OIDC, so no npm token is needed.
 on:
   release:
     types: [published]
@@ -18,9 +18,6 @@ jobs:
         with:
           node-version: 24
           registry-url: "https://registry.npmjs.org"
-          cache: npm
       - run: npm ci
       - run: npm test
-      - run: npm publish --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - run: npm publish --access public
