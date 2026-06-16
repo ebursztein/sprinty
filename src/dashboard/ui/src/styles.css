@@ -323,7 +323,9 @@ button {
   }
 
   .tree-list {
-    @apply grid max-h-[38rem] gap-1 overflow-y-auto p-2;
+    @apply grid gap-2 overflow-y-auto p-2;
+    max-height: min(46rem, calc(100vh - 8rem));
+    scroll-padding: .5rem;
   }
 
   .tree-row {
@@ -356,7 +358,7 @@ button {
   }
 
   .tree-row-main {
-    @apply grid grid-cols-[auto_auto_minmax(0,1fr)] items-center gap-2;
+    @apply grid grid-cols-[auto_auto_minmax(0,1fr)] items-start gap-2;
   }
 
   .tree-id,
@@ -365,11 +367,11 @@ button {
   }
 
   .tree-label {
-    @apply truncate text-sm font-medium text-base-content;
+    @apply min-w-0 whitespace-normal break-words text-sm font-medium leading-snug text-base-content;
   }
 
   .tree-row-progress {
-    @apply mt-2 grid grid-cols-[auto_minmax(0,1fr)] items-center gap-2 pl-8 text-xs text-zinc-500 dark:text-zinc-400;
+    @apply mt-3 grid grid-cols-[auto_minmax(0,1fr)] items-center gap-3 pl-8 text-xs text-zinc-500 dark:text-zinc-400;
   }
 
   .mini-track {
@@ -731,7 +733,7 @@ button {
   }
 
   .tree-list {
-    max-height: 18rem;
+    max-height: none;
   }
 
   .todo-button {
