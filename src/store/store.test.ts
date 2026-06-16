@@ -73,6 +73,22 @@ describe("SprintStore lifecycle", () => {
     expect(sub.id).toBe("S01");
     const item = store.addItem({ subsprint: "S01", description: "i", code_locations: ["a.ts"], gates: [{ kind: "command", spec: "true" }] });
     expect(item.id).toBe("S01-001");
+    expect(item.view.subsprints[0]!.items[0]!.high_priority).toBe(false);
+  });
+
+  it("persists and mutates item high_priority as a boolean", () => {
+    store.createSprint("g");
+    store.createSubsprint({ description: "d", goals: ["go"], gates: [{ kind: "build", spec: "true" }] });
+    const added = store.addItem({ subsprint: "S01", description: "important", code_locations: ["a.ts"], gates: [{ kind: "command", spec: "true" }], high_priority: true });
+    expect(added.view.subsprints[0]!.items[0]!.high_priority).toBe(true);
+
+    const lowered = store.updateItem({ target: "S01-001", high_priority: false });
+    expect(lowered.subsprints[0]!.items[0]!.high_priority).toBe(false);
+
+    const raised = store.updateItem({ target: "S01-001", note: "raise again", high_priority: true });
+    expect(raised.subsprints[0]!.items[0]!.updates).toEqual(["raise again"]);
+    expect(raised.subsprints[0]!.items[0]!.high_priority).toBe(true);
+    expect(() => store.updateItem({ target: "S01", high_priority: true })).toThrow(/metadata/);
   });
 
   it("rejects adding an item to an unknown subsprint", () => {
@@ -286,6 +302,36 @@ describe("SprintStore lifecycle", () => {
     expect(view.graph.topological_order.indexOf("S01-001")).toBeLessThan(view.graph.topological_order.indexOf("S01-002"));
     expect(view.graph.blocked_by["S01-002"]).toEqual(["S01-001", "S01"]);
     expect(() => store.addDependencies({ target: "S01-001", dependencies: ["S01-002"] })).toThrow(/cycle/i);
+  });
+
+  it("replaces dependency sets through item update so wrong edges can be removed", () => {
+    store.createSprint("g");
+    store.createSubsprint({ description: "d", goals: ["go"], gates: [{ kind: "build", spec: "true" }] });
+    store.addItem({ subsprint: "S01", description: "base", code_locations: ["a.ts"], gates: [{ kind: "command", spec: "true" }] });
+    store.addItem({ subsprint: "S01", description: "debug capture", code_locations: ["b.ts"], gates: [{ kind: "command", spec: "true" }], dependencies: ["S01-001"] });
+    store.addItem({ subsprint: "S01", description: "alternate blocker", code_locations: ["c.ts"], gates: [{ kind: "command", spec: "true" }] });
+
+    const replaced = store.updateItem({ target: "S01-002", dependencies: ["S01-003"] });
+    expect(replaced.subsprints[0]!.items[1]!.dependencies).toEqual(["S01-003"]);
+    expect(replaced.graph.edges).not.toContainEqual({ from: "S01-002", to: "S01-001" });
+    expect(replaced.graph.edges).toContainEqual({ from: "S01-002", to: "S01-003" });
+
+    const removed = store.updateItem({ target: "S01-002", dependencies: [] });
+    expect(removed.subsprints[0]!.items[1]!.dependencies).toEqual([]);
+    expect(removed.graph.blocked_by["S01-002"]).toEqual([]);
+  });
+
+  it("validates replacement dependency sets before they enter the ledger", () => {
+    store.createSprint("g");
+    store.createSubsprint({ description: "d", goals: ["go"], gates: [{ kind: "build", spec: "true" }] });
+    store.addItem({ subsprint: "S01", description: "base", code_locations: ["a.ts"], gates: [{ kind: "command", spec: "true" }] });
+    store.addItem({ subsprint: "S01", description: "dependent", code_locations: ["b.ts"], gates: [{ kind: "command", spec: "true" }] });
+
+    expect(() => store.updateItem({ target: "S01-002", dependencies: ["S99-001"] })).toThrow(/Unknown dependency/);
+    expect(() => store.updateItem({ target: "S01-002", dependencies: ["S01-001", "S01-001"] })).toThrow(/Duplicate dependencies/);
+    expect(() => store.updateItem({ target: "S01-002", dependencies: ["S01-002"] })).toThrow(/cannot depend on itself/);
+    store.updateItem({ target: "S01-001", dependencies: ["S01-002"] });
+    expect(() => store.updateItem({ target: "S01-002", dependencies: ["S01-001"] })).toThrow(/cycle/i);
   });
 
   it("rejects invalid dependency edges before they enter the ledger", () => {

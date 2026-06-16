@@ -138,7 +138,7 @@ export class SprintStore {
     return { id, view: this.requireState() };
   }
 
-  addItem(input: { subsprint: string; title?: string; description: string; code_locations: string[]; gates: Gate[]; dependencies?: string[] }): { id: string; view: SprintView } {
+  addItem(input: { subsprint: string; title?: string; description: string; high_priority?: boolean; code_locations: string[]; gates: Gate[]; dependencies?: string[] }): { id: string; view: SprintView } {
     const s = this.requireActiveState();
     const sub = s.subsprints.find((x) => x.id === input.subsprint);
     if (!sub) throw new StoreError(`Unknown subsprint ${input.subsprint}.`);
@@ -148,7 +148,7 @@ export class SprintStore {
     const id = mintItemId(sub.id, sub.items.length);
     const dependencies = input.dependencies ?? [];
     this.validateDependencyAddition(s, id, dependencies, { allowNewTarget: true, newTarget: { id, kind: "item", label: title, status: "open" } });
-    this.append({ type: "item_added", item_id: id, subsprint_id: sub.id, title, description: input.description, code_locations: input.code_locations, gates: input.gates, dependencies });
+    this.append({ type: "item_added", item_id: id, subsprint_id: sub.id, title, description: input.description, high_priority: input.high_priority ?? false, code_locations: input.code_locations, gates: input.gates, dependencies });
     return { id, view: this.requireState() };
   }
 
@@ -159,11 +159,32 @@ export class SprintStore {
     return item;
   }
 
-  updateItem(input: { target: string; note: string }): SprintView {
+  updateItem(input: { target: string; note?: string | undefined; title?: string | undefined; description?: string | undefined; high_priority?: boolean | undefined; dependencies?: string[] | undefined }): SprintView {
     const s = this.requireActiveState();
-    const exists = s.subsprints.some((x) => x.id === input.target) || s.subsprints.flatMap((x) => x.items).some((i) => i.id === input.target);
-    if (!exists) throw new StoreError(`Unknown target ${input.target}.`);
-    this.append({ type: "item_updated", target_id: input.target, note: input.note });
+    if (!input.note?.trim() && !input.title?.trim() && !input.description?.trim() && input.high_priority === undefined && input.dependencies === undefined) throw new StoreError("Item update requires a note, title, description, high_priority, or dependencies.");
+    const item = s.subsprints.flatMap((x) => x.items).find((i) => i.id === input.target);
+    if (!item) {
+      const sub = s.subsprints.find((x) => x.id === input.target);
+      if (sub) throw new StoreError(`Item metadata can only be set on items, not subsprint ${input.target}.`);
+      if (input.dependencies !== undefined && !input.note?.trim() && !input.title?.trim() && !input.description?.trim() && input.high_priority === undefined) {
+        throw new StoreError(`Unknown dependency target ${input.target}.`);
+      }
+      throw new StoreError(`Unknown item ${input.target}.`);
+    }
+    if (input.dependencies !== undefined) this.validateDependencyReplacement(s, input.target, input.dependencies);
+    if (input.note?.trim() || input.title?.trim() || input.description?.trim() || input.high_priority !== undefined) {
+      this.append({
+        type: "item_updated",
+        target_id: input.target,
+        ...(input.note?.trim() ? { note: input.note } : {}),
+        ...(input.title?.trim() ? { title: input.title } : {}),
+        ...(input.description?.trim() ? { description: input.description } : {}),
+        ...(input.high_priority === undefined ? {} : { high_priority: input.high_priority }),
+      });
+    }
+    if (input.dependencies !== undefined) {
+      this.append({ type: "dependencies_replaced", target_id: input.target, dependencies: input.dependencies });
+    }
     return this.requireState();
   }
 
@@ -503,6 +524,26 @@ export class SprintStore {
 
     try {
       buildDependencyGraph(nodes, [...s.graph.edges, ...uniqueDeps.map((dep) => ({ from: target, to: dep }))], { throwOnCycle: true });
+    } catch (err) {
+      if (err instanceof GraphCycleError) throw new StoreError(err.message);
+      throw err;
+    }
+  }
+
+  private validateDependencyReplacement(s: SprintView, target: string, dependencies: string[]): void {
+    const uniqueDeps = [...new Set(dependencies)];
+    if (uniqueDeps.length !== dependencies.length) throw new StoreError("Duplicate dependencies are not allowed.");
+
+    const known = new Set(s.graph.nodes.map((n) => n.id));
+    if (!known.has(target)) throw new StoreError(`Unknown dependency target ${target}.`);
+    for (const dep of uniqueDeps) {
+      if (!known.has(dep)) throw new StoreError(`Unknown dependency ${dep}.`);
+      if (dep === target) throw new StoreError(`Dependency cycle: ${target} cannot depend on itself.`);
+    }
+
+    const retainedEdges = s.graph.edges.filter((edge) => edge.from !== target);
+    try {
+      buildDependencyGraph(s.graph.nodes, [...retainedEdges, ...uniqueDeps.map((dep) => ({ from: target, to: dep }))], { throwOnCycle: true });
     } catch (err) {
       if (err instanceof GraphCycleError) throw new StoreError(err.message);
       throw err;

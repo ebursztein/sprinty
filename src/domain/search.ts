@@ -12,11 +12,12 @@ export function renderEvent(e: LedgerEvent): string {
     case "sprint_created": return `[sprint] goal: ${e.goal}`;
     case "subsprint_created": return `[${e.subsprint_id}] subsprint: ${e.description} | goals: ${e.goals.join("; ")} | gates: ${e.gates.map((g) => `${g.kind}:${g.spec}`).join(", ")}${e.spawned_from_item ? ` | from ${e.spawned_from_item}` : ""}`;
     case "item_added": return `[${e.item_id}] item: ${e.description} @ ${e.code_locations.join(", ")} | gates: ${e.gates.map((g) => `${g.kind}:${g.spec}`).join(", ")}`;
-    case "item_updated": return `[${e.target_id}] update: ${e.note}`;
+    case "item_updated": return `[${e.target_id}] item update: ${[e.note, e.title ? `title=${e.title}` : "", e.description ? "description updated" : "", e.high_priority === undefined ? "" : `high_priority=${e.high_priority}`].filter(Boolean).join(" | ") || "metadata updated"}`;
     case "item_resolved": return `[${e.item_id}] resolved: ${e.disposition}${e.commit_id ? ` @${e.commit_id}` : ""}${e.reason ? ` reason: ${e.reason}` : ""}${e.spawned_subsprint ? ` -> ${e.spawned_subsprint}` : ""}`;
     case "note_added": return `[${e.element_id}] note: ${e.text}`;
     case "note_updated": return `[${e.note_id}] note updated: ${e.text}`;
     case "dependencies_added": return `[${e.target_id}] dependencies: ${e.dependencies.join(", ")}`;
+    case "dependencies_replaced": return `[${e.target_id}] dependencies replaced: ${e.dependencies.join(", ") || "(none)"}`;
     case "artifact_added": return `[${e.target_id}] artifact ${e.artifact_id}: ${e.kind} ${e.title} @ ${e.uri}${e.description ? ` | ${e.description}` : ""}`;
     case "artifact_amended": return `[${e.artifact_id}] artifact amended${e.title ? ` title: ${e.title}` : ""}${e.uri ? ` uri: ${e.uri}` : ""}`;
     case "artifact_deprecated": return `[${e.artifact_id}] artifact deprecated: ${e.reason}`;
@@ -72,6 +73,7 @@ function searchId(e: LedgerEvent): string {
       return e.item_id;
     case "item_updated":
     case "dependencies_added":
+    case "dependencies_replaced":
     case "follow_up_added":
       return e.target_id;
     case "note_added":
@@ -112,6 +114,7 @@ function searchType(e: LedgerEvent): SearchMatch["type"] {
     case "item_updated":
       return "update";
     case "dependencies_added":
+    case "dependencies_replaced":
       return "dependency";
     case "follow_up_added":
       return "follow_up";

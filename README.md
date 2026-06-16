@@ -103,8 +103,8 @@ sprint_new(goal, git_dir, data_dir, context_notes?)
   -> overview() | next() | search(pattern, context_size?)
   -> subsprint_new(description, goals[], gates[], dependencies?)
   -> subsprint_list() | subsprint_get(id)
-  -> item_add(subsprint, title, description, code_locations[], gates[], dependencies?)
-  -> item_update(id, note?, dependencies?)
+  -> item_add(subsprint, title, description, code_locations[], gates[], dependencies?, high_priority?)
+  -> item_update(id, note?, title?, description?, high_priority?, dependencies?)
   -> note_add(id, text) | note_list(id) | note_get(id) | note_update(id, text)
   -> artifact_add(title, path, description?, related_items?) | artifact_list() | artifact_get(id) | artifact_update(id, ...)
   -> item_done(id, commit_id, gate_results[], changelog) | item_split(id, ...) | item_deprecate(id, reason)
@@ -144,9 +144,10 @@ coverage, and change-map tables. `item_done()` also requires passing evidence fo
 item gate, including manual gates. When an early declared gate was a placeholder, `item_done()` can
 record an explicit supersession: the final passing gate result names the declared gate in
 `supersedes` and includes a `supersession_reason`, preserving strict evidence without pretending
-the placeholder command was the final proof. Dependencies are stored as ids and updated with
-`item_update({ id, dependencies })`; writes reject unknown ids, duplicates, and cycles. Use `next()`
-for the active work window and `subsprint_get({ id })` or `item_get({ id })` for focused detail.
+the placeholder command was the final proof. Dependencies are stored as ids and replaced with
+`item_update({ id, dependencies })`; pass `dependencies: []` to remove a bad edge. Writes reject
+unknown ids, duplicates, and cycles. Use `next()` for the active work window and `subsprint_get({
+id })` or `item_get({ id })` for focused detail.
 At close, executable gates are re-run by Sprinty and `sprint_close()` requires an LCOV coverage
 report path.
 
@@ -155,7 +156,8 @@ Public artifact tools expose file paths and optional related item ids. Notes are
 with ids like `N001`, but they must attach to a specific item id; they are not a planning surface.
 
 Items have two text fields by design: `title` is a short one-line label for the tree/dashboard, and
-`description` is bounded detail for the expanded item body. Use one item per independently
+`description` is bounded detail for the expanded item body. `high_priority` is a simple boolean
+that promotes available work in `next()`; it is not a ranking system. Use one item per independently
 verifiable behavior, tool, endpoint, component, or migration step. If an item needs a list of
 unrelated deliverables in the title, split it before adding it. Oversized `item_add()` calls return
 a validation nudge to create more than one smaller item. Notes must attach to a specific item id and
@@ -167,7 +169,9 @@ Sprinty tools are designed for agent token budgets:
 
 - `overview()` is compact: sprint title/details, compact notes/artifacts, and subsprint counts only.
   Use `subsprint_get({ id })` for item rows.
-- `next()` is the active work window and deliberately omits the full dependency graph.
+- `next()` is the active work window and deliberately omits the full dependency graph. By default it
+  returns one resolved item, all available high-priority items, then one normal available item per
+  subsprint; tune that with `past`, `future_per_subsprint`, and `include_high_priority`.
 - `search({ pattern, context_size })` uses JavaScript regex syntax and returns compact rows with
   `{ id, type, text, tool_call }`.
 - list tools are compact and point to the matching `_get()` tool for full untruncated detail.
