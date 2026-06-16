@@ -310,15 +310,14 @@ describe("SprintStore lifecycle", () => {
     expect(() => store.updateItem({ target: "S99-999", note: "x" })).toThrow(StoreError);
   });
 
-  it("note attaches to an item or a subsprint and rejects an unknown element", () => {
+  it("note attaches only to an item and rejects subsprint or unknown targets", () => {
     store.createSprint("g");
     store.createSubsprint({ description: "d", goals: ["go"], gates: [{ kind: "build", spec: "true" }] });
     store.addItem({ subsprint: "S01", description: "i", code_locations: ["a.ts"], gates: [{ kind: "command", spec: "true" }] });
     store.addNote({ element: "S01-001", text: "item note" });
-    store.addNote({ element: "S01", text: "subsprint note" });
     const view = store.read();
     expect(view.subsprints[0]!.items[0]!.notes).toEqual(["item note"]);
-    expect(view.subsprints[0]!.notes).toEqual(["subsprint note"]);
+    expect(() => store.addNote({ element: "S01", text: "subsprint note" })).toThrow(/specific item/);
     expect(() => store.addNote({ element: "nope", text: "x" })).toThrow(StoreError);
   });
 

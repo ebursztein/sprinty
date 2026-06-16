@@ -1,5 +1,6 @@
 import { Ledger } from "../ledger/ledger.js";
 import { SprintBook } from "../ledger/book.js";
+import { existsSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { project, type SprintView } from "../domain/projection.js";
 import { mintSubsprintId, mintItemId } from "../domain/ids.js";
@@ -30,6 +31,10 @@ function gateKey(gate: Gate): string {
 
 export class SprintStore {
   private readonly book: SprintBook;
+  private cachedId: string | null = null;
+  private cachedSignature: string | null = null;
+  private cachedEvents: LedgerEvent[] | null = null;
+  private cachedView: SprintView | null | undefined;
   readonly dataDir: string;
 
   constructor(readonly dir: string, dataDir: string = join(dir, ".sprinty")) {
@@ -44,9 +49,48 @@ export class SprintStore {
     return this.book.ledger(id);
   }
 
+  private invalidate(): void {
+    this.cachedId = null;
+    this.cachedSignature = null;
+    this.cachedEvents = null;
+    this.cachedView = undefined;
+  }
+
+  private append(event: Parameters<Ledger["append"]>[0]): LedgerEvent {
+    const appended = this.ledger.append(event);
+    this.invalidate();
+    return appended;
+  }
+
+  private currentEvents(): LedgerEvent[] {
+    const id = this.book.currentId();
+    if (!id) return [];
+    const signature = this.ledgerSignature(id);
+    if (this.cachedId === id && this.cachedSignature === signature && this.cachedEvents) return this.cachedEvents;
+    const events = this.book.ledger(id).read();
+    this.cachedId = id;
+    this.cachedSignature = signature;
+    this.cachedEvents = events;
+    this.cachedView = undefined;
+    return events;
+  }
+
+  private ledgerSignature(id: string): string {
+    const file = join(this.book.root, `${id}.jsonl`);
+    if (!existsSync(file)) return "missing";
+    const stat = statSync(file);
+    return `${stat.size}:${stat.mtimeMs}`;
+  }
+
   private state(): SprintView | null {
     const id = this.book.currentId();
-    return id ? project(this.book.ledger(id).read()) : null;
+    if (!id) return null;
+    const signature = this.ledgerSignature(id);
+    if (this.cachedId === id && this.cachedSignature === signature && this.cachedView !== undefined) return this.cachedView;
+    const events = this.currentEvents();
+    const view = project(events);
+    this.cachedView = view;
+    return view;
   }
   private requireState(): SprintView {
     const s = this.state();
@@ -67,8 +111,10 @@ export class SprintStore {
     if (!goal.trim()) throw new StoreError("Sprint goal is required.");
     const id = this.book.allocateId();   // new ledger file id (001, 002, …)
     this.book.setCurrent(id);            // `.sprinty/current` -> id : enforces unicity
+    this.invalidate();
     const { branch, worktree } = gitContext(this.dir);
     this.book.ledger(id).append({ type: "sprint_created", goal, worktree, branch, dir: this.dir, data_dir: this.dataDir, context_notes: contextNotes });
+    this.invalidate();
     return this.requireState();
   }
 
@@ -78,7 +124,7 @@ export class SprintStore {
     const id = mintSubsprintId(s.subsprints.length);
     const dependencies = input.dependencies ?? [];
     this.validateDependencyAddition(s, id, dependencies, { allowNewTarget: true, newTarget: { id, kind: "subsprint", label: input.description, status: "open" } });
-    this.ledger.append({ type: "subsprint_created", subsprint_id: id, description: input.description, goals: input.goals, gates: input.gates, spawned_from_item: null, dependencies, kind: "feature" });
+    this.append({ type: "subsprint_created", subsprint_id: id, description: input.description, goals: input.goals, gates: input.gates, spawned_from_item: null, dependencies, kind: "feature" });
     return { id, view: this.requireState() };
   }
 
@@ -88,7 +134,7 @@ export class SprintStore {
     const id = mintSubsprintId(s.subsprints.length);
     const dependencies = input.dependencies ?? [];
     this.validateDependencyAddition(s, id, dependencies, { allowNewTarget: true, newTarget: { id, kind: "subsprint", label: input.description, status: "open" } });
-    this.ledger.append({ type: "subsprint_created", subsprint_id: id, description: input.description, goals: input.goals, gates: input.gates, spawned_from_item: null, dependencies, kind: "spike" });
+    this.append({ type: "subsprint_created", subsprint_id: id, description: input.description, goals: input.goals, gates: input.gates, spawned_from_item: null, dependencies, kind: "spike" });
     return { id, view: this.requireState() };
   }
 
@@ -102,7 +148,7 @@ export class SprintStore {
     const id = mintItemId(sub.id, sub.items.length);
     const dependencies = input.dependencies ?? [];
     this.validateDependencyAddition(s, id, dependencies, { allowNewTarget: true, newTarget: { id, kind: "item", label: title, status: "open" } });
-    this.ledger.append({ type: "item_added", item_id: id, subsprint_id: sub.id, title, description: input.description, code_locations: input.code_locations, gates: input.gates, dependencies });
+    this.append({ type: "item_added", item_id: id, subsprint_id: sub.id, title, description: input.description, code_locations: input.code_locations, gates: input.gates, dependencies });
     return { id, view: this.requireState() };
   }
 
@@ -117,7 +163,7 @@ export class SprintStore {
     const s = this.requireActiveState();
     const exists = s.subsprints.some((x) => x.id === input.target) || s.subsprints.flatMap((x) => x.items).some((i) => i.id === input.target);
     if (!exists) throw new StoreError(`Unknown target ${input.target}.`);
-    this.ledger.append({ type: "item_updated", target_id: input.target, note: input.note });
+    this.append({ type: "item_updated", target_id: input.target, note: input.note });
     return this.requireState();
   }
 
@@ -130,7 +176,7 @@ export class SprintStore {
     const failed = input.gate_results.filter((g) => !g.passed);
     if (failed.length > 0) throw new StoreError(`Cannot complete ${input.item}: failing gates: ${failed.map((g) => g.spec).join(", ")}`);
     const changeMap = buildItemChangeMap(input.item, input.commit_id, commitNumstat(this.dir, input.commit_id));
-    this.ledger.append({ type: "item_resolved", item_id: input.item, disposition: "completed", commit_id: input.commit_id, gate_results: input.gate_results, spawned_subsprint: null, reason: null, changelog: input.changelog, change_map: changeMap });
+    this.append({ type: "item_resolved", item_id: input.item, disposition: "completed", commit_id: input.commit_id, gate_results: input.gate_results, spawned_subsprint: null, reason: null, changelog: input.changelog, change_map: changeMap });
     return this.requireState();
   }
 
@@ -169,8 +215,8 @@ export class SprintStore {
     const newId = mintSubsprintId(s.subsprints.length);
     const dependencies = input.dependencies ?? [];
     this.validateDependencyAddition(s, newId, dependencies, { allowNewTarget: true, newTarget: { id: newId, kind: "subsprint", label: input.description, status: "open" } });
-    this.ledger.append({ type: "item_resolved", item_id: input.item, disposition: "split", commit_id: null, gate_results: [], spawned_subsprint: newId, reason: null, changelog: null, change_map: emptyChangeMap() });
-    this.ledger.append({ type: "subsprint_created", subsprint_id: newId, description: input.description, goals: input.goals, gates: input.gates, spawned_from_item: input.item, dependencies, kind: "feature" });
+    this.append({ type: "item_resolved", item_id: input.item, disposition: "split", commit_id: null, gate_results: [], spawned_subsprint: newId, reason: null, changelog: null, change_map: emptyChangeMap() });
+    this.append({ type: "subsprint_created", subsprint_id: newId, description: input.description, goals: input.goals, gates: input.gates, spawned_from_item: input.item, dependencies, kind: "feature" });
     return this.requireState();
   }
 
@@ -178,31 +224,35 @@ export class SprintStore {
     const s = this.requireActiveState();
     this.findOpenItem(s, input.item);
     if (!input.reason.trim()) throw new StoreError("Deprecation requires a reason.");
-    this.ledger.append({ type: "item_resolved", item_id: input.item, disposition: "deprecated", commit_id: null, gate_results: [], spawned_subsprint: null, reason: input.reason, changelog: null, change_map: emptyChangeMap() });
+    this.append({ type: "item_resolved", item_id: input.item, disposition: "deprecated", commit_id: null, gate_results: [], spawned_subsprint: null, reason: input.reason, changelog: null, change_map: emptyChangeMap() });
     return this.requireState();
   }
 
   addDependencies(input: { target: string; dependencies: string[] }): SprintView {
     const s = this.requireActiveState();
     this.validateDependencyAddition(s, input.target, input.dependencies);
-    this.ledger.append({ type: "dependencies_added", target_id: input.target, dependencies: input.dependencies });
+    this.append({ type: "dependencies_added", target_id: input.target, dependencies: input.dependencies });
     return this.requireState();
   }
 
-  addNote(input: { element: string; text: string }): SprintView {
+  addNote(input: { element: string; text: string }): { id: string; view: SprintView } {
     const s = this.requireActiveState();
-    const exists = s.subsprints.some((x) => x.id === input.element) || s.subsprints.flatMap((x) => x.items).some((i) => i.id === input.element);
-    if (!exists) throw new StoreError(`Unknown element ${input.element}.`);
-    this.ledger.append({ type: "note_added", element_id: input.element, text: input.text });
-    return this.requireState();
+    const item = s.subsprints.flatMap((x) => x.items).find((i) => i.id === input.element);
+    if (!item) {
+      const subsprint = s.subsprints.find((x) => x.id === input.element);
+      if (subsprint) throw new StoreError(`Notes must attach to a specific item, not subsprint ${input.element}. Add one or more atomic items with item_add() for trackable work, then attach notes to the relevant item id.`);
+      throw new StoreError(`Unknown item ${input.element}. Notes must attach to a specific item id.`);
+    }
+    const event = this.append({ type: "note_added", element_id: input.element, text: input.text });
+    return { id: noteId(event.seq), view: this.requireState() };
   }
 
-  addArtifact(input: { target?: string | undefined; kind: ArtifactKind; title: string; uri: string; description?: string | null | undefined }): { id: string; view: SprintView } {
+  addArtifact(input: { target?: string | undefined; kind: ArtifactKind; title: string; uri: string; description?: string | null | undefined; related_items?: string[] | undefined }): { id: string; view: SprintView } {
     const s = this.requireActiveState();
     const target = input.target ?? "sprint";
     this.assertKnownTarget(s, target, "artifact target");
     const id = `A${String(s.artifacts.length + 1).padStart(3, "0")}`;
-    this.ledger.append({
+    this.append({
       type: "artifact_added",
       artifact_id: id,
       target_id: target,
@@ -210,6 +260,7 @@ export class SprintStore {
       title: input.title,
       uri: input.uri,
       description: input.description ?? null,
+      related_items: input.related_items ?? [],
     });
     return { id, view: this.requireState() };
   }
@@ -223,13 +274,13 @@ export class SprintStore {
     return { artifacts };
   }
 
-  amendArtifact(input: { artifact: string; kind?: ArtifactKind | undefined; title?: string | undefined; uri?: string | undefined; description?: string | null | undefined }): SprintView {
+  amendArtifact(input: { artifact: string; kind?: ArtifactKind | undefined; title?: string | undefined; uri?: string | undefined; description?: string | null | undefined; related_items?: string[] | undefined }): SprintView {
     const s = this.requireActiveState();
     const artifact = s.artifacts.find((a) => a.id === input.artifact);
     if (!artifact) throw new StoreError(`Unknown artifact ${input.artifact}.`);
     if (artifact.status === "deprecated") throw new StoreError(`Artifact ${input.artifact} is deprecated.`);
-    if (!input.kind && !input.title && !input.uri && !("description" in input)) throw new StoreError("Artifact amendment requires at least one changed field.");
-    const event: { type: "artifact_amended"; artifact_id: string; kind?: ArtifactKind; title?: string; uri?: string; description?: string | null } = {
+    if (!input.kind && !input.title && !input.uri && !("description" in input) && !input.related_items) throw new StoreError("Artifact amendment requires at least one changed field.");
+    const event: { type: "artifact_amended"; artifact_id: string; kind?: ArtifactKind; title?: string; uri?: string; description?: string | null; related_items?: string[] } = {
       type: "artifact_amended",
       artifact_id: input.artifact,
     };
@@ -237,7 +288,8 @@ export class SprintStore {
     if (input.title) event.title = input.title;
     if (input.uri) event.uri = input.uri;
     if ("description" in input) event.description = input.description ?? null;
-    this.ledger.append(event);
+    if (input.related_items) event.related_items = input.related_items;
+    this.append(event);
     return this.requireState();
   }
 
@@ -247,7 +299,7 @@ export class SprintStore {
     if (!artifact) throw new StoreError(`Unknown artifact ${input.artifact}.`);
     if (artifact.status === "deprecated") throw new StoreError(`Artifact ${input.artifact} is already deprecated.`);
     if (!input.reason.trim()) throw new StoreError("Artifact deprecation requires a reason.");
-    this.ledger.append({ type: "artifact_deprecated", artifact_id: input.artifact, reason: input.reason });
+    this.append({ type: "artifact_deprecated", artifact_id: input.artifact, reason: input.reason });
     return this.requireState();
   }
 
@@ -258,7 +310,7 @@ export class SprintStore {
     const bugIds = [...new Set([...(input.bug_ids ?? []), ...(input.bug_id ? [input.bug_id] : [])].map((bug) => bug.trim()).filter(Boolean))];
     if (bugIds.length === 0) throw new StoreError("Follow-up requires bug_id or bug_ids.");
     const id = `F${String(s.follow_ups.length + 1).padStart(3, "0")}`;
-    this.ledger.append({ type: "follow_up_added", follow_up_id: id, target_id: target, description: input.description, bug_ids: bugIds });
+    this.append({ type: "follow_up_added", follow_up_id: id, target_id: target, description: input.description, bug_ids: bugIds });
     return { id, view: this.requireState() };
   }
 
@@ -271,7 +323,7 @@ export class SprintStore {
     if (sub.status === "closed") throw new StoreError(`Spike ${input.subsprint} is already concluded.`);
     if (sub.items.some((item) => item.status === "open")) throw new StoreError(`Spike ${input.subsprint} still has open items.`);
     if (!input.conclusion.trim()) throw new StoreError("Spike conclusion is required.");
-    this.ledger.append({ type: "spike_concluded", subsprint_id: input.subsprint, conclusion: input.conclusion });
+    this.append({ type: "spike_concluded", subsprint_id: input.subsprint, conclusion: input.conclusion });
     return this.requireState();
   }
 
@@ -284,7 +336,7 @@ export class SprintStore {
     if (sub.status === "closed") throw new StoreError(`Spike ${input.subsprint} is already concluded.`);
     if (!input.reason.trim()) throw new StoreError("Spike deprecation requires a reason.");
     for (const item of sub.items.filter((child) => child.status === "open")) {
-      this.ledger.append({
+      this.append({
         type: "item_resolved",
         item_id: item.id,
         disposition: "deprecated",
@@ -296,17 +348,33 @@ export class SprintStore {
         change_map: emptyChangeMap(),
       });
     }
-    this.ledger.append({ type: "spike_deprecated", subsprint_id: input.subsprint, reason: input.reason });
+    this.append({ type: "spike_deprecated", subsprint_id: input.subsprint, reason: input.reason });
     return this.requireState();
   }
 
-  private currentSprintEvents(): LedgerEvent[] {
-    const id = this.book.currentId();
-    return id ? this.book.ledger(id).read() : [];
+  search(pattern: string, contextSize: number): SearchMatch[] {
+    return searchLedger(this.currentEvents(), pattern, contextSize);
   }
 
-  search(pattern: string, contextLines: number): SearchMatch[] {
-    return searchLedger(this.currentSprintEvents(), pattern, contextLines);
+  listNotes(itemId: string): Array<{ id: string; item: string; text: string }> {
+    return this.listAllNotes().filter((note) => note.item === itemId);
+  }
+
+  listAllNotes(): Array<{ id: string; item: string; text: string }> {
+    return noteRecords(this.currentEvents());
+  }
+
+  getNote(id: string): { id: string; item: string; text: string } {
+    const note = noteRecords(this.currentEvents()).find((candidate) => candidate.id === id);
+    if (!note) throw new StoreError(`Unknown note ${id}.`);
+    return note;
+  }
+
+  updateNote(input: { id: string; text: string }): { id: string; item: string; text: string } {
+    this.requireActiveState();
+    this.getNote(input.id);
+    this.append({ type: "note_updated", note_id: input.id, text: input.text });
+    return this.getNote(input.id);
   }
 
   changelog(): string {
@@ -384,14 +452,14 @@ export class SprintStore {
     }
 
     if (blockers.length > 0) throw new StoreError("Sprint cannot close.", blockers);
-    this.ledger.append({ type: "sprint_closed", gate_results: results, coverage, coverage_state: coverageState });
+    this.append({ type: "sprint_closed", gate_results: results, coverage, coverage_state: coverageState });
     return this.requireState();
   }
 
   archiveSprint(input: { reason: string }): SprintView {
     this.requireActiveState();
     if (!input.reason.trim()) throw new StoreError("Archive requires a reason.");
-    this.ledger.append({ type: "sprint_archived", reason: input.reason });
+    this.append({ type: "sprint_archived", reason: input.reason });
     return this.requireState();
   }
 
@@ -460,4 +528,23 @@ function looksLikeProse(spec: string): boolean {
 function normalizeOptionalTitle(title: string | undefined, description: string): string {
   const candidate = title?.trim() || description.trim().split(/\r?\n/, 1)[0] || "Untitled item";
   return candidate.length > 80 ? `${candidate.slice(0, 77).trimEnd()}...` : candidate;
+}
+
+function noteId(seq: number): string {
+  return `N${String(seq).padStart(3, "0")}`;
+}
+
+function noteRecords(events: LedgerEvent[]): Array<{ id: string; item: string; text: string }> {
+  const records = new Map<string, { id: string; item: string; text: string }>();
+  for (const event of events) {
+    if (event.type === "note_added") {
+      const id = noteId(event.seq);
+      records.set(id, { id, item: event.element_id, text: event.text });
+    }
+    if (event.type === "note_updated") {
+      const existing = records.get(event.note_id);
+      if (existing) records.set(event.note_id, { ...existing, text: event.text });
+    }
+  }
+  return [...records.values()];
 }

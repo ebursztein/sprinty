@@ -3,17 +3,16 @@
 A disciplined-sprint MCP server for AI coding agents — **Claude Code, Codex, and Gemini**.
 
 Sprinty gives an agent first-class tools to run a sprint with structure that can't silently rot:
-structured **sprint → subsprint → item** objects, dependency graphs with topological ordering and
-cycle detection, an **immutable append-only ledger** anchored to real git commits,
-Git-backed **change maps**, durable **artifacts**, bug-backed **follow-ups**, feature-sized
-**spikes**, Markdown changelogs with file tables, **programmatic close-gates**
-that re-run your tests and require coverage evidence before a sprint can close, a **regex search**
-over the record, and a **live follow-along dashboard**.
+structured **sprint → subsprint → item** objects, dependency edges with cycle detection, an
+**immutable append-only ledger** anchored to real git commits, Git-backed **change maps**, durable
+file **artifacts**, item-scoped **notes**, Markdown changelogs with file tables, **programmatic
+close-gates** that re-run your tests and require coverage evidence before a sprint can close, a
+bounded **regex search** over the record, and a **live follow-along dashboard**.
 
 The point: the agent doesn't drift, and the record doesn't lie. IDs are minted server-side, items
-can't exist without gates, `done` rejects a commit that doesn't exist or lacks a semver changelog
-line, and `sprint_close` refuses to close while anything is open, coverage is missing, or a gate
-fails.
+can't exist without gates, `item_done` rejects a commit that doesn't exist or lacks a semver
+changelog line, and `sprint_close` refuses to close while anything is open, coverage is missing, or
+a gate fails.
 
 ## Install
 
@@ -61,10 +60,13 @@ Sprinty does not guess from the MCP server process cwd. Start a sprint with expl
 `git_dir` is where commits, gates, coverage, and change maps run. `data_dir` is where Sprinty stores
 the `current` pointer and append-only JSONL ledgers. Use a worktree-scoped, uncommitted `data_dir`,
 such as `<git_dir>/.sprinty` when that path is gitignored; avoid shared temp dirs or any directory
-that will be committed. For read-only tools before `sprint_new`, you may pre-bind the MCP server
-with `SPRINTY_GIT_DIR` and `SPRINTY_DATA_DIR` or `--git-dir` and
-`--data-dir`; both are required together. `SPRINTY_REPO_DIR` and `SPRINTY_WORKTREE` remain accepted
-as legacy aliases for `git_dir` only when a `data_dir` is also supplied.
+that will be committed. After a Codex/MCP restart, call `sprint_list(data_dir)` to inspect the
+existing ledgers and `sprint_resume(git_dir, data_dir)` to reattach without creating a sprint.
+Use `sprint_detach()` to clear a process binding before resuming another sprint. For read-only
+tools before `sprint_new`, you may also pre-bind the MCP server with `SPRINTY_GIT_DIR` and
+`SPRINTY_DATA_DIR` or `--git-dir` and `--data-dir`; both are required together.
+`SPRINTY_REPO_DIR` and `SPRINTY_WORKTREE` remain accepted as legacy aliases for `git_dir` only when
+a `data_dir` is also supplied.
 
 Codex CLI plugin path: install the repo-local marketplace from a repository checkout:
 
@@ -95,16 +97,17 @@ content rather than copying it.
 ## The loop
 
 ```
+sprint_list(data_dir?) -> sprint_resume(git_dir, data_dir) | sprint_detach()
 sprint_new(goal, git_dir, data_dir, context_notes?)
   -> dashboard()
+  -> overview() | next() | search(pattern, context_size?)
   -> subsprint_new(description, goals[], gates[], dependencies?)
-  -> spike(description, goals[], gates[], dependencies?)
-  -> add(subsprint, title, description, code_locations[], gates[], dependencies?)
-  -> artifact_add/list/amend/deprecate(...)
-  -> follow_up(target, description, bug_id|bug_ids)
-  -> dependencies(target, dependencies[])
-  -> done(commit_id, gate_results[], changelog) | split(...) | deprecate(reason)
-  -> spike_conclude(subsprint, conclusion) | spike_deprecate(subsprint, reason)
+  -> subsprint_list() | subsprint_get(id)
+  -> item_add(subsprint, title, description, code_locations[], gates[], dependencies?)
+  -> item_update(id, note?, dependencies?)
+  -> note_add(id, text) | note_list(id) | note_get(id) | note_update(id, text)
+  -> artifact_add(title, path, description?, related_items?) | artifact_list() | artifact_get(id) | artifact_update(id, ...)
+  -> item_done(id, commit_id, gate_results[], changelog) | item_split(id, ...) | item_deprecate(id, reason)
   -> changelog()
   -> sprint_close(coverage: { path, format: "lcov", command? })
 ```
@@ -133,29 +136,45 @@ dashboard URL so old sprint dashboards do not pile up.
 ## Proof Model
 
 Sprinty records timestamps on every event and projects them into the sprint timeline. Completed
-items require a real git commit id and controlled changelog entry when `done()` is called, and
-`sprint_close()` checks that the commit still resolves before closing. `done()` also records a
+items require a real git commit id and controlled changelog entry when `item_done()` is called, and
+`sprint_close()` checks that the commit still resolves before closing. `item_done()` also records a
 Git-backed change map for the commit: file, language, directory, additions, deletions, net change,
 churn, item ids, and commit ids. `changelog()` renders a Markdown release note with semver sections,
-coverage, and change-map tables. `done()` also requires passing evidence for every declared item
-gate, including manual gates. When an early declared gate was a placeholder, `done()` can record an
-explicit supersession: the final passing gate result names the declared gate in `supersedes` and
-includes a `supersession_reason`, preserving strict evidence without pretending the placeholder
-command was the final proof. Dependencies are stored as a real graph: `current()` returns nodes,
-edges, adjacency indexes, topological order, cycle information, the first actionable `current`
-item, actionable `next` items, `blocked_open` items, and enriched relation rows that name direct
-blockers/unblocked work with statuses. Writes reject cycles. At close, executable gates are re-run
-by Sprinty and `sprint_close()` requires an LCOV coverage report path.
-Artifacts are append-only too: amendments and deprecations are separate ledger events, never
-in-place edits or deletes. Follow-ups require bug ids. Spikes are subsprints with a `spike` flag:
-they can have normal items, but must be concluded or deprecated with a reason, and spike work is
-kept out of release changelog output.
+coverage, and change-map tables. `item_done()` also requires passing evidence for every declared
+item gate, including manual gates. When an early declared gate was a placeholder, `item_done()` can
+record an explicit supersession: the final passing gate result names the declared gate in
+`supersedes` and includes a `supersession_reason`, preserving strict evidence without pretending
+the placeholder command was the final proof. Dependencies are stored as ids and updated with
+`item_update({ id, dependencies })`; writes reject unknown ids, duplicates, and cycles. Use `next()`
+for the active work window and `subsprint_get({ id })` or `item_get({ id })` for focused detail.
+At close, executable gates are re-run by Sprinty and `sprint_close()` requires an LCOV coverage
+report path.
+
+Artifacts are append-only too: updates are separate ledger events, never in-place silent edits.
+Public artifact tools expose file paths and optional related item ids. Notes are first-class records
+with ids like `N001`, but they must attach to a specific item id; they are not a planning surface.
 
 Items have two text fields by design: `title` is a short one-line label for the tree/dashboard, and
 `description` is bounded detail for the expanded item body. Use one item per independently
 verifiable behavior, tool, endpoint, component, or migration step. If an item needs a list of
-unrelated deliverables in the title, split it before adding it. Oversized `add()` calls return a
-validation nudge to use `split()` or smaller atomic items.
+unrelated deliverables in the title, split it before adding it. Oversized `item_add()` calls return
+a validation nudge to create more than one smaller item. Notes must attach to a specific item id and
+must not be used as a substitute for trackable items.
+
+## Response Budgets
+
+Sprinty tools are designed for agent token budgets:
+
+- `overview()` is compact: sprint title/details, compact notes/artifacts, and subsprint counts only.
+  Use `subsprint_get({ id })` for item rows.
+- `next()` is the active work window and deliberately omits the full dependency graph.
+- `search({ pattern, context_size })` uses JavaScript regex syntax and returns compact rows with
+  `{ id, type, text, tool_call }`.
+- list tools are compact and point to the matching `_get()` tool for full untruncated detail.
+- tool responses omit timestamps and empty fields; the ledger and dashboard keep audit detail.
+
+The repository includes hard response-size and speed gates against a hermetic Capsem-shaped fixture.
+The steady-state read-handler p95 cap is 2ms.
 
 ## Storage
 

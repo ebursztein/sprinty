@@ -11,16 +11,15 @@ const files = [
 ];
 
 describe("client guidance", () => {
-  it("documents dashboard-at-start, artifacts, follow-ups, and spikes", () => {
+  it("documents dashboard-at-start, compact artifacts, and canonical item tools", () => {
     for (const file of files) {
       const text = readFileSync(file, "utf8");
-      expect(text, file).toContain("dashboard()");
+      expect(text, file).toContain("dashboard");
     }
 
     const gemini = readFileSync("clients/gemini/GEMINI.md", "utf8");
-    expect(gemini).toContain("artifact_add/list/amend/deprecate");
-    expect(gemini).toContain("follow_up");
-    expect(gemini).toContain("spike_conclude");
+    expect(gemini).toContain("artifact");
+    expect(gemini).toContain("item");
     expect(gemini).toContain("recent activity");
 
     const codex = readFileSync("clients/codex/README.md", "utf8");
@@ -35,17 +34,15 @@ describe("client guidance", () => {
       plugin.interface?.longDescription,
       ...(plugin.interface?.defaultPrompt ?? []),
     ].join("\n");
-    expect(pluginText).toContain("dashboard()");
-    expect(pluginText).toContain("artifact_add/list/amend/deprecate");
-    expect(pluginText).toContain("follow_up");
-    expect(pluginText).toContain("spike_conclude");
+    expect(pluginText).toContain("dashboard");
+    expect(pluginText).toContain("artifact");
+    expect(pluginText).toContain("item");
 
     for (const manifestPath of ["clients/claude/.claude-plugin/plugin.json", "clients/gemini/gemini-extension.json"]) {
       const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as { description?: string };
       expect(manifest.description, manifestPath).toContain("dashboard-at-start");
       expect(manifest.description, manifestPath).toContain("artifacts");
-      expect(manifest.description, manifestPath).toContain("follow-ups");
-      expect(manifest.description, manifestPath).toContain("spike");
+      expect(manifest.description, manifestPath).toContain("gates");
     }
   });
 
@@ -70,15 +67,11 @@ describe("client guidance", () => {
     const pkg = JSON.parse(readFileSync("package.json", "utf8")) as { description?: string; keywords?: string[] };
     expect(pkg.description).toContain("dashboard");
     expect(pkg.description).toContain("artifacts");
-    expect(pkg.description).toContain("follow-ups");
-    expect(pkg.description).toContain("spikes");
     expect(pkg.description).toContain("gates");
     expect(pkg.keywords).toEqual(expect.arrayContaining([
       "mcp",
       "dashboard",
       "artifacts",
-      "follow-ups",
-      "spikes",
       "gates",
       "ledger",
     ]));

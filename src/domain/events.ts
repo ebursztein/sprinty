@@ -67,6 +67,11 @@ export const NoteAdded = z.object({
   element_id: z.string(), text: z.string().min(1),
 });
 
+export const NoteUpdated = z.object({
+  ...base, type: z.literal("note_updated"),
+  note_id: z.string().min(1), text: z.string().min(1),
+});
+
 export const DependenciesAdded = z.object({
   ...base, type: z.literal("dependencies_added"),
   target_id: z.string().min(1),
@@ -81,6 +86,7 @@ export const ArtifactAdded = z.object({
   title: z.string().min(1),
   uri: z.string().min(1),
   description: z.string().min(1).nullable().default(null),
+  related_items: z.array(z.string().min(1)).default([]),
 });
 
 export const ArtifactAmended = z.object({
@@ -90,6 +96,7 @@ export const ArtifactAmended = z.object({
   title: z.string().min(1).optional(),
   uri: z.string().min(1).optional(),
   description: z.string().min(1).nullable().optional(),
+  related_items: z.array(z.string().min(1)).optional(),
 });
 
 export const ArtifactDeprecated = z.object({
@@ -132,7 +139,7 @@ export const SprintArchived = z.object({
 });
 
 export const LedgerEvent = z.discriminatedUnion("type", [
-  SprintCreated, SubsprintCreated, ItemAdded, ItemUpdated, ItemResolved, NoteAdded, DependenciesAdded,
+  SprintCreated, SubsprintCreated, ItemAdded, ItemUpdated, ItemResolved, NoteAdded, NoteUpdated, DependenciesAdded,
   ArtifactAdded, ArtifactAmended, ArtifactDeprecated, FollowUpAdded, SpikeConcluded, SpikeDeprecated,
   SprintClosed, SprintArchived,
 ]);

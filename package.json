@@ -1,6 +1,6 @@
 {
   "name": "sprinty-mcp",
-  "version": "0.1.4",
+  "version": "0.1.6",
   "description": "Disciplined sprint MCP with dashboard, artifacts, follow-ups, spikes, gates, and changelogs for Claude Code, Codex, and Gemini",
   "type": "module",
   "license": "Apache-2.0",
@@ -40,7 +40,7 @@
     "build:dashboard": "vite build --config vite.dashboard.config.ts",
     "prepack": "npm run build",
     "pretest": "npm run build",
-    "test": "vitest run",
+    "test": "vitest run --exclude src/tools/response-size.test.ts && vitest run src/tools/response-size.test.ts --no-file-parallelism --maxWorkers=1",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "typecheck": "tsc -p tsconfig.json --noEmit",
