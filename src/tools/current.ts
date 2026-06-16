@@ -1,52 +1,144 @@
 import type { ArtifactView, SprintView, ItemView, SubsprintView, TimelineEntry } from "../domain/projection.js";
-import type { DependencyGraph, GraphNode } from "../domain/graph.js";
 
 export interface CurrentWindow {
   goal: string;
-  last_resolved: ItemView[];
-  current: ItemView | null;
-  next: ItemView[];
-  blocked_open: ItemView[];
-  current_subsprint: SubsprintView | null;
-  graph: DependencyGraph;
+  last_resolved: LastResolvedRow[];
+  current: WorkItemRow | null;
+  next: WorkItemRow[];
+  blocked_open: BlockedOpenSummary;
+  current_subsprint: CurrentSubsprintRow | null;
   relations: RelationRow[];
   artifacts: ArtifactView[];
   recent_artifacts: ArtifactView[];
-  recent_activity: TimelineEntry[];
+  recent_activity: RecentActivityRow[];
+}
+
+export interface BlockedOpenRow {
+  id: string;
+  title: string;
+}
+
+export interface BlockedOpenSummary {
+  count: number;
+  items: BlockedOpenRow[];
+  truncated: boolean;
+}
+
+export interface LastResolvedRow {
+  id: string;
+  title: string;
+  commit_id: string | null;
+}
+
+export interface WorkItemRow {
+  id: string;
+  subsprint_id: string;
+  title: string;
+  description: string;
+  code_locations: string[];
+  gates: ItemView["gates"];
+  status: ItemView["status"];
+  dependencies: string[];
+  updates: string[];
+  notes: string[];
+}
+
+export interface CurrentSubsprintRow {
+  id: string;
+  kind: SubsprintView["kind"];
+  description: string;
+  status: SubsprintView["status"];
+  goals: string[];
+  gates: SubsprintView["gates"];
+  dependencies: string[];
+  notes: string[];
+}
+
+export interface RecentActivityRow {
+  id: string;
+  type: TimelineEntry["type"];
+  text: string;
 }
 
 export interface RelationRow {
-  id: string;
-  node: GraphNode | null;
-  blocked_by: GraphNode[];
-  unblocks: GraphNode[];
+  from: string;
+  to: string;
 }
 
 export function windowCurrent(view: SprintView, past: number, future: number): CurrentWindow {
   const items = view.subsprints.flatMap((s) => s.items);
   const resolved = items.filter((i) => i.status !== "open");
   const { available, blocked } = orderOpenItems(view, items);
+  const lastResolved = resolved.slice(-past);
+  const next = available.slice(0, future);
   const currentItem = available[0] ?? null;
   const current = currentItem
     ? view.subsprints.find((sub) => sub.id === currentItem.subsprint_id) ?? null
     : view.subsprints.find((s) => s.status === "open") ?? null;
   return {
     goal: view.goal,
-    last_resolved: resolved.slice(-past),
-    current: currentItem,
-    next: available.slice(0, future),
-    blocked_open: blocked,
-    current_subsprint: current,
-    graph: view.graph,
-    relations: collectRelations(view, [
-      ...(current ? [current.id] : []),
-      ...resolved.slice(-past).map((item) => item.id),
-      ...available.slice(0, future).map((item) => item.id),
-      ...blocked.map((item) => item.id),
-    ]),
-    artifacts: collectRelevantArtifacts(view, current, resolved.slice(-past), available.slice(0, future)),
+    last_resolved: lastResolved.map(compactLastResolved),
+    current: currentItem ? compactWorkItem(currentItem) : null,
+    next: next.map(compactWorkItem),
+    blocked_open: compactBlockedOpen(blocked, future),
+    current_subsprint: current ? compactCurrentSubsprint(current) : null,
+    relations: collectRelations(view, [...lastResolved, ...next].map((item) => item.id)),
+    artifacts: collectRelevantArtifacts(view, current, lastResolved, next),
     recent_artifacts: collectArtifacts(view).filter((artifact) => artifact.status === "active").slice(-future),
-    recent_activity: view.timeline.slice(-Math.max(5, past + future)),
+    recent_activity: view.timeline.slice(-Math.max(5, past + future)).map(compactActivity),
+  };
+}
+
+function compactBlockedOpen(items: ItemView[], limit: number): BlockedOpenSummary {
+  const bounded = items.slice(0, Math.max(0, limit));
+  return {
+    count: items.length,
+    items: bounded.map((item) => ({ id: item.id, title: item.title })),
+    truncated: bounded.length < items.length,
+  };
+}
+
+function compactLastResolved(item: ItemView): LastResolvedRow {
+  return {
+    id: item.id,
+    title: item.title,
+    commit_id: item.commit_id,
+  };
+}
+
+function compactWorkItem(item: ItemView): WorkItemRow {
+  return {
+    id: item.id,
+    subsprint_id: item.subsprint_id,
+    title: item.title,
+    description: item.description,
+    code_locations: item.code_locations,
+    gates: item.gates,
+    status: item.status,
+    dependencies: item.dependencies,
+    updates: item.updates,
+    notes: item.notes,
+  };
+}
+
+function compactCurrentSubsprint(sub: SubsprintView): CurrentSubsprintRow {
+  return {
+    id: sub.id,
+    kind: sub.kind,
+    description: sub.description,
+    status: sub.status,
+    goals: sub.goals,
+    gates: sub.gates,
+    dependencies: sub.dependencies,
+    notes: sub.notes,
+  };
+}
+
+function compactActivity(entry: TimelineEntry): RecentActivityRow {
+  return {
+    id: entry.id,
+    type: entry.type,
+    text: truncate(entry.text, 256),
   };
 }
 
@@ -85,14 +177,8 @@ function collectArtifacts(view: SprintView): ArtifactView[] {
 }
 
 function collectRelations(view: SprintView, ids: string[]): RelationRow[] {
-  const nodes = new Map(view.graph.nodes.map((node) => [node.id, node]));
-  const uniqueIds = [...new Set(ids)];
-  return uniqueIds.map((id) => ({
-    id,
-    node: nodes.get(id) ?? null,
-    blocked_by: (view.graph.blocked_by?.[id] ?? []).map((dep) => nodes.get(dep)).filter((node): node is GraphNode => Boolean(node)),
-    unblocks: (view.graph.unblocks?.[id] ?? []).map((dep) => nodes.get(dep)).filter((node): node is GraphNode => Boolean(node)),
-  }));
+  const scopedIds = new Set(ids);
+  return view.graph.edges.filter((edge) => scopedIds.has(edge.from) && scopedIds.has(edge.to));
 }
 
 function collectRelevantArtifacts(view: SprintView, current: SubsprintView | null, past: ItemView[], future: ItemView[]): ArtifactView[] {
@@ -103,4 +189,8 @@ function collectRelevantArtifacts(view: SprintView, current: SubsprintView | nul
     ...future.map((item) => item.id),
   ]);
   return collectArtifacts(view).filter((artifact) => artifact.status === "active" && targetIds.has(artifact.target_id));
+}
+
+function truncate(value: string, max: number): string {
+  return value.length <= max ? value : `${value.slice(0, max - 3)}...`;
 }

@@ -118,6 +118,7 @@ describe("project", () => {
       title: "Sprint plan",
       uri: "docs/plan.md",
       description: "Top-level plan",
+      related_items: [],
       created_at: t,
       updated_at: null,
       deprecated_at: null,

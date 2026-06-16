@@ -36,6 +36,7 @@ export interface ArtifactView {
   title: string;
   uri: string;
   description: string | null;
+  related_items: string[];
   created_at: string;
   updated_at: string | null;
   deprecated_at: string | null;
@@ -182,6 +183,9 @@ export function project(events: LedgerEvent[]): SprintView | null {
         timeline.push({ seq: e.seq, ts: e.ts, type: e.type, id: e.element_id, text: e.text });
         break;
       }
+      case "note_updated":
+        timeline.push({ seq: e.seq, ts: e.ts, type: e.type, id: e.note_id, text: e.text });
+        break;
       case "dependencies_added": {
         const item = items.get(e.target_id);
         const sub = subsprints.get(e.target_id);
@@ -198,6 +202,7 @@ export function project(events: LedgerEvent[]): SprintView | null {
           title: e.title,
           uri: e.uri,
           description: e.description,
+          related_items: e.related_items ?? [],
           created_at: e.ts,
           updated_at: null,
           deprecated_at: null,
@@ -221,6 +226,7 @@ export function project(events: LedgerEvent[]): SprintView | null {
           if (e.title) artifact.title = e.title;
           if (e.uri) artifact.uri = e.uri;
           if ("description" in e) artifact.description = e.description ?? null;
+          if (e.related_items) artifact.related_items = e.related_items;
           artifact.updated_at = e.ts;
         }
         timeline.push({ seq: e.seq, ts: e.ts, type: e.type, id: e.artifact_id, text: "amended" });

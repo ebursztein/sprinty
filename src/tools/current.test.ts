@@ -42,7 +42,7 @@ describe("windowCurrent", () => {
     expect(w.next.map((i) => i.id)).toEqual(["S01-002"]);
     expect(w.current_subsprint?.id).toBe("S01");
     expect(w.current_subsprint?.notes).toEqual(["n"]);
-    expect(w.graph.edges).toEqual([{ from: "S01-002", to: "S01-001" }]);
+    expect("graph" in w).toBe(false);
     expect(w.artifacts.map((artifact) => artifact.id)).toEqual(["A001", "A002", "A003"]);
     expect(w.recent_artifacts.map((artifact) => artifact.id)).toEqual(["A001", "A002", "A003"]);
     expect(w.recent_activity.map((entry) => entry.type)).toContain("follow_up_added");
@@ -70,7 +70,8 @@ describe("windowCurrent", () => {
     const w = windowCurrent(v, 1, 2);
 
     expect(w.next.map((item) => item.id)).toEqual(["S01-003"]);
-    expect(w.blocked_open.map((item) => item.id)).toEqual(["S01-002"]);
+    expect(w.blocked_open.items.map((item) => item.id)).toEqual(["S01-002"]);
+    expect(w.blocked_open.count).toBe(1);
     expect(w.current_subsprint?.id).toBe("S01");
   });
 
@@ -105,8 +106,8 @@ describe("windowCurrent", () => {
 
     expect(w.current?.id).toBe("S01-002");
     expect(w.next.map((item) => item.id)).toEqual(["S01-002", "S01-004"]);
-    expect(w.blocked_open.map((item) => item.id)).toEqual(["S01-005", "S01-003"]);
-    expect(w.relations.find((row) => row.id === "S01-003")?.blocked_by.map((node) => node.id)).toEqual(["S01-004", "S01-005"]);
-    expect(w.relations.find((row) => row.id === "S01-004")?.unblocks.map((node) => node.id)).toEqual(["S01-003", "S01-005"]);
+    expect(w.blocked_open.items.map((item) => item.id)).toEqual(["S01-005", "S01-003"]);
+    expect(w.blocked_open.count).toBe(2);
+    expect(w.relations).toEqual([]);
   });
 });

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ArtifactKind, ChangelogEntry } from "../domain/events.js";
+import { ChangelogEntry } from "../domain/events.js";
 import { Gate, GateResult } from "../domain/gates.js";
 
 export const CoverageInput = z.object({
@@ -28,8 +28,8 @@ export const SprintListInput = z.object({
 export const SprintCloseInput = z.object({ coverage: z.union([CoverageInput, CoverageNotApplicableInput]).optional() });
 export const SprintArchiveInput = z.object({ reason: z.string().min(1) });
 export const ChangelogInput = z.object({});
-export const InfoInput = z.object({});
-export const CurrentInput = z.object({
+export const OverviewInput = z.object({});
+export const NextInput = z.object({
   past: z.number().int().nonnegative().default(1),
   future: z.number().int().nonnegative().default(3),
 });
@@ -39,9 +39,8 @@ export const SubsprintNewInput = z.object({
   gates: z.array(Gate).min(1),
   dependencies: z.array(z.string().min(1)).default([]),
 });
-export const SpikeInput = SubsprintNewInput;
-export const SpikeConcludeInput = z.object({ subsprint: z.string().min(1), conclusion: z.string().min(1) });
-export const SpikeDeprecateInput = z.object({ subsprint: z.string().min(1), reason: z.string().min(1) });
+export const SubsprintGetInput = z.object({ id: z.string().min(1) });
+export const SubsprintListInput = z.object({});
 
 export const ITEM_TITLE_MIN = 3;
 export const ITEM_TITLE_MAX = 80;
@@ -49,12 +48,12 @@ export const ITEM_DESCRIPTION_MIN = 20;
 export const ITEM_DESCRIPTION_MAX = 500;
 
 export const ItemTitleInput = z.string().trim().min(ITEM_TITLE_MIN).max(ITEM_TITLE_MAX, {
-  message: `Item title is too large for one tree row; create more than one item with add() or split the work into smaller atomic items.`,
+  message: `Item title is too large for one tree row; create more than one item with item_add() or split the work into smaller atomic items.`,
 }).refine((value) => !/[\r\n]/.test(value), {
   message: "Item title must fit on one line.",
 });
 export const ItemDescriptionInput = z.string().trim().min(ITEM_DESCRIPTION_MIN).max(ITEM_DESCRIPTION_MAX, {
-  message: `Item description is too large for one Sprinty item; create more than one item with add() instead of using notes or one oversized item.`,
+  message: `Item description is too large for one Sprinty item; create more than one item with item_add() instead of using notes or one oversized item.`,
 });
 
 export const AddInput = z.object({
@@ -65,53 +64,54 @@ export const AddInput = z.object({
   gates: z.array(Gate).min(1),
   dependencies: z.array(z.string().min(1)).default([]),
 });
-export const UpdateInput = z.object({ target: z.string().min(1), note: z.string().min(1) });
+export const ItemAddInput = AddInput;
+export const ItemGetInput = z.object({ id: z.string().min(1) });
+export const ItemUpdateInput = z.object({
+  id: z.string().min(1),
+  title: ItemTitleInput.optional(),
+  description: ItemDescriptionInput.optional(),
+  dependencies: z.array(z.string().min(1)).optional(),
+  note: z.string().min(1).optional(),
+});
 export const DoneInput = z.object({
-  item: z.string().min(1),
+  id: z.string().min(1),
   commit_id: z.string().min(7),
   gate_results: z.array(GateResult).min(1),
   changelog: ChangelogEntry,
 });
+export const ItemDoneInput = DoneInput;
 export const SplitInput = z.object({
-  item: z.string().min(1),
+  id: z.string().min(1),
   description: z.string().min(1),
   goals: z.array(z.string().min(1)).min(1),
   gates: z.array(Gate).min(1),
   dependencies: z.array(z.string().min(1)).default([]),
 });
-export const DeprecateInput = z.object({ item: z.string().min(1), reason: z.string().min(1) });
-export const NoteInput = z.object({ element: z.string().min(1), text: z.string().min(1) });
-export const ArtifactInput = z.object({
-  target: z.string().min(1).default("sprint"),
-  kind: ArtifactKind,
+export const ItemSplitInput = SplitInput;
+export const DeprecateInput = z.object({ id: z.string().min(1), reason: z.string().min(1) });
+export const ItemDeprecateInput = DeprecateInput;
+export const NoteInput = z.object({ id: z.string().min(1), text: z.string().min(1) });
+export const NoteGetInput = z.object({ id: z.string().min(1) });
+export const NoteListInput = z.object({ id: z.string().min(1) });
+export const NoteUpdateInput = z.object({ id: z.string().min(1), text: z.string().min(1) });
+export const ArtifactAddInput = z.object({
+  id: z.string().min(1).optional(),
   title: z.string().min(1),
-  uri: z.string().min(1),
-  description: z.string().min(1).nullable().optional(),
+  path: z.string().min(1),
+  description: z.string().min(1).optional(),
+  related_items: z.array(z.string().min(1)).default([]),
 });
-export const ArtifactListInput = z.object({
-  target: z.string().min(1).optional(),
-  include_deprecated: z.boolean().default(false),
-});
-export const ArtifactAmendInput = z.object({
-  artifact: z.string().min(1),
-  kind: ArtifactKind.optional(),
+export const ArtifactGetInput = z.object({ id: z.string().min(1) });
+export const ArtifactListInput = z.object({});
+export const ArtifactUpdateInput = z.object({
+  id: z.string().min(1),
   title: z.string().min(1).optional(),
-  uri: z.string().min(1).optional(),
-  description: z.string().min(1).nullable().optional(),
-});
-export const ArtifactDeprecateInput = z.object({ artifact: z.string().min(1), reason: z.string().min(1) });
-export const FollowUpInput = z.object({
-  target: z.string().min(1).default("sprint"),
-  description: z.string().min(1),
-  bug_id: z.string().min(1).optional(),
-  bug_ids: z.array(z.string().min(1)).optional(),
-});
-export const DependenciesInput = z.object({
-  target: z.string().min(1),
-  dependencies: z.array(z.string().min(1)).min(1),
+  path: z.string().min(1).optional(),
+  description: z.string().min(1).optional(),
+  related_items: z.array(z.string().min(1)).optional(),
 });
 export const SearchInput = z.object({
   pattern: z.string().min(1),
-  context_lines: z.number().int().nonnegative().default(0),
+  context_size: z.number().int().positive().max(4096).default(512),
 });
 export const DashboardInput = z.object({});
