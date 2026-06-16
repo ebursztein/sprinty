@@ -10,10 +10,11 @@ sprint_new(goal, git_dir, data_dir, context_notes?)
   -> dashboard()
   -> subsprint_new(description, goals[], gates[], dependencies?)
   -> spike(description, goals[], gates[], dependencies?)
-  -> add(subsprint, title, description, code_locations[], gates[], dependencies?)
+  -> next(past?, future_per_subsprint?, include_high_priority?)
+  -> add(subsprint, title, description, code_locations[], gates[], dependencies?, high_priority?)
+  -> item_update(id, note?, title?, description?, high_priority?, dependencies?)
   -> artifact_add/list/amend/deprecate(...)
   -> follow_up(target, description, bug_id|bug_ids)
-  -> dependencies(target, dependencies[])
   -> done(commit_id, gate_results[], changelog) | split(...) | deprecate(reason)
   -> spike_conclude(subsprint, conclusion) | spike_deprecate(subsprint, reason)
   -> changelog()
@@ -30,9 +31,10 @@ passing evidence for every declared item gate, and a semver-style changelog line
 `added`, `fixed`, or `removed`. `split` and `deprecate` are terminal non-code exits. Each
 subsprint should be one feature; use `spike()` for feature investigations, then close the spike with
 `spike_conclude()` or `spike_deprecate()`. Use `artifact_add/list/amend/deprecate` for durable
-outputs and `follow_up()` with bug ids for bugs found while moving fast. `current()` returns the
-dependency graph, including topological order and cycles, plus relevant artifacts, recent artifacts,
-and recent activity. `done` records a Git-backed change map. `changelog()` returns Markdown with
+outputs and `follow_up()` with bug ids for bugs found while moving fast. `next()` returns the active
+work window with relevant artifacts and recent activity: all available `high_priority` items first
+by default, then normal available items per subsprint. `item_update({ id, dependencies })` replaces
+dependencies, so pass `dependencies: []` to remove a bad edge. `done` records a Git-backed change map. `changelog()` returns Markdown with
 changelog and change-map tables. `sprint_close` rechecks commits, re-runs executable gates, requires
 an LCOV coverage report path, and refuses to close on any blocker. Use `search(pattern,
 context_lines)` to query the immutable ledger. Use `dashboard()` immediately after `sprint_new()`,

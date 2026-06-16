@@ -10,6 +10,7 @@ export interface ItemView {
   subsprint_id: string;
   title: string;
   description: string;
+  high_priority: boolean;
   created_at: string;
   resolved_at: string | null;
   code_locations: string[];
@@ -145,6 +146,7 @@ export function project(events: LedgerEvent[]): SprintView | null {
       case "item_added": {
         const item: ItemView = {
           id: e.item_id, subsprint_id: e.subsprint_id, title: e.title ?? titleFromDescription(e.description), description: e.description,
+          high_priority: e.high_priority,
           created_at: e.ts, resolved_at: null,
           code_locations: e.code_locations, gates: e.gates, status: "open",
           disposition: null, dependencies: e.dependencies ?? [], commit_id: null, gate_results: [], reason: null,
@@ -156,10 +158,18 @@ export function project(events: LedgerEvent[]): SprintView | null {
         timeline.push({ seq: e.seq, ts: e.ts, type: e.type, id: e.item_id, text: item.title });
         break;
       }
-      case "item_updated":
-        items.get(e.target_id)?.updates.push(e.note);
-        timeline.push({ seq: e.seq, ts: e.ts, type: e.type, id: e.target_id, text: e.note });
+      case "item_updated": {
+        const item = items.get(e.target_id);
+        if (item) {
+          if (e.note) item.updates.push(e.note);
+          if (e.title) item.title = e.title;
+          if (e.description) item.description = e.description;
+          if (e.high_priority !== undefined) item.high_priority = e.high_priority;
+        }
+        const text = e.note ?? e.title ?? e.description ?? (e.high_priority === undefined ? "updated" : `high_priority=${e.high_priority}`);
+        timeline.push({ seq: e.seq, ts: e.ts, type: e.type, id: e.target_id, text });
         break;
+      }
       case "item_resolved": {
         const item = items.get(e.item_id);
         if (item) {
@@ -192,6 +202,14 @@ export function project(events: LedgerEvent[]): SprintView | null {
         const target = item ?? sub;
         if (target) target.dependencies = unique([...target.dependencies, ...e.dependencies]);
         timeline.push({ seq: e.seq, ts: e.ts, type: e.type, id: e.target_id, text: e.dependencies.join(", ") });
+        break;
+      }
+      case "dependencies_replaced": {
+        const item = items.get(e.target_id);
+        const sub = subsprints.get(e.target_id);
+        const target = item ?? sub;
+        if (target) target.dependencies = unique(e.dependencies);
+        timeline.push({ seq: e.seq, ts: e.ts, type: e.type, id: e.target_id, text: e.dependencies.join(", ") || "(none)" });
         break;
       }
       case "artifact_added": {

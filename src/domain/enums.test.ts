@@ -20,7 +20,7 @@ describe("enums", () => {
   it("EventType enumerates every ledger event", () => {
     expect(EventType.options).toEqual([
       "sprint_created", "subsprint_created", "item_added",
-      "item_updated", "item_resolved", "note_added", "dependencies_added",
+      "item_updated", "item_resolved", "note_added", "dependencies_added", "dependencies_replaced",
       "artifact_added", "artifact_amended", "artifact_deprecated",
       "follow_up_added", "spike_concluded", "spike_deprecated",
       "sprint_closed", "sprint_archived",

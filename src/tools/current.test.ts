@@ -24,8 +24,8 @@ function view(): SprintView {
       changelog: [],
       change_map: { by_file: [], by_directory: [], by_language: [], hotspots: [] },
       items: [
-        { id: "S01-001", subsprint_id: "S01", title: "Done one", description: "done one", created_at: "2026-06-14T00:00:00.000Z", resolved_at: "2026-06-14T00:01:00.000Z", code_locations: ["a"], gates: [], status: "completed", disposition: "completed", commit_id: "abc", gate_results: [], reason: null, spawned_subsprint: null, updates: [], notes: [], dependencies: [], changelog: { verb: "fixed", line: "Fixed one thing." }, change_map: { by_file: [], by_directory: [], by_language: [], hotspots: [] }, artifacts: [], follow_ups: [] },
-        { id: "S01-002", subsprint_id: "S01", title: "Open one", description: "open one", created_at: "2026-06-14T00:02:00.000Z", resolved_at: null, code_locations: ["b"], gates: [], status: "open", disposition: null, commit_id: null, gate_results: [], reason: null, spawned_subsprint: null, updates: [], notes: [], dependencies: ["S01-001"], changelog: null, change_map: { by_file: [], by_directory: [], by_language: [], hotspots: [] }, artifacts: [{ id: "A003", target_id: "S01-002", kind: "spec", title: "Item spec", uri: "docs/spec.md", description: null, created_at: "2026-06-14T00:00:00.000Z", updated_at: null, deprecated_at: null, deprecation_reason: null, status: "active" }], follow_ups: [{ id: "F001", target_id: "S01-002", description: "fix it", bug_ids: ["BUG-1"], created_at: "2026-06-14T00:01:00.000Z" }] },
+        { id: "S01-001", subsprint_id: "S01", title: "Done one", description: "done one", high_priority: false, created_at: "2026-06-14T00:00:00.000Z", resolved_at: "2026-06-14T00:01:00.000Z", code_locations: ["a"], gates: [], status: "completed", disposition: "completed", commit_id: "abc", gate_results: [], reason: null, spawned_subsprint: null, updates: [], notes: [], dependencies: [], changelog: { verb: "fixed", line: "Fixed one thing." }, change_map: { by_file: [], by_directory: [], by_language: [], hotspots: [] }, artifacts: [], follow_ups: [] },
+        { id: "S01-002", subsprint_id: "S01", title: "Open one", description: "open one", high_priority: false, created_at: "2026-06-14T00:02:00.000Z", resolved_at: null, code_locations: ["b"], gates: [], status: "open", disposition: null, commit_id: null, gate_results: [], reason: null, spawned_subsprint: null, updates: [], notes: [], dependencies: ["S01-001"], changelog: null, change_map: { by_file: [], by_directory: [], by_language: [], hotspots: [] }, artifacts: [{ id: "A003", target_id: "S01-002", kind: "spec", title: "Item spec", uri: "docs/spec.md", description: null, created_at: "2026-06-14T00:00:00.000Z", updated_at: null, deprecated_at: null, deprecation_reason: null, status: "active" }], follow_ups: [{ id: "F001", target_id: "S01-002", description: "fix it", bug_ids: ["BUG-1"], created_at: "2026-06-14T00:01:00.000Z" }] },
       ],
     }],
     changelog: [],
@@ -73,6 +73,74 @@ describe("windowCurrent", () => {
     expect(w.blocked_open.items.map((item) => item.id)).toEqual(["S01-002"]);
     expect(w.blocked_open.count).toBe(1);
     expect(w.current_subsprint?.id).toBe("S01");
+  });
+
+  it("lists all high-priority open items before the per-subsprint normal window", () => {
+    const v = view();
+    const first = v.subsprints[0]!;
+    const open = first.items[1]!;
+    first.items = [
+      { ...open, id: "S01-002", title: "First normal", description: "first normal", dependencies: [], high_priority: false },
+      { ...open, id: "S01-003", title: "First urgent", description: "first urgent", dependencies: [], high_priority: true },
+    ];
+    v.subsprints.push({
+      ...first,
+      id: "S02",
+      description: "second feature",
+      artifacts: [],
+      notes: [],
+      items: [
+        { ...open, id: "S02-001", subsprint_id: "S02", title: "Second normal", description: "second normal", dependencies: [], high_priority: false, artifacts: [], follow_ups: [] },
+        { ...open, id: "S02-002", subsprint_id: "S02", title: "Second urgent", description: "second urgent", dependencies: [], high_priority: true, artifacts: [], follow_ups: [] },
+      ],
+    });
+    v.graph = {
+      nodes: [
+        { id: "S01-002", kind: "item", label: "First normal", status: "open" },
+        { id: "S01-003", kind: "item", label: "First urgent", status: "open" },
+        { id: "S02-001", kind: "item", label: "Second normal", status: "open" },
+        { id: "S02-002", kind: "item", label: "Second urgent", status: "open" },
+      ],
+      edges: [],
+      blocked_by: { "S01-002": [], "S01-003": [], "S02-001": [], "S02-002": [] },
+      unblocks: { "S01-002": [], "S01-003": [], "S02-001": [], "S02-002": [] },
+      topological_order: ["S01-002", "S01-003", "S02-001", "S02-002"],
+      cycles: [],
+    };
+
+    const w = windowCurrent(v, 1, 1);
+
+    expect(w.next.map((item) => item.id)).toEqual(["S01-003", "S02-002", "S01-002", "S02-001"]);
+    expect(w.current?.id).toBe("S01-003");
+    expect(w.next[0]?.high_priority).toBe(true);
+  });
+
+  it("can suppress high-priority promotion and configure normal items per subsprint", () => {
+    const v = view();
+    const sub = v.subsprints[0]!;
+    const open = sub.items[1]!;
+    sub.items = [
+      { ...open, id: "S01-002", title: "Normal one", description: "normal one", dependencies: [], high_priority: false },
+      { ...open, id: "S01-003", title: "Urgent one", description: "urgent one", dependencies: [], high_priority: true },
+      { ...open, id: "S01-004", title: "Normal two", description: "normal two", dependencies: [], high_priority: false },
+    ];
+    v.graph = {
+      nodes: [
+        { id: "S01-002", kind: "item", label: "Normal one", status: "open" },
+        { id: "S01-003", kind: "item", label: "Urgent one", status: "open" },
+        { id: "S01-004", kind: "item", label: "Normal two", status: "open" },
+      ],
+      edges: [],
+      blocked_by: { "S01-002": [], "S01-003": [], "S01-004": [] },
+      unblocks: { "S01-002": [], "S01-003": [], "S01-004": [] },
+      topological_order: ["S01-002", "S01-003", "S01-004"],
+      cycles: [],
+    };
+
+    const w = windowCurrent(v, 1, 2, { include_high_priority: false });
+
+    expect(w.next.map((item) => item.id)).toEqual(["S01-002", "S01-003"]);
+    expect(w.current?.id).toBe("S01-002");
   });
 
   it("keeps blocked open dependents out of current and returns relation context", () => {

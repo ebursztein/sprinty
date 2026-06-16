@@ -31,7 +31,9 @@ export const ChangelogInput = z.object({});
 export const OverviewInput = z.object({});
 export const NextInput = z.object({
   past: z.number().int().nonnegative().default(1),
-  future: z.number().int().nonnegative().default(3),
+  future: z.number().int().nonnegative().optional(),
+  future_per_subsprint: z.number().int().nonnegative().default(1),
+  include_high_priority: z.boolean().default(true),
 });
 export const SubsprintNewInput = z.object({
   description: z.string().min(1),
@@ -60,6 +62,7 @@ export const AddInput = z.object({
   subsprint: z.string().min(1),
   title: ItemTitleInput,
   description: ItemDescriptionInput,
+  high_priority: z.boolean().default(false),
   code_locations: z.array(z.string().min(1)).min(1),
   gates: z.array(Gate).min(1),
   dependencies: z.array(z.string().min(1)).default([]),
@@ -70,6 +73,7 @@ export const ItemUpdateInput = z.object({
   id: z.string().min(1),
   title: ItemTitleInput.optional(),
   description: ItemDescriptionInput.optional(),
+  high_priority: z.boolean().optional(),
   dependencies: z.array(z.string().min(1)).optional(),
   note: z.string().min(1).optional(),
 });

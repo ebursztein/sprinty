@@ -17,15 +17,20 @@ function def<Sc extends z.ZodObject<z.ZodRawShape>>(
   schema: Sc,
   description: string,
   run: (input: z.infer<Sc>) => unknown | Promise<unknown>,
+  options: PruneOptions = {},
 ): ToolDef {
   return {
     description,
     schema,
     handler: async (raw) => {
       const input = schema.parse(raw);
-      return pruneEmptyResponseFields(stripResponseNoise(ensureHelp(await run(input), helpTarget(input as Record<string, unknown>)))) ?? {};
+      return pruneEmptyResponseFields(stripResponseNoise(ensureHelp(await run(input), helpTarget(input as Record<string, unknown>))), options) ?? {};
     },
   };
+}
+
+interface PruneOptions {
+  keepItemEmptyDependencies?: boolean;
 }
 
 export type ToolHandlers = Record<string, ToolDef>;
@@ -79,7 +84,7 @@ export function buildToolHandlers(
       }),
     next: def(S.NextInput, "Compact work window for choosing the next item.",
       async (i) => {
-        const view = windowCurrent((await getStore()).read(), i.past, i.future);
+        const view = windowCurrent((await getStore()).read(), i.past, i.future ?? i.future_per_subsprint, { include_high_priority: i.include_high_priority });
         return withHelp(renameCurrentWindow(view), view.current?.id ?? "sprint");
       }),
     subsprint_new: def(S.SubsprintNewInput, "Create a subsprint (description, goals, gates).",
@@ -97,13 +102,12 @@ export function buildToolHandlers(
         return ack("item_add", result.view, { item: result.id });
       }),
     item_get: def(S.ItemGetInput, "Read one item with full untruncated detail.",
-      async (i) => itemGet((await getStore()).read(), i.id)),
-    item_update: def(S.ItemUpdateInput, "Update item metadata: note and/or dependency ids.",
+      async (i) => itemGet((await getStore()).read(), i.id),
+      { keepItemEmptyDependencies: true }),
+    item_update: def(S.ItemUpdateInput, "Update item metadata: note, title, description, high_priority, and/or replacement dependency ids.",
       async (i) => {
         const store = await getStore();
-        let view = store.read();
-        if (i.dependencies?.length) view = store.addDependencies({ target: i.id, dependencies: i.dependencies });
-        if (i.note) view = store.updateItem({ target: i.id, note: i.note });
+        const view = store.updateItem({ target: i.id, note: i.note, title: i.title, description: i.description, high_priority: i.high_priority, dependencies: i.dependencies });
         return ack("item_update", view, { id: i.id });
       }),
     item_done: def(S.ItemDoneInput, "Resolve an item as completed with commit id + gate results.",
@@ -330,6 +334,7 @@ function itemGet(view: SprintView, id: string) {
     subsprint: item.subsprint_id,
     title: item.title,
     description: item.description,
+    high_priority: item.high_priority,
     status: item.status,
     dependencies: item.dependencies,
     code_locations: item.code_locations,
@@ -427,19 +432,28 @@ function stripResponseNoise(value: unknown): unknown {
   );
 }
 
-function pruneEmptyResponseFields(value: unknown): unknown {
+function pruneEmptyResponseFields(value: unknown, options: PruneOptions = {}): unknown {
   if (Array.isArray(value)) {
-    const entries = value.map(pruneEmptyResponseFields).filter((entry) => entry !== undefined);
+    const entries = value.map((entry) => pruneEmptyResponseFields(entry, options)).filter((entry) => entry !== undefined);
     return entries.length > 0 ? entries : undefined;
   }
   if (!value || typeof value !== "object") {
     if (value === null || value === undefined || value === "") return undefined;
     return value;
   }
-  const entries = Object.entries(value as Record<string, unknown>)
-    .map(([key, child]) => [key, pruneEmptyResponseFields(child)] as const)
+  const source = value as Record<string, unknown>;
+  const entries = Object.entries(source)
+    .map(([key, child]) => {
+      const pruned = pruneEmptyResponseFields(child, options);
+      if (options.keepItemEmptyDependencies && pruned === undefined && key === "dependencies" && isItemId(source.id) && Array.isArray(child)) return [key, []] as const;
+      return [key, pruned] as const;
+    })
     .filter(([, child]) => child !== undefined);
   return entries.length > 0 ? Object.fromEntries(entries) : undefined;
+}
+
+function isItemId(value: unknown): boolean {
+  return typeof value === "string" && /^S\d{2}-\d{3}$/.test(value);
 }
 
 interface SprintListResult {

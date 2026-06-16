@@ -35,12 +35,9 @@ export interface WorkItemRow {
   subsprint_id: string;
   title: string;
   description: string;
-  code_locations: string[];
-  gates: ItemView["gates"];
+  high_priority: boolean;
   status: ItemView["status"];
   dependencies: string[];
-  updates: string[];
-  notes: string[];
 }
 
 export interface CurrentSubsprintRow {
@@ -65,13 +62,17 @@ export interface RelationRow {
   to: string;
 }
 
-export function windowCurrent(view: SprintView, past: number, future: number): CurrentWindow {
+export interface CurrentOptions {
+  include_high_priority?: boolean;
+}
+
+export function windowCurrent(view: SprintView, past: number, futurePerSubsprint: number, options: CurrentOptions = {}): CurrentWindow {
   const items = view.subsprints.flatMap((s) => s.items);
   const resolved = items.filter((i) => i.status !== "open");
   const { available, blocked } = orderOpenItems(view, items);
   const lastResolved = resolved.slice(-past);
-  const next = available.slice(0, future);
-  const currentItem = available[0] ?? null;
+  const next = selectNextItems(available, futurePerSubsprint, options.include_high_priority ?? true);
+  const currentItem = next[0] ?? null;
   const current = currentItem
     ? view.subsprints.find((sub) => sub.id === currentItem.subsprint_id) ?? null
     : view.subsprints.find((s) => s.status === "open") ?? null;
@@ -80,12 +81,12 @@ export function windowCurrent(view: SprintView, past: number, future: number): C
     last_resolved: lastResolved.map(compactLastResolved),
     current: currentItem ? compactWorkItem(currentItem) : null,
     next: next.map(compactWorkItem),
-    blocked_open: compactBlockedOpen(blocked, future),
+    blocked_open: compactBlockedOpen(blocked, Math.max(futurePerSubsprint, next.length)),
     current_subsprint: current ? compactCurrentSubsprint(current) : null,
     relations: collectRelations(view, [...lastResolved, ...next].map((item) => item.id)),
     artifacts: collectRelevantArtifacts(view, current, lastResolved, next),
-    recent_artifacts: collectArtifacts(view).filter((artifact) => artifact.status === "active").slice(-future),
-    recent_activity: view.timeline.slice(-Math.max(5, past + future)).map(compactActivity),
+    recent_artifacts: collectArtifacts(view).filter((artifact) => artifact.status === "active").slice(-Math.max(futurePerSubsprint, next.length)),
+    recent_activity: view.timeline.slice(-Math.max(5, past + next.length)).map(compactActivity),
   };
 }
 
@@ -112,12 +113,9 @@ function compactWorkItem(item: ItemView): WorkItemRow {
     subsprint_id: item.subsprint_id,
     title: item.title,
     description: item.description,
-    code_locations: item.code_locations,
-    gates: item.gates,
+    high_priority: item.high_priority,
     status: item.status,
     dependencies: item.dependencies,
-    updates: item.updates,
-    notes: item.notes,
   };
 }
 
@@ -158,6 +156,31 @@ function orderOpenItems(view: SprintView, items: ItemView[]): { available: ItemV
     else available.push(item);
   }
   return { available, blocked };
+}
+
+function selectNextItems(available: ItemView[], perSubsprint: number, includeHighPriority: boolean): ItemView[] {
+  const selected: ItemView[] = [];
+  const selectedIds = new Set<string>();
+
+  if (includeHighPriority) {
+    for (const item of available) {
+      if (!item.high_priority) continue;
+      selected.push(item);
+      selectedIds.add(item.id);
+    }
+  }
+
+  const counts = new Map<string, number>();
+  for (const item of available) {
+    if (selectedIds.has(item.id)) continue;
+    const count = counts.get(item.subsprint_id) ?? 0;
+    if (count >= perSubsprint) continue;
+    selected.push(item);
+    selectedIds.add(item.id);
+    counts.set(item.subsprint_id, count + 1);
+  }
+
+  return selected;
 }
 
 function collectArtifacts(view: SprintView): ArtifactView[] {

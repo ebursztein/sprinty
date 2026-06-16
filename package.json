@@ -1,6 +1,6 @@
 {
   "name": "sprinty-mcp",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "Disciplined sprint MCP with dashboard, artifacts, follow-ups, spikes, gates, and changelogs for Claude Code, Codex, and Gemini",
   "type": "module",
   "license": "Apache-2.0",

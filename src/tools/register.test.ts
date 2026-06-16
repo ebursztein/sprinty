@@ -35,7 +35,7 @@ function sprintInput(goal: string, context_notes?: string[]) {
   return { goal, git_dir: dir, data_dir: join(dir, ".sprinty"), ...(context_notes ? { context_notes } : {}) };
 }
 
-function addInput(input: { subsprint?: string; title?: string; description?: string; code_locations?: string[]; gates?: Array<{ kind: string; spec: string }>; dependencies?: string[] } = {}) {
+function addInput(input: { subsprint?: string; title?: string; description?: string; code_locations?: string[]; gates?: Array<{ kind: string; spec: string }>; dependencies?: string[]; high_priority?: boolean } = {}) {
   return {
     subsprint: input.subsprint ?? "S01",
     title: input.title ?? "Atomic item",
@@ -43,6 +43,7 @@ function addInput(input: { subsprint?: string; title?: string; description?: str
     code_locations: input.code_locations ?? ["a.ts"],
     gates: input.gates ?? [{ kind: "command", spec: "true" }],
     ...(input.dependencies ? { dependencies: input.dependencies } : {}),
+    ...(input.high_priority === undefined ? {} : { high_priority: input.high_priority }),
   };
 }
 
@@ -186,9 +187,27 @@ describe("tool handlers", () => {
     await tools.subsprint_new!.handler({ description: "d", goals: ["go"], gates: [{ kind: "command", spec: "true" }] });
     await tools.item_add!.handler(addInput({ title: "First item", description: "Implement the first dependency graph item." }));
     await tools.item_add!.handler(addInput({ title: "Second item", description: "Implement the second dependency graph item.", code_locations: ["b.ts"] }));
+    await tools.item_add!.handler(addInput({ title: "Third item", description: "Implement the third dependency graph item.", code_locations: ["c.ts"] }));
     await tools.item_update!.handler({ id: "S01-002", dependencies: ["S01-001"] });
     const item = await tools.item_get!.handler({ id: "S01-002" }) as { dependencies: string[] };
     expect(item.dependencies).toEqual(["S01-001"]);
+    await tools.item_update!.handler({ id: "S01-002", dependencies: ["S01-003"] });
+    const replaced = await tools.item_get!.handler({ id: "S01-002" }) as { dependencies: string[] };
+    expect(replaced.dependencies).toEqual(["S01-003"]);
+    await tools.item_update!.handler({ id: "S01-002", dependencies: [] });
+    const removed = await tools.item_get!.handler({ id: "S01-002" }) as { dependencies: string[] };
+    expect(removed.dependencies).toEqual([]);
+  });
+
+  it("passes high_priority through item_add and item_update", async () => {
+    await tools.sprint_new!.handler(sprintInput("g"));
+    await tools.subsprint_new!.handler({ description: "d", goals: ["go"], gates: [{ kind: "command", spec: "true" }] });
+    await tools.item_add!.handler(addInput({ high_priority: true }));
+    const added = await tools.item_get!.handler({ id: "S01-001" }) as { high_priority: boolean };
+    expect(added.high_priority).toBe(true);
+    await tools.item_update!.handler({ id: "S01-001", high_priority: false });
+    const lowered = await tools.item_get!.handler({ id: "S01-001" }) as { high_priority: boolean };
+    expect(lowered.high_priority).toBe(false);
   });
 
   it("records notes with note ids, supports note updates, and requires item scope", async () => {

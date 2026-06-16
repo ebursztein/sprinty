@@ -236,9 +236,9 @@ describe("sprinty e2e over MCP", () => {
       expect(selfEdge.isError).toBe(true);
       expect(selfEdge.text).toContain("cannot depend on itself");
 
-      const duplicateEdge = await call(c, "item_update", { id: "S01-002", dependencies: ["S01-001"] });
+      const duplicateEdge = await call(c, "item_update", { id: "S01-002", dependencies: ["S01-001", "S01-001"] });
       expect(duplicateEdge.isError).toBe(true);
-      expect(duplicateEdge.text).toContain("already exists");
+      expect(duplicateEdge.text).toContain("Duplicate dependencies");
 
       const cycle = await call(c, "item_update", { id: "S01-001", dependencies: ["S01-002"] });
       expect(cycle.isError).toBe(true);
