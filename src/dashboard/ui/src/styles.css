@@ -277,11 +277,11 @@ button {
   }
 
   .legend-open {
-    @apply text-primary;
+    @apply text-warning;
   }
 
   .legend-split {
-    @apply text-warning;
+    @apply text-zinc-500;
   }
 
   .legend-muted {
@@ -363,7 +363,7 @@ button {
 
   .tree-id,
   .todo-id {
-    @apply font-mono text-xs font-semibold text-primary;
+    @apply font-mono text-xs font-semibold text-base-content;
   }
 
   .tree-label {
@@ -435,11 +435,11 @@ button {
   }
 
   .todo-blocked {
-    @apply bg-zinc-100 text-zinc-500 dark:bg-zinc-900 dark:text-zinc-500;
+    @apply bg-red-50 text-base-content dark:bg-red-950/30 dark:text-base-content;
   }
 
   .todo-blocked .todo-title {
-    @apply text-zinc-500;
+    @apply text-base-content;
   }
 
   .todo-terminal {
@@ -458,22 +458,23 @@ button {
     @apply text-zinc-500 line-through decoration-zinc-300 dark:decoration-zinc-700;
   }
 
+  .todo-terminal .todo-id {
+    @apply text-zinc-500 dark:text-zinc-400;
+  }
+
   .todo-expand {
     @apply relative grid h-8 w-8 place-items-center rounded-md border border-base-300 bg-base-100 text-zinc-500 dark:text-zinc-400;
   }
 
-  .todo-expand::before,
   .todo-expand::after {
     content: "";
-    @apply absolute h-px w-3 bg-current;
-  }
-
-  .todo-expand::after {
-    transform: rotate(90deg);
+    @apply absolute h-2 w-2 border-b-2 border-r-2 border-current;
+    transform: rotate(-45deg);
+    transition: transform 160ms ease;
   }
 
   .todo-expand-open::after {
-    display: none;
+    transform: rotate(45deg);
   }
 
   .todo-detail {
@@ -538,7 +539,7 @@ button {
   }
 
   table {
-    @apply w-full min-w-[72rem] text-left text-sm;
+    @apply w-full min-w-[56rem] text-left text-sm;
   }
 
   thead {
@@ -554,15 +555,7 @@ button {
     @apply border-t border-base-300 hover:bg-blue-50 dark:hover:bg-blue-950/20;
   }
 
-  tbody td:first-child {
-    @apply font-mono text-xs text-primary;
-  }
-
-  tbody td:nth-child(5) code {
-    @apply rounded bg-base-200 px-1.5 py-0.5 font-mono text-xs text-zinc-500 dark:text-zinc-400;
-  }
-
-  tbody td:nth-child(6) {
+  tbody td:nth-child(4) {
     @apply max-w-[36rem] truncate;
   }
 
@@ -571,40 +564,44 @@ button {
   }
 
   .ledger-chip {
-    @apply inline-flex whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold ring-1;
+    @apply inline-flex whitespace-nowrap text-xs font-semibold;
   }
 
   .ledger-entity-item {
-    @apply bg-blue-50 text-blue-700 ring-blue-200 dark:bg-blue-950/30 dark:text-blue-300 dark:ring-blue-800;
+    @apply text-blue-600 dark:text-blue-300;
   }
 
   .ledger-entity-subsprint,
   .ledger-entity-spike {
-    @apply bg-teal-50 text-teal-700 ring-teal-200 dark:bg-teal-950/30 dark:text-teal-300 dark:ring-teal-800;
+    @apply text-teal-600 dark:text-teal-300;
   }
 
   .ledger-entity-note {
-    @apply bg-violet-50 text-violet-700 ring-violet-200 dark:bg-violet-950/30 dark:text-violet-300 dark:ring-violet-800;
+    @apply text-violet-600 dark:text-violet-300;
   }
 
   .ledger-entity-artifact {
-    @apply bg-amber-50 text-amber-700 ring-amber-200 dark:bg-amber-950/30 dark:text-amber-300 dark:ring-amber-800;
+    @apply text-amber-600 dark:text-amber-300;
   }
 
   .ledger-entity-dependency {
-    @apply bg-cyan-50 text-cyan-700 ring-cyan-200 dark:bg-cyan-950/30 dark:text-cyan-300 dark:ring-cyan-800;
+    @apply text-cyan-600 dark:text-cyan-300;
   }
 
   .ledger-entity-follow_up {
-    @apply bg-rose-50 text-rose-700 ring-rose-200 dark:bg-rose-950/30 dark:text-rose-300 dark:ring-rose-800;
+    @apply text-rose-600 dark:text-rose-300;
   }
 
   .ledger-entity-sprint {
-    @apply bg-zinc-100 text-zinc-700 ring-zinc-200 dark:bg-zinc-900 dark:text-zinc-300 dark:ring-zinc-700;
+    @apply text-zinc-600 dark:text-zinc-300;
   }
 
   .ledger-verb {
-    @apply bg-base-200 text-zinc-700 ring-base-300 dark:text-zinc-300;
+    @apply inline-flex items-center gap-1 whitespace-nowrap text-xs font-semibold text-zinc-700 dark:text-zinc-300;
+  }
+
+  .ledger-verb-icon {
+    @apply font-mono text-sm leading-none;
   }
 
   .ledger-verb-close,
@@ -624,19 +621,19 @@ button {
   }
 
   .ledger-target {
-    @apply inline-flex max-w-[10rem] truncate rounded px-1.5 py-0.5 font-mono text-xs font-semibold text-zinc-600 dark:text-zinc-300;
+    @apply inline-flex max-w-[10rem] truncate font-mono text-xs font-semibold text-base-content;
   }
 
   button.ledger-target {
-    @apply cursor-pointer border border-transparent text-primary transition hover:border-primary hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-primary dark:hover:bg-blue-950/30;
+    @apply cursor-pointer border-b border-transparent transition hover:border-primary focus:outline-none focus:ring-2 focus:ring-primary;
   }
 
   .ledger-target-item {
-    @apply bg-blue-50 dark:bg-blue-950/20;
+    @apply text-base-content;
   }
 
   .ledger-target-subsprint {
-    @apply bg-teal-50 dark:bg-teal-950/20;
+    @apply text-base-content;
   }
 
   .ledger-empty {
@@ -651,15 +648,22 @@ button {
     @apply bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-300 dark:ring-emerald-800;
   }
 
+  .status-todo,
   .status-open {
-    @apply bg-blue-50 text-blue-700 ring-blue-200 dark:bg-blue-950/30 dark:text-blue-300 dark:ring-blue-800;
-  }
-
-  .status-split {
     @apply bg-amber-50 text-amber-700 ring-amber-200 dark:bg-amber-950/30 dark:text-amber-300 dark:ring-amber-800;
   }
 
+  .status-started {
+    @apply bg-blue-50 text-blue-700 ring-blue-200 dark:bg-blue-950/30 dark:text-blue-300 dark:ring-blue-800;
+  }
+
+  .status-blocked {
+    @apply bg-red-50 text-red-700 ring-red-200 dark:bg-red-950/30 dark:text-red-300 dark:ring-red-800;
+  }
+
+  .status-split,
   .status-deprecated,
+  .status-muted,
   .status-neutral {
     @apply bg-zinc-100 text-zinc-600 ring-zinc-200 dark:bg-zinc-900 dark:text-zinc-400 dark:ring-zinc-700;
   }
@@ -672,15 +676,22 @@ button {
     @apply bg-success;
   }
 
+  .dot-todo,
   .dot-open {
-    @apply bg-primary;
-  }
-
-  .dot-split {
     @apply bg-warning;
   }
 
+  .dot-started {
+    @apply bg-primary;
+  }
+
+  .dot-blocked {
+    @apply bg-error;
+  }
+
+  .dot-split,
   .dot-deprecated,
+  .dot-muted,
   .dot-neutral {
     @apply bg-zinc-500;
   }

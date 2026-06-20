@@ -1,6 +1,7 @@
 import type { ArtifactView, ItemView, SprintView, SubsprintView, TimelineEntry } from "../../domain/projection.js";
 
 export type TreeTone = "done" | "active" | "current" | "next" | "blocked" | "muted" | "normal";
+export type StatusTone = "done" | "todo" | "started" | "blocked" | "muted" | "neutral";
 
 export interface DashboardModel {
   sprint: SprintView;
@@ -124,6 +125,44 @@ export function filterLedgerRows(rows: LedgerRow[], filters: LedgerFilters): Led
       row.time,
     ].some((value) => value.toLowerCase().includes(query));
   });
+}
+
+export function statusToneFor(status: string): StatusTone {
+  if (status === "completed" || status === "closed") return "done";
+  if (status === "open") return "todo";
+  if (status === "active") return "started";
+  if (status === "blocked" || status === "failed") return "blocked";
+  if (status === "split" || status === "deprecated") return "muted";
+  return "neutral";
+}
+
+export function statusPillClass(status: string): string {
+  return `status-pill status-${statusToneFor(status)}`;
+}
+
+export function statusDotClass(status: string): string {
+  return `dot dot-${statusToneFor(status)}`;
+}
+
+export function ledgerVerbIcon(verb: LedgerVerb): string {
+  switch (verb) {
+    case "add":
+    case "create":
+      return "+";
+    case "close":
+    case "conclude":
+      return "✓";
+    case "update":
+      return "↻";
+    case "replace":
+      return "↔";
+    case "amend":
+      return "✎";
+    case "archive":
+      return "◼";
+    case "deprecate":
+      return "×";
+  }
 }
 
 function orderOpenItems(sprint: SprintView, items: ItemView[]): { available: ItemView[]; blocked: ItemView[] } {

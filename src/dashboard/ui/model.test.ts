@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { deriveDashboardModel, filterLedgerRows } from "./model.js";
+import { deriveDashboardModel, filterLedgerRows, ledgerVerbIcon, statusDotClass, statusPillClass, statusToneFor } from "./model.js";
 import type { SprintView } from "../../domain/projection.js";
 
 const baseTime = "2026-06-14T00:00:00.000Z";
@@ -132,6 +132,27 @@ function sprintView(): SprintView {
 }
 
 describe("deriveDashboardModel", () => {
+  it("maps tracker statuses to semantic readable colors", () => {
+    expect(statusToneFor("deprecated")).toBe("muted");
+    expect(statusToneFor("split")).toBe("muted");
+    expect(statusToneFor("completed")).toBe("done");
+    expect(statusToneFor("closed")).toBe("done");
+    expect(statusToneFor("open")).toBe("todo");
+    expect(statusToneFor("active")).toBe("started");
+    expect(statusToneFor("blocked")).toBe("blocked");
+
+    expect(statusDotClass("deprecated")).toBe("dot dot-muted");
+    expect(statusDotClass("split")).toBe("dot dot-muted");
+    expect(statusDotClass("completed")).toBe("dot dot-done");
+    expect(statusDotClass("open")).toBe("dot dot-todo");
+    expect(statusDotClass("active")).toBe("dot dot-started");
+    expect(statusDotClass("blocked")).toBe("dot dot-blocked");
+
+    expect(statusPillClass("open")).toBe("status-pill status-todo");
+    expect(statusPillClass("active")).toBe("status-pill status-started");
+    expect(statusPillClass("blocked")).toBe("status-pill status-blocked");
+  });
+
   it("derives progress, active tree state, and ledger rows without a duplicate timeline model", () => {
     const model = deriveDashboardModel(sprintView());
     expect(model.activeSubsprint?.id).toBe("S02");
@@ -160,6 +181,14 @@ describe("deriveDashboardModel", () => {
       ["item_added", "item", "add", "S02-001"],
       ["sprint_created", "sprint", "create", "sprint"],
     ]);
+  });
+
+  it("maps ledger verbs to compact visual icons", () => {
+    expect(ledgerVerbIcon("add")).toBe("+");
+    expect(ledgerVerbIcon("close")).toBe("✓");
+    expect(ledgerVerbIcon("update")).toBe("↻");
+    expect(ledgerVerbIcon("replace")).toBe("↔");
+    expect(ledgerVerbIcon("deprecate")).toBe("×");
   });
 
   it("filters ledger rows by search text, entity, and verb", () => {

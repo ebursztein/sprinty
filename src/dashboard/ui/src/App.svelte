@@ -2,7 +2,7 @@
   import { onMount } from "svelte";
   import DOMPurify from "dompurify";
   import { marked } from "marked";
-  import { deriveDashboardModel, filterLedgerRows, type DashboardModel, type LedgerEntity, type LedgerRow, type LedgerVerb, type TreeSubsprint } from "../model";
+  import { deriveDashboardModel, filterLedgerRows, ledgerVerbIcon, statusDotClass, statusPillClass, type DashboardModel, type LedgerEntity, type LedgerRow, type LedgerVerb, type TreeSubsprint } from "../model";
   import type { ArtifactView, ItemView, SprintView, SubsprintView } from "../../../domain/projection";
 
   let sprint: SprintView | null = null;
@@ -117,19 +117,25 @@
   }
 
   function statusClass(status: string): string {
-    if (status === "completed" || status === "closed") return "status-pill status-done";
-    if (status === "open" || status === "active") return "status-pill status-open";
-    if (status === "split") return "status-pill status-split";
-    if (status === "deprecated") return "status-pill status-deprecated";
-    return "status-pill status-neutral";
+    return statusPillClass(status);
   }
 
   function statusDot(status: string): string {
-    if (status === "completed" || status === "closed") return "dot dot-done";
-    if (status === "open" || status === "active") return "dot dot-open";
-    if (status === "split") return "dot dot-split";
-    if (status === "deprecated") return "dot dot-deprecated";
-    return "dot dot-neutral";
+    return statusDotClass(status);
+  }
+
+  function subsprintDotStatus(sub: TreeSubsprint): string {
+    return sub.status === "open" && sub.tone === "active" ? "active" : sub.status;
+  }
+
+  function itemDotStatus(item: ItemView): string {
+    if (model?.blockedItems.some((blocked) => blocked.id === item.id)) return "blocked";
+    if (item.id === model?.currentItem?.id) return "active";
+    return item.status;
+  }
+
+  function itemDisplayStatus(item: ItemView): string {
+    return model?.blockedItems.some((blocked) => blocked.id === item.id) ? "blocked" : item.status;
   }
 
   function ledgerEntityClass(entity: LedgerEntity): string {
@@ -175,7 +181,7 @@
     const open = model.progress.statuses.open / total * 100;
     const split = model.progress.statuses.split / total * 100;
     const deprecated = model.progress.statuses.deprecated / total * 100;
-    return `conic-gradient(#16a34a 0 ${done}%, #2563eb ${done}% ${done + open}%, #d97706 ${done + open}% ${done + open + split}%, #71717a ${done + open + split}% ${done + open + split + deprecated}%, #d4d4d8 0)`;
+    return `conic-gradient(#16a34a 0 ${done}%, #fbbf24 ${done}% ${done + open}%, #71717a ${done + open}% ${done + open + split}%, #71717a ${done + open + split}% ${done + open + split + deprecated}%, #d4d4d8 0)`;
   }
 
   function targetLabel(artifact: ArtifactView): string {
@@ -283,7 +289,7 @@
               {#each model.tree as sub}
                 <button class={treeRowClass(sub)} on:click={() => selectSub(sub)}>
                   <div class="tree-row-main">
-                    <span class={statusDot(sub.status)}></span>
+                    <span class={statusDot(subsprintDotStatus(sub))}></span>
                     <span class="tree-id">{sub.id}</span>
                     <span class="tree-label">{sub.label}</span>
                   </div>
@@ -328,10 +334,10 @@
               {#each selectedSub?.items ?? [] as item}
                 <article class={itemRowClass(item)} data-testid="item-row">
                   <button class="todo-button" on:click={() => toggleItem(item)} aria-expanded={expandedItemIds.includes(item.id)}>
-                    <span class={statusDot(item.status)}></span>
+                    <span class={statusDot(itemDotStatus(item))}></span>
                     <span class="todo-id">{item.id}</span>
                     <span class="todo-title">{itemTitle(item)}</span>
-                    <span class={statusClass(item.status)}>{item.status}</span>
+                    <span class={statusClass(itemDisplayStatus(item))}>{itemDisplayStatus(item)}</span>
                     <span class:todo-expand-open={expandedItemIds.includes(item.id)} class="todo-expand" aria-hidden="true"></span>
                   </button>
 
@@ -412,14 +418,11 @@
           <div class="table-scroll">
             <table>
               <thead>
-                <tr><th>Seq</th><th>Type</th><th>Verb</th><th>Target</th><th>Event</th><th>Text</th><th>Time</th></tr>
+                <tr><th>Target</th><th>Type</th><th>Verb</th><th>Text</th><th>Time</th></tr>
               </thead>
               <tbody>
                 {#each visibleLedger as row}
                   <tr>
-                    <td>{row.seq}</td>
-                    <td><span class={ledgerEntityClass(row.entity)}>{row.entity.replace("_", " ")}</span></td>
-                    <td><span class={ledgerVerbClass(row.verb)}>{row.verb}</span></td>
                     <td>
                       {#if row.clickable}
                         <button class={ledgerTargetClass(row)} on:click={() => inspectLedgerTarget(row)}>{row.id}</button>
@@ -427,13 +430,14 @@
                         <span class={ledgerTargetClass(row)}>{row.id}</span>
                       {/if}
                     </td>
-                    <td><code>{row.type}</code></td>
+                    <td><span class={ledgerEntityClass(row.entity)}>{row.entity.replace("_", " ")}</span></td>
+                    <td><span class={ledgerVerbClass(row.verb)}><span class="ledger-verb-icon" aria-hidden="true">{ledgerVerbIcon(row.verb)}</span>{row.verb}</span></td>
                     <td>{row.text}</td>
                     <td>{fmt(row.time)}</td>
                   </tr>
                 {:else}
                   <tr>
-                    <td colspan="7" class="ledger-empty">No matching ledger rows.</td>
+                    <td colspan="5" class="ledger-empty">No matching ledger rows.</td>
                   </tr>
                 {/each}
               </tbody>
