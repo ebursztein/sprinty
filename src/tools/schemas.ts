@@ -118,4 +118,5 @@ export const SearchInput = z.object({
   pattern: z.string().min(1),
   context_size: z.number().int().positive().max(4096).default(512),
 });
-export const DashboardInput = z.object({});
+export const DashboardInfoInput = z.object({});
+export const DashboardRestartInput = z.object({});

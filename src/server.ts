@@ -6,7 +6,7 @@ import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { dirname, join, resolve } from "node:path";
 import { SprintStore } from "./store/store.js";
-import { buildToolHandlers } from "./tools/register.js";
+import { buildToolHandlers, type DashboardInfo } from "./tools/register.js";
 import { startDashboard, type Dashboard } from "./dashboard/server.js";
 
 const require = createRequire(import.meta.url);
@@ -18,7 +18,7 @@ One sprint per explicit git/data binding. sprint_new requires git_dir and data_d
 Use a worktree-scoped, uncommitted data_dir, such as <git_dir>/.sprinty when it is gitignored; avoid shared temp dirs and committed sprint state.
 The data_dir/current pointer keeps exactly one open sprint for that binding. After an MCP restart, call sprint_resume(git_dir, data_dir) to reattach to an existing sprint without creating a new one. Use sprint_list(data_dir) to inspect existing ledgers and sprint_detach() to clear the process binding.
 Call overview() after binding for compact sprint shape, or next() for the active work window.
-Build is item-driven: sprint_new(goal, git_dir, data_dir, context_notes?) -> dashboard() for the human -> subsprint_new(..., dependencies?)
+Build is item-driven: sprint_new(goal, git_dir, data_dir, context_notes?) -> dashboard URL for the human -> subsprint_new(..., dependencies?)
 -> item_add(title + description + code_locations + gates, dependencies?) -> item_done(commit + passing gates + changelog)
 | item_split(promote to a subsprint) | item_deprecate(reason). Use item_update(id, dependencies[]) to add graph edges later.
 Each subsprint should be one feature. Notes attach only to item ids: use note_add(id, text), note_list(id), note_get(id), and note_update(id, text).
@@ -27,7 +27,7 @@ next() returns a compact work window, blocked item ids/titles, scoped relations,
 item_done() records a Git-backed file change map in the ledger; compact tool responses omit change maps. changelog() renders Markdown with semver sections, coverage, and change-map tables.
 Subsprints close automatically when their items are completed, split, or deprecated. sprint_close re-runs executable gates;
 it refuses to close if anything is open, uncommitted, missing changelog, missing coverage, or failing a gate. IDs are minted by the server.
-Use search(pattern, context_size) to query the immutable record with bounded character context and focused tool_call hints. dashboard() returns a live URL.`;
+Use search(pattern, context_size) to query the immutable record with bounded character context and focused tool_call hints. sprint_new and sprint_resume return a live dashboard URL; dashboard_info reports it and dashboard_restart refreshes it.`;
 
 export async function main(): Promise<void> {
   let dashboard: Dashboard | undefined;
@@ -51,14 +51,21 @@ export async function main(): Promise<void> {
   const detachStore = (): void => {
     store = undefined;
   };
-  const openDashboard = async (): Promise<string> => {
+  const dashboardInfo = (): DashboardInfo => dashboard
+    ? { running: true, url: dashboard.url, port: dashboard.port }
+    : { running: false };
+  const openDashboard = async (): Promise<DashboardInfo> => {
     const store = getStore();
     if (!dashboard) {
       dashboard = await startDashboard(() => {
         try { return store.read(); } catch { return null; }
       });
     }
-    return dashboard.url;
+    return dashboardInfo();
+  };
+  const restartDashboard = async (): Promise<DashboardInfo> => {
+    await closeDashboard();
+    return openDashboard();
   };
   const closeDashboard = async (): Promise<void> => {
     if (!dashboard) return;
@@ -67,7 +74,12 @@ export async function main(): Promise<void> {
     await running.stop();
   };
 
-  const handlers = buildToolHandlers(getStore, openDashboard, bindStore, closeDashboard, detachStore);
+  const handlers = buildToolHandlers(getStore, {
+    open: openDashboard,
+    restart: restartDashboard,
+    info: async () => dashboardInfo(),
+    close: closeDashboard,
+  }, bindStore, detachStore);
 
   for (const [name, d] of Object.entries(handlers)) {
     server.registerTool(
@@ -95,6 +107,17 @@ export async function main(): Promise<void> {
       contents: [{ uri, text: readFileSync(join(here, "..", "skills", skill, "SKILL.md"), "utf8") }],
     }));
   }
+
+  let shuttingDown = false;
+  const shutdown = () => {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    void closeDashboard().finally(() => process.exit(0));
+  };
+  process.stdin.once("end", shutdown);
+  process.stdin.once("close", shutdown);
+  process.once("SIGTERM", shutdown);
+  process.once("SIGINT", shutdown);
 
   await server.connect(new StdioServerTransport());
 }

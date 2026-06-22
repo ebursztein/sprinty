@@ -40,5 +40,6 @@ both `--git-dir` and `--data-dir`.
 
 Do not copy skill files into client directories; keep them in the top-level `skills/` directory.
 
-For human visibility during a sprint, ask Codex to call `dashboard()` and open the returned
-`http://127.0.0.1:<port>` URL in a browser.
+For human visibility during a sprint, open the dashboard URL returned by `sprint_new()` or
+`sprint_resume()` in a browser. Use `dashboard_info()` to re-read it and `dashboard_restart()` to
+refresh the dashboard server.

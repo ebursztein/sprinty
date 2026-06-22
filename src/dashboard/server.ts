@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import { PAGE } from "./page.js";
 import type { SprintView } from "../domain/projection.js";
 
-export interface Dashboard { url: string; stop(): Promise<void>; }
+export interface Dashboard { url: string; port: number; stop(): Promise<void>; }
 
 export function startDashboard(getState: () => SprintView | null): Promise<Dashboard> {
   const staticRoot = dashboardStaticRoot();
@@ -60,6 +60,7 @@ export function startDashboard(getState: () => SprintView | null): Promise<Dashb
       const { port } = server.address() as AddressInfo;
       resolve({
         url: `http://127.0.0.1:${port}`,
+        port,
         stop: () => new Promise((r) => server.close(() => r())),
       });
     });

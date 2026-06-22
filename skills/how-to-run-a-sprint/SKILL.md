@@ -10,7 +10,7 @@ A Sprinty sprint is item-driven. Do not keep parallel prose trackers when tools 
 ## Loop
 
 1. Bind explicitly. Use `sprint_list({ data_dir })` to inspect existing ledgers after restart, then `sprint_resume({ git_dir, data_dir })`. Start fresh only with `sprint_new({ goal, git_dir, data_dir, context_notes })`.
-2. Call `dashboard({})` and share the URL. Use `overview({})` for compact orientation and `next({})` for the active work window.
+2. Share the dashboard URL returned by `sprint_new({})` or `sprint_resume({})`. Use `dashboard_info({})` to re-read it, `dashboard_restart({})` to refresh it, `overview({})` for compact orientation, and `next({})` for the active work window.
 3. Create feature-sized subsprints with `subsprint_new({ description, goals, gates, dependencies })`.
 4. Create atomic work with `item_add({ subsprint, title, description, code_locations, gates, dependencies, high_priority })`. If the work is too large, make more items; do not hide scope in notes.
 5. Work against one owning item. Use `item_update({ id, note })` for progress, `item_update({ id, title, description, high_priority })` for metadata, `item_update({ id, dependencies })` to replace graph edges, `note_add({ id, text })` only for item-scoped observations, and `artifact_add({ title, path, description, related_items })` for durable files.

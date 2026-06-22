@@ -4,7 +4,7 @@ import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { SprintStore } from "../store/store.js";
-import { buildToolHandlers, type ToolHandlers } from "./register.js";
+import { buildToolHandlers, type DashboardController, type DashboardInfo, type ToolHandlers } from "./register.js";
 
 function initRepo(): { dir: string; sha: string } {
   const dir = mkdtempSync(join(tmpdir(), "sprinty-tools-"));
@@ -29,6 +29,8 @@ function writeCoverage(dir: string): string {
 let dir: string;
 let sha: string;
 let tools: ToolHandlers;
+let dashboardOpenCalls: number;
+let dashboardRestartCalls: number;
 let dashboardCloseCalls: number;
 
 function sprintInput(goal: string, context_notes?: string[]) {
@@ -47,24 +49,49 @@ function addInput(input: { subsprint?: string; title?: string; description?: str
   };
 }
 
+function dashboardController(): DashboardController {
+  let running = false;
+  const info = (): DashboardInfo => running ? { running: true, url: "http://127.0.0.1:4321", port: 4321 } : { running: false };
+  return {
+    open: async () => {
+      dashboardOpenCalls += 1;
+      running = true;
+      return info();
+    },
+    restart: async () => {
+      dashboardRestartCalls += 1;
+      running = true;
+      return info();
+    },
+    info: async () => info(),
+    close: async () => {
+      dashboardCloseCalls += 1;
+      running = false;
+    },
+  };
+}
+
 beforeEach(() => {
   ({ dir, sha } = initRepo());
+  dashboardOpenCalls = 0;
+  dashboardRestartCalls = 0;
   dashboardCloseCalls = 0;
   tools = buildToolHandlers(
     () => new SprintStore(dir),
-    async () => "http://127.0.0.1:0",
+    dashboardController(),
     (binding) => new SprintStore(binding.git_dir, binding.data_dir),
-    async () => { dashboardCloseCalls += 1; },
   );
 });
 
 describe("tool handlers", () => {
   it("sprint_new returns orientation for the canonical item workflow", async () => {
-    const res = await tools.sprint_new!.handler(sprintInput("g", ["human can watch dashboard"])) as { goal: string; context_notes: string[]; orientation: { how: string } };
+    const res = await tools.sprint_new!.handler(sprintInput("g", ["human can watch dashboard"])) as { goal: string; context_notes: string[]; orientation: { how: string }; dashboard: DashboardInfo };
     expect(res.goal).toBe("g");
     expect(res.context_notes).toEqual(["human can watch dashboard"]);
     expect(res.orientation.how).toContain("item_add");
-    expect(res.orientation.how).toContain("dashboard()");
+    expect(res.orientation.how).toContain("dashboard_info");
+    expect(res.dashboard).toEqual({ running: true, url: "http://127.0.0.1:4321", port: 4321 });
+    expect(dashboardOpenCalls).toBe(1);
     await expect(tools.sprint_new!.handler({ goal: "", git_dir: dir, data_dir: join(dir, ".sprinty") })).rejects.toThrow();
   });
 
@@ -72,12 +99,13 @@ describe("tool handlers", () => {
     const dataDir = join(dir, ".sprinty-existing");
     new SprintStore(dir, dataDir).createSprint("existing sprint");
     let bound: SprintStore | undefined;
+    const dashboard = dashboardController();
     const unboundTools = buildToolHandlers(
       () => {
         if (!bound) throw new Error("not bound");
         return bound;
       },
-      async () => "http://127.0.0.1:0",
+      dashboard,
       (binding) => {
         bound = new SprintStore(binding.git_dir, binding.data_dir);
         return bound;
@@ -85,8 +113,8 @@ describe("tool handlers", () => {
     );
 
     await expect(unboundTools.overview!.handler({})).rejects.toThrow("not bound");
-    const rebound = await unboundTools.sprint_resume!.handler({ git_dir: dir, data_dir: dataDir }) as { ok: boolean; action: string };
-    expect(rebound).toMatchObject({ ok: true, action: "sprint_resume" });
+    const rebound = await unboundTools.sprint_resume!.handler({ git_dir: dir, data_dir: dataDir }) as { ok: boolean; action: string; dashboard: DashboardInfo };
+    expect(rebound).toMatchObject({ ok: true, action: "sprint_resume", dashboard: { running: true, url: "http://127.0.0.1:4321", port: 4321 } });
     const overview = await unboundTools.overview!.handler({}) as { title: string };
     expect(overview.title).toBe("existing sprint");
   });
@@ -96,7 +124,7 @@ describe("tool handlers", () => {
     new SprintStore(dir, dataDir).createSprint("existing sprint");
     const unboundTools = buildToolHandlers(
       () => { throw new Error("not bound"); },
-      async () => "http://127.0.0.1:0",
+      dashboardController(),
       (binding) => new SprintStore(binding.git_dir, binding.data_dir),
     );
 
@@ -110,17 +138,18 @@ describe("tool handlers", () => {
   it("sprint_detach clears the current binding and closes the dashboard", async () => {
     let bound: SprintStore | undefined = new SprintStore(dir, join(dir, ".sprinty"));
     bound.createSprint("attached sprint");
+    const dashboard = dashboardController();
+    await dashboard.open();
     const detachableTools = buildToolHandlers(
       () => {
         if (!bound) throw new Error("not bound");
         return bound;
       },
-      async () => "http://127.0.0.1:0",
+      dashboard,
       (binding) => {
         bound = new SprintStore(binding.git_dir, binding.data_dir);
         return bound;
       },
-      async () => { dashboardCloseCalls += 1; },
       async () => { bound = undefined; },
     );
 
@@ -128,6 +157,14 @@ describe("tool handlers", () => {
     expect(detached.detached).toBe(true);
     expect(dashboardCloseCalls).toBe(1);
     await expect(detachableTools.overview!.handler({})).rejects.toThrow("not bound");
+  });
+
+  it("reports and restarts the dashboard explicitly after automatic open", async () => {
+    expect(await tools.dashboard_info!.handler({})).toMatchObject({ running: false });
+    await tools.sprint_new!.handler(sprintInput("g"));
+    expect(await tools.dashboard_info!.handler({})).toMatchObject({ running: true, url: "http://127.0.0.1:4321", port: 4321 });
+    expect(await tools.dashboard_restart!.handler({})).toMatchObject({ running: true, url: "http://127.0.0.1:4321", port: 4321 });
+    expect(dashboardRestartCalls).toBe(1);
   });
 
   it("drives a full happy path through canonical item handlers", async () => {

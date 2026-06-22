@@ -20,7 +20,7 @@ Then start a new Codex CLI thread. The plugin provides:
 Expected agent loop:
 
 1. Call `info()` first to orient to the current sprint and repository binding.
-2. Start or continue the Sprinty sprint, then call `dashboard()` and show the localhost URL to the human.
+2. Start or continue the Sprinty sprint, then show the returned dashboard localhost URL to the human. Use `dashboard_info()` to re-read it or `dashboard_restart()` to refresh it.
 3. Track each feature as a `subsprint_new(...)` unit, then add atomic items with `add(...)`; each item needs a short title, bounded description, code locations, and gates.
 4. Record durable outputs with `artifact_add/list/amend/deprecate`.
 5. Record follow-up bugs with `follow_up(...)` and at least one bug id.

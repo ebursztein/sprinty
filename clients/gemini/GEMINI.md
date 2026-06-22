@@ -7,7 +7,7 @@ See `skills/how-to-run-a-sprint` and `skills/using-sprinty`. The loop:
 ```
 sprint_list(data_dir?) -> sprint_resume(git_dir, data_dir) | sprint_detach()
 sprint_new(goal, git_dir, data_dir, context_notes?)
-  -> dashboard()
+  -> dashboard URL in response | dashboard_info() | dashboard_restart()
   -> subsprint_new(description, goals[], gates[], dependencies?)
   -> spike(description, goals[], gates[], dependencies?)
   -> next(past?, future_per_subsprint?, include_high_priority?)
@@ -37,5 +37,6 @@ by default, then normal available items per subsprint. `item_update({ id, depend
 dependencies, so pass `dependencies: []` to remove a bad edge. `done` records a Git-backed change map. `changelog()` returns Markdown with
 changelog and change-map tables. `sprint_close` rechecks commits, re-runs executable gates, requires
 an LCOV coverage report path, and refuses to close on any blocker. Use `search(pattern,
-context_lines)` to query the immutable ledger. Use `dashboard()` immediately after `sprint_new()`,
-and give the returned localhost URL to the human so they can watch the sprint timeline.
+context_lines)` to query the immutable ledger. Show the dashboard URL returned by `sprint_new()` or
+`sprint_resume()` to the human so they can watch the sprint timeline; use `dashboard_info()` to
+re-read it and `dashboard_restart()` to refresh it.

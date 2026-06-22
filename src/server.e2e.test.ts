@@ -9,7 +9,7 @@ import { resolveBinding, resolveRepoDir, SERVER_VERSION } from "./server.js";
 
 const publicTools = [
   "artifact_add", "artifact_get", "artifact_list", "artifact_update",
-  "changelog", "dashboard",
+  "changelog", "dashboard_info", "dashboard_restart",
   "item_add", "item_deprecate", "item_done", "item_get", "item_split", "item_update",
   "next", "note_add", "note_get", "note_list", "note_update",
   "overview", "search",
@@ -125,6 +125,7 @@ describe("sprinty e2e over MCP", () => {
       expect(created.json.worktree).toBe(repoDir);
       expect(created.json.data_dir).toBe(dataDir);
       expect(created.json.branch).toBe("main");
+      expect(created.json.dashboard.url).toMatch(/^http:\/\/127\.0\.0\.1:\d+$/);
       await call(c, "subsprint_new", { description: "core", goals: ["build core"], gates: [{ kind: "command", spec: "true" }] });
       await call(c, "item_add", addInput());
       const done = await call(c, "item_done", {
@@ -167,7 +168,8 @@ describe("sprinty e2e over MCP", () => {
         expect.objectContaining({ id: "001", title: "bind through env", status: "active" }),
       ]);
       const resumed = await call(unbound, "sprint_resume", { git_dir: fresh.dir, data_dir: dataDir });
-      expect(resumed.json).toMatchObject({ ok: true, action: "sprint_resume" });
+      expect(resumed.json).toMatchObject({ ok: true, action: "sprint_resume", dashboard: { running: true } });
+      expect(resumed.json.dashboard.url).toMatch(/^http:\/\/127\.0\.0\.1:\d+$/);
       const after = await call(unbound, "overview", {});
       expect(after.json.title).toBe("bind through env");
     } finally {
@@ -257,6 +259,9 @@ describe("sprinty e2e over MCP", () => {
     try {
       const created = await call(c, "sprint_new", sprintInput(fresh.dir, { goal: "Build a neighborhood bookshop catalog", context_notes: ["Owner wants a cozy neighborhood workflow."] }));
       expect(created.json.goal).toBe("Build a neighborhood bookshop catalog");
+      expect(created.json.dashboard.url).toMatch(/^http:\/\/127\.0\.0\.1:\d+$/);
+      expect(created.json.dashboard.port).toBeGreaterThan(0);
+      const dashboardUrl = created.json.dashboard.url as string;
 
       await call(c, "subsprint_new", {
         description: "Catalog discovery",
@@ -346,9 +351,8 @@ describe("sprinty e2e over MCP", () => {
       expect(matches.json.matches.length).toBeGreaterThanOrEqual(2);
       expect(matches.json.matches[0]).toHaveProperty("tool_call");
 
-      const dashboard = await call(c, "dashboard", {});
-      expect(dashboard.json.url).toMatch(/^http:\/\/127\.0\.0\.1:\d+$/);
-      const dashboardUrl = dashboard.json.url as string;
+      const dashboard = await call(c, "dashboard_info", {});
+      expect(dashboard.json).toMatchObject({ running: true, url: dashboardUrl });
       const state = await (await fetch(`${dashboardUrl}/state`)).json();
       expect(state.goal).toBe("Build a neighborhood bookshop catalog");
       expect(state.subsprints.map((s: { id: string }) => s.id)).toEqual(["S01", "S02"]);
@@ -361,6 +365,8 @@ describe("sprinty e2e over MCP", () => {
       const closedMissingCoverage = await call(c, "sprint_close", {});
       expect(closedMissingCoverage.isError).toBe(true);
       expect(closedMissingCoverage.text).toContain("Coverage evidence is required");
+      const stillRunning = await (await fetch(`${dashboardUrl}/state`)).json();
+      expect(stillRunning.goal).toBe("Build a neighborhood bookshop catalog");
 
       const closed = await call(c, "sprint_close", { coverage: { path: writeCoverage(fresh.dir), format: "lcov", command: "npm run test:coverage" } });
       expect(closed.json.status).toBe("closed");

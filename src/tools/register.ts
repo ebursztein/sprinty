@@ -37,22 +37,38 @@ export type ToolHandlers = Record<string, ToolDef>;
 export type StoreProvider = () => SprintStore | Promise<SprintStore>;
 export type StoreBinder = (binding: { git_dir: string; data_dir: string }) => SprintStore | Promise<SprintStore>;
 export type StoreDetacher = () => void | Promise<void>;
+export interface DashboardInfo {
+  running: boolean;
+  url?: string;
+  port?: number;
+}
+export interface DashboardController {
+  open(): Promise<DashboardInfo>;
+  restart(): Promise<DashboardInfo>;
+  info(): Promise<DashboardInfo>;
+  close(): Promise<void> | void;
+}
 
 export function buildToolHandlers(
   getStore: StoreProvider,
-  openDashboard: () => Promise<string>,
+  dashboard: DashboardController,
   bindStore: StoreBinder = async () => getStore(),
-  closeDashboard: () => Promise<void> | void = () => undefined,
   detachStore: StoreDetacher = () => undefined,
 ): ToolHandlers {
   return {
     sprint_new: def(S.SprintNewInput, "Start a sprint with explicit git_dir and a worktree-scoped, uncommitted data_dir; returns orientation.",
-      async (i) => ({ ...(await bindStore({ git_dir: i.git_dir, data_dir: i.data_dir })).createSprint(i.goal, i.context_notes), orientation: orientation() })),
+      async (i) => {
+        const store = await bindStore({ git_dir: i.git_dir, data_dir: i.data_dir });
+        return { ...store.createSprint(i.goal, i.context_notes), orientation: orientation(), dashboard: await dashboard.open() };
+      }),
     sprint_resume: def(S.SprintResumeInput, "Resume an existing sprint by binding this MCP session to an existing git_dir and data_dir without creating a sprint.",
-      async (i) => ack("sprint_resume", (await bindStore({ git_dir: i.git_dir, data_dir: i.data_dir })).read())),
+      async (i) => {
+        const store = await bindStore({ git_dir: i.git_dir, data_dir: i.data_dir });
+        return ack("sprint_resume", store.read(), { dashboard: await dashboard.open() });
+      }),
     sprint_detach: def(S.SprintDetachInput, "Detach this MCP session from its current Sprinty binding and stop the dashboard.",
       async () => {
-        await closeDashboard();
+        await dashboard.close();
         await detachStore();
         return { detached: true };
       }),
@@ -68,13 +84,13 @@ export function buildToolHandlers(
     sprint_close: def(S.SprintCloseInput, "Close the sprint after a programmatic re-check of all gates.",
       async (i) => {
         const view = (await getStore()).closeSprint(i);
-        await closeDashboard();
+        await dashboard.close();
         return ack("sprint_close", view, { status: view.status });
       }),
     sprint_archive: def(S.SprintArchiveInput, "Archive the sprint with a recovery reason, bypassing normal close gates.",
       async (i) => {
         const view = (await getStore()).archiveSprint(i);
-        await closeDashboard();
+        await dashboard.close();
         return ack("sprint_archive", view, { status: view.status });
       }),
     overview: def(S.OverviewInput, "Compact sprint overview: title, details, notes, artifacts, and subsprint counts.",
@@ -171,8 +187,10 @@ export function buildToolHandlers(
       }),
     changelog: def(S.ChangelogInput, "Render the sprint changelog as Markdown with change-map and coverage tables.",
       async () => ({ markdown: (await getStore()).changelog() })),
-    dashboard: def(S.DashboardInput, "Start (once) and return the follow-along dashboard URL.",
-      async () => ({ url: await openDashboard() })),
+    dashboard_info: def(S.DashboardInfoInput, "Return the current dashboard URL and port without starting or restarting it.",
+      async () => dashboard.info()),
+    dashboard_restart: def(S.DashboardRestartInput, "Restart the follow-along dashboard and return its URL and port.",
+      async () => dashboard.restart()),
   };
 }
 
@@ -183,7 +201,7 @@ function orientation(): { skills: string[]; how: string } {
       "One sprint per session. Build item-driven: subsprint_new -> item_add -> item_done/item_split/item_deprecate. " +
       "Start with explicit git_dir and a worktree-scoped, uncommitted data_dir, such as <git_dir>/.sprinty when it is gitignored, so Sprinty cannot bind to a temp MCP cwd or shared state. " +
       "Items need a short title, bounded description, code_locations, and gates; keep them atomic. Each subsprint should represent one feature. " +
-      "After sprint_new, call dashboard() and show the localhost URL to the human. Resolve every item, then sprint_close re-runs gates.",
+      "sprint_new and sprint_resume return a dashboard URL for the human; use dashboard_info to inspect it or dashboard_restart to refresh it. Resolve every item, then sprint_close re-runs gates.",
   };
 }
 

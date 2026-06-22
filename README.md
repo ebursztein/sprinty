@@ -99,7 +99,7 @@ content rather than copying it.
 ```
 sprint_list(data_dir?) -> sprint_resume(git_dir, data_dir) | sprint_detach()
 sprint_new(goal, git_dir, data_dir, context_notes?)
-  -> dashboard()
+  -> dashboard URL in response | dashboard_info() | dashboard_restart()
   -> overview() | next() | search(pattern, context_size?)
   -> subsprint_new(description, goals[], gates[], dependencies?)
   -> subsprint_list() | subsprint_get(id)
@@ -119,11 +119,12 @@ How to run a sprint: [`skills/how-to-run-a-sprint/SKILL.md`](skills/how-to-run-a
 
 The dashboard is for the human sitting next to the agent.
 
-1. Ask the agent to call `dashboard()`.
-2. Open the returned `http://127.0.0.1:<port>` URL in a browser.
+1. Start or resume the sprint with `sprint_new()` or `sprint_resume()`.
+2. Open the returned dashboard `http://127.0.0.1:<port>` URL in a browser.
 3. Leave it open while the sprint runs; it refreshes every two seconds.
 
-Agents should call `dashboard()` right after `sprint_new()` and show the URL to the human. The
+Agents should show the dashboard URL returned by `sprint_new()` or `sprint_resume()` to the human. Use
+`dashboard_info()` to re-read the current URL and `dashboard_restart()` to restart the server. The
 dashboard shows the sprint goal, explicit git/data paths, branch/worktree, artifact shelf, sprint progress, item status
 distribution, code churn, subsprint progress, open items, gate evidence, dependency graph state,
 commit ids and changelog lines for completed items, changed-file hotspots, and a paginated ledger

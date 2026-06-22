@@ -15,7 +15,7 @@ const subsprint = "S02";
 
 const publicTools = [
   "artifact_add", "artifact_get", "artifact_list", "artifact_update",
-  "changelog", "dashboard",
+  "changelog", "dashboard_info", "dashboard_restart",
   "item_add", "item_deprecate", "item_done", "item_get", "item_split", "item_update",
   "next", "note_add", "note_get", "note_list", "note_update",
   "overview", "search",
@@ -37,12 +37,16 @@ function makeTools(dataDir: string): ToolHandlers {
       if (!store) throw new Error("not bound");
       return store;
     },
-    async () => "http://127.0.0.1:0",
+    {
+      open: async () => ({ running: true, url: "http://127.0.0.1:0", port: 0 }),
+      restart: async () => ({ running: true, url: "http://127.0.0.1:0", port: 0 }),
+      info: async () => ({ running: false }),
+      close: async () => undefined,
+    },
     ({ git_dir, data_dir }) => {
       store = new SprintStore(git_dir, data_dir);
       return store;
     },
-    async () => undefined,
     async () => { store = undefined; },
   );
 }

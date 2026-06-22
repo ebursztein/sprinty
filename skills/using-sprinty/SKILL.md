@@ -12,13 +12,14 @@ Prefer compact commands first. Lists are compact and say which `_get()` tool ret
 | Tool | Input | Use |
 |---|---|---|
 | `sprint_list` | `{ data_dir? }` | Inspect ledgers without creating or binding. Returns sprint title plus open/closed/blocked item counts. |
-| `sprint_resume` | `{ git_dir, data_dir }` | Rebind this MCP process to an existing sprint. Never call `sprint_new` as a resume trick. |
+| `sprint_resume` | `{ git_dir, data_dir }` | Rebind this MCP process to an existing sprint and return the dashboard URL. Never call `sprint_new` as a resume trick. |
 | `sprint_detach` | `{}` | Clear this process binding before resuming a different sprint. |
-| `sprint_new` | `{ goal, git_dir, data_dir, context_notes?[] }` | Start one sprint with explicit paths, then call `dashboard()`. |
+| `sprint_new` | `{ goal, git_dir, data_dir, context_notes?[] }` | Start one sprint with explicit paths and return the dashboard URL. |
 | `overview` | `{}` | Compact sprint title/details/artifacts/subsprints/items. Use this to orient. |
 | `next` | `{ past?=1, future_per_subsprint?=1, include_high_priority?=true }` | Compact active work window. Returns all available high-priority items first, then normal available items per subsprint. No full graph. |
 | `search` | `{ pattern, context_size?=512 }` | Regex search. Returns `{ id, type, text, tool_call }`; use `tool_call` for full detail. |
-| `dashboard` | `{}` | Live localhost dashboard URL. |
+| `dashboard_info` | `{}` | Current localhost dashboard URL and port, or `running:false` when stopped. |
+| `dashboard_restart` | `{}` | Restart the dashboard server and return the new URL and port. |
 
 ## Work Tools
 
