@@ -1,44 +1,46 @@
-# sprinty
+# Sprinty
 
-A disciplined-sprint MCP server for AI coding agents — **Claude Code, Codex, and Gemini**.
+Disciplined sprint tracking for AI coding agents.
 
-Sprinty gives an agent first-class tools to run a sprint with structure that can't silently rot:
-structured **sprint → subsprint → item** objects, dependency edges with cycle detection, an
-**immutable append-only ledger** anchored to real git commits, Git-backed **change maps**, durable
-file **artifacts**, item-scoped **notes**, Markdown changelogs with file tables, **programmatic
-close-gates** that re-run your tests and require coverage evidence before a sprint can close, a
-bounded **regex search** over the record, and a **live follow-along dashboard**.
+Sprinty is an MCP server that gives agents a structured way to plan, execute, verify, and close
+non-trivial coding work. It keeps the sprint record local, append-only, and tied to real git
+commits, so an agent cannot quietly lose track of work, invent ids, or mark items done without
+evidence.
 
-The point: the agent doesn't drift, and the record doesn't lie. IDs are minted server-side, items
-can't exist without gates, `item_done` rejects a commit that doesn't exist or lacks a semver
-changelog line, and `sprint_close` refuses to close while anything is open, coverage is missing, or
-a gate fails.
+## Why Use Sprinty?
 
-## Install
+Without Sprinty, long agent sessions often drift:
 
-Sprinty has two layers:
+- work gets tracked in loose prose that is hard to resume;
+- tasks are marked done without a real commit or passing gate evidence;
+- follow-up context disappears after a restart;
+- humans cannot easily see what the agent is doing right now.
 
-- the MCP server, which runs from npm as `npx -y sprinty-mcp`;
-- optional client manifests under `clients/` for agents that support plugins or extensions.
+With Sprinty, the agent gets MCP tools for:
 
-The npm package is `sprinty-mcp`. The server, MCP tool namespace, and client manifests are named
-`sprinty`. The tarball ships the canonical top-level `skills/` directory; client directories in a
-Git checkout may symlink to it, but package consumers should treat the top-level `skills/` directory
-as authoritative.
+- sprint, subsprint, and item tracking with server-minted ids;
+- dependency edges, blocked work, and cycle detection;
+- item gates that require passing evidence before completion;
+- git commit validation and per-item change maps;
+- notes and artifacts attached to the sprint record;
+- compact `overview`, `next`, and `search` reads for agent token budgets;
+- a local dashboard URL returned by `sprint_new` and `sprint_resume`;
+- strict `sprint_close` checks that refuse to close while work, coverage, or gates are missing.
 
-### Claude Code
+## Installation
 
-Add the MCP server directly:
+Sprinty is published as the npm package `sprinty-mcp`.
 
 ```bash
-claude mcp add sprinty -- npx -y sprinty-mcp
+npx -y sprinty-mcp
 ```
 
-The repo also includes a Claude plugin manifest in `clients/claude/`.
+The server is usually launched by an MCP client. Sprinty works with any MCP client that can run a
+local command.
 
 ### Codex
 
-Fast path: add the MCP server to `~/.codex/config.toml`:
+Add Sprinty to `~/.codex/config.toml`:
 
 ```toml
 [mcp_servers.sprinty]
@@ -46,156 +48,183 @@ command = "npx"
 args = ["-y", "sprinty-mcp"]
 ```
 
-Sprinty does not guess from the MCP server process cwd. Start a sprint with explicit paths:
+### Claude Code
 
-```json
-{
-  "goal": "Build the catalogue MCP",
-  "git_dir": "/absolute/path/to/your/repo",
-  "data_dir": "/absolute/path/to/your/repo/.sprinty",
-  "context_notes": ["optional context"]
-}
+```bash
+claude mcp add sprinty -- npx -y sprinty-mcp
 ```
 
-`git_dir` is where commits, gates, coverage, and change maps run. `data_dir` is where Sprinty stores
-the `current` pointer and append-only JSONL ledgers. Use a worktree-scoped, uncommitted `data_dir`,
-such as `<git_dir>/.sprinty` when that path is gitignored; avoid shared temp dirs or any directory
-that will be committed. After a Codex/MCP restart, call `sprint_list(data_dir)` to inspect the
-existing ledgers and `sprint_resume(git_dir, data_dir)` to reattach without creating a sprint.
-Use `sprint_detach()` to clear a process binding before resuming another sprint. For read-only
-tools before `sprint_new`, you may also pre-bind the MCP server with `SPRINTY_GIT_DIR` and
-`SPRINTY_DATA_DIR` or `--git-dir` and `--data-dir`; both are required together.
-`SPRINTY_REPO_DIR` and `SPRINTY_WORKTREE` remain accepted as legacy aliases for `git_dir` only when
-a `data_dir` is also supplied.
+The repository also includes a Claude plugin manifest in `clients/claude/`.
 
-Codex CLI plugin path: install the repo-local marketplace from a repository checkout:
+### Gemini CLI
+
+From a repository checkout:
+
+```bash
+gemini extensions install ./clients/gemini
+```
+
+The Gemini extension uses `clients/gemini/gemini-extension.json` and `clients/gemini/GEMINI.md`.
+
+### Codex Plugin From A Checkout
+
+For local plugin development from this repository:
 
 ```bash
 codex plugin marketplace add .
 codex plugin add sprinty@sprinty-local
 ```
 
-The installable plugin bundle is `plugins/sprinty/`, and the marketplace index is
-`.agents/plugins/marketplace.json`. This marketplace layout is for Git/repo installs, not the npm
-tarball. The plugin uses a `plugins/sprinty/skills` symlink to the canonical top-level `skills/`
-directory; there is no duplicated Codex-only skill copy.
+The installable plugin bundle lives in `plugins/sprinty/`.
 
-After installation, ask Codex to use Sprinty for a non-trivial task. It should call `sprint_new`
-before implementation and `sprint_close` before claiming the sprint is done.
+## Quick Start
 
-### Gemini CLI
+Sprinty never guesses the repository from the MCP server process cwd. Start a sprint with explicit
+paths:
 
-`clients/gemini/` is a Gemini extension (`gemini-extension.json` + `GEMINI.md` + skills):
+```json
+{
+  "goal": "Ship the dashboard lifecycle change",
+  "git_dir": "/absolute/path/to/repo",
+  "data_dir": "/absolute/path/to/repo/.sprinty",
+  "context_notes": ["optional notes for the agent"]
+}
+```
+
+- `git_dir` is where Sprinty checks commits, runs gates, reads coverage, and builds change maps.
+- `data_dir` is where Sprinty stores the `current` pointer and JSONL ledgers.
+- Use a worktree-scoped, gitignored `data_dir`, such as `<git_dir>/.sprinty`.
+
+After a restart, inspect and resume the same sprint:
+
+```text
+sprint_list({ data_dir })
+sprint_resume({ git_dir, data_dir })
+```
+
+You can also pre-bind a read-only MCP process with both environment variables:
 
 ```bash
-gemini extensions install ./clients/gemini
+SPRINTY_GIT_DIR=/absolute/path/to/repo
+SPRINTY_DATA_DIR=/absolute/path/to/repo/.sprinty
 ```
 
-The skill guidance is authored once in `skills/`. Client packages should reference or symlink that
-content rather than copying it.
+Both `SPRINTY_GIT_DIR` and `SPRINTY_DATA_DIR` are required together.
 
-## The loop
+## Basic Workflow
 
-```
-sprint_list(data_dir?) -> sprint_resume(git_dir, data_dir) | sprint_detach()
-sprint_new(goal, git_dir, data_dir, context_notes?)
-  -> dashboard URL in response | dashboard_info() | dashboard_restart()
-  -> overview() | next() | search(pattern, context_size?)
-  -> subsprint_new(description, goals[], gates[], dependencies?)
-  -> subsprint_list() | subsprint_get(id)
-  -> item_add(subsprint, title, description, code_locations[], gates[], dependencies?, high_priority?)
-  -> item_update(id, note?, title?, description?, high_priority?, dependencies?)
-  -> note_add(id, text) | note_list(id) | note_get(id) | note_update(id, text)
-  -> artifact_add(title, path, description?, related_items?) | artifact_list() | artifact_get(id) | artifact_update(id, ...)
-  -> item_done(id, commit_id, gate_results[], changelog) | item_split(id, ...) | item_deprecate(id, reason)
-  -> changelog()
-  -> sprint_close(coverage: { path, format: "lcov", command? })
+```text
+sprint_new({ goal, git_dir, data_dir, context_notes? })
+  -> returns dashboard.url
+overview({})
+subsprint_new({ description, goals, gates, dependencies? })
+item_add({ subsprint, title, description, code_locations, gates, dependencies?, high_priority? })
+next({})
+item_done({ id, commit_id, gate_results, changelog })
+changelog({})
+sprint_close({ coverage: { path, format: "lcov", command? } })
 ```
 
-Full tool reference: [`skills/using-sprinty/SKILL.md`](skills/using-sprinty/SKILL.md).
-How to run a sprint: [`skills/how-to-run-a-sprint/SKILL.md`](skills/how-to-run-a-sprint/SKILL.md).
+Use `item_split` when an item is too large and `item_deprecate` when an item is intentionally
+dropped. Use `sprint_detach` before switching one MCP process to a different sprint.
 
-## Watching the Dashboard
+## Dashboard
 
-The dashboard is for the human sitting next to the agent.
+`sprint_new` and `sprint_resume` automatically start a read-only local dashboard and return:
 
-1. Start or resume the sprint with `sprint_new()` or `sprint_resume()`.
-2. Open the returned dashboard `http://127.0.0.1:<port>` URL in a browser.
-3. Leave it open while the sprint runs; it refreshes every two seconds.
+```json
+{
+  "dashboard": {
+    "running": true,
+    "url": "http://127.0.0.1:60767",
+    "port": 60767
+  }
+}
+```
 
-Agents should show the dashboard URL returned by `sprint_new()` or `sprint_resume()` to the human. Use
-`dashboard_info()` to re-read the current URL and `dashboard_restart()` to restart the server. The
-dashboard shows the sprint goal, explicit git/data paths, branch/worktree, artifact shelf, sprint progress, item status
-distribution, code churn, subsprint progress, open items, gate evidence, dependency graph state,
-commit ids and changelog lines for completed items, changed-file hotspots, and a paginated ledger
-from the immutable timeline.
+Open the URL in a browser to watch progress while the agent works. The dashboard shows sprint
+status, items, blocked work, gates, artifacts, changelog entries, change maps, and the ledger.
 
-The dashboard server binds to `127.0.0.1` on an ephemeral port and is read-only. It lives only for
-the running MCP server process, and a successful `sprint_close()` or `sprint_archive()` stops that
-dashboard URL so old sprint dashboards do not pile up.
+Dashboard tools:
 
-## Proof Model
+- `dashboard_info` returns the current dashboard URL and port without restarting it.
+- `dashboard_restart` restarts the dashboard server and returns the new URL and port.
+- `sprint_close`, `sprint_archive`, and `sprint_detach` stop the dashboard.
 
-Sprinty records timestamps on every event and projects them into the sprint timeline. Completed
-items require a real git commit id and controlled changelog entry when `item_done()` is called, and
-`sprint_close()` checks that the commit still resolves before closing. `item_done()` also records a
-Git-backed change map for the commit: file, language, directory, additions, deletions, net change,
-churn, item ids, and commit ids. `changelog()` renders a Markdown release note with semver sections,
-coverage, and change-map tables. `item_done()` also requires passing evidence for every declared
-item gate, including manual gates. When an early declared gate was a placeholder, `item_done()` can
-record an explicit supersession: the final passing gate result names the declared gate in
-`supersedes` and includes a `supersession_reason`, preserving strict evidence without pretending
-the placeholder command was the final proof. Dependencies are stored as ids and replaced with
-`item_update({ id, dependencies })`; pass `dependencies: []` to remove a bad edge. Writes reject
-unknown ids, duplicates, and cycles. Use `next()` for the active work window and `subsprint_get({
-id })` or `item_get({ id })` for focused detail.
-At close, executable gates are re-run by Sprinty and `sprint_close()` requires an LCOV coverage
-report path.
+## Available Tools
 
-Artifacts are append-only too: updates are separate ledger events, never in-place silent edits.
-Public artifact tools expose file paths and optional related item ids. Notes are first-class records
-with ids like `N001`, but they must attach to a specific item id; they are not a planning surface.
+### Sprint Tools
 
-Items have two text fields by design: `title` is a short one-line label for the tree/dashboard, and
-`description` is bounded detail for the expanded item body. `high_priority` is a simple boolean
-that promotes available work in `next()`; it is not a ranking system. Use one item per independently
-verifiable behavior, tool, endpoint, component, or migration step. If an item needs a list of
-unrelated deliverables in the title, split it before adding it. Oversized `item_add()` calls return
-a validation nudge to create more than one smaller item. Notes must attach to a specific item id and
-must not be used as a substitute for trackable items.
+| Tool | What it does |
+| --- | --- |
+| `sprint_new` | Start a sprint with explicit `git_dir` and `data_dir`; returns orientation and dashboard info. |
+| `sprint_resume` | Reattach to an existing sprint after an MCP restart; returns dashboard info. |
+| `sprint_list` | List ledgers in a `data_dir` without creating a sprint. |
+| `sprint_detach` | Clear this MCP process binding and stop the dashboard. |
+| `sprint_close` | Re-run gates, require coverage evidence, and close only when all work is resolved. |
+| `sprint_archive` | Archive an active sprint with a recovery reason. |
+| `overview` | Compact sprint summary for orientation. |
+| `next` | Compact active work window with available and blocked items. |
+| `search` | Regex search over the immutable sprint ledger. |
+| `changelog` | Render the sprint changelog and change-map summary as Markdown. |
 
-## Response Budgets
+### Work Tools
 
-Sprinty tools are designed for agent token budgets:
+| Tool | What it does |
+| --- | --- |
+| `subsprint_new` | Create a feature-sized unit of work. |
+| `subsprint_list` | List subsprints with compact item counts. |
+| `subsprint_get` | Read one subsprint and its item rows. |
+| `item_add` | Create one atomic, gated item. |
+| `item_get` | Read full item detail. |
+| `item_update` | Update item metadata, notes, priority, or dependency edges. |
+| `item_done` | Complete an item with a real commit, passing gate evidence, and changelog line. |
+| `item_split` | Resolve an oversized item by creating a new subsprint. |
+| `item_deprecate` | Drop an item with an explicit reason. |
 
-- `overview()` is compact: sprint title/details, compact notes/artifacts, and subsprint counts only.
-  Use `subsprint_get({ id })` for item rows.
-- `next()` is the active work window and deliberately omits the full dependency graph. By default it
-  returns one resolved item, all available high-priority items, then one normal available item per
-  subsprint; tune that with `past`, `future_per_subsprint`, and `include_high_priority`.
-- `search({ pattern, context_size })` uses JavaScript regex syntax and returns compact rows with
-  `{ id, type, text, tool_call }`.
-- list tools are compact and point to the matching `_get()` tool for full untruncated detail.
-- tool responses omit timestamps and empty fields; the ledger and dashboard keep audit detail.
+### Notes And Artifacts
 
-The repository includes hard response-size and speed gates against a hermetic Capsem-shaped fixture.
-The steady-state read-handler p95 cap is 2ms.
+| Tool | What it does |
+| --- | --- |
+| `note_add` | Attach a note to an item. |
+| `note_list` | List notes for an item. |
+| `note_get` | Read one note. |
+| `note_update` | Update one note. |
+| `artifact_add` | Attach a durable file path to the sprint. |
+| `artifact_list` | List active artifacts. |
+| `artifact_get` | Read one artifact record. |
+| `artifact_update` | Update artifact metadata. |
 
-## Storage
+### Dashboard Tools
 
-One append-only JSONL ledger file per sprint under the explicit `data_dir`, with a `current` pointer
-naming the active sprint (this enforces one-open-sprint unicity for that binding). `git_dir` and
-`data_dir` are intentionally separate so agents can run gates against one checkout while storing
-Sprinty state somewhere deliberate. It is local state — keep it gitignored when `data_dir` lives
-inside a repository, and scope it to the active worktree or repo instead of a shared process temp
-directory.
+| Tool | What it does |
+| --- | --- |
+| `dashboard_info` | Report whether the dashboard is running and, if so, its URL and port. |
+| `dashboard_restart` | Restart the dashboard and return the new URL and port. |
 
-## Develop
+## How Sprinty Stores Data
+
+Sprinty writes one append-only JSONL ledger per sprint under `data_dir`. The ledger is local state;
+keep it out of git unless you intentionally want to preserve it elsewhere. Sprinty projects that
+ledger into compact read models for agents and into the dashboard for humans.
+
+Completed items record the commit id, gate results, changelog entry, and Git-backed file change map.
+`sprint_close` re-checks commits, re-runs executable gates, requires coverage evidence, and refuses
+to close while any item is still open.
+
+## More Documentation
+
+- [How to run a sprint](skills/how-to-run-a-sprint/SKILL.md)
+- [Full Sprinty tool contract](skills/using-sprinty/SKILL.md)
+- [Codex client notes](clients/codex/README.md)
+- [Gemini client notes](clients/gemini/GEMINI.md)
+
+## Development
 
 ```bash
 npm install
-npm test            # builds, then runs unit + e2e tests
-npm run test:coverage
+npm test
+npm run typecheck
 npm run build
 ```
 
