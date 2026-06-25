@@ -93,11 +93,16 @@
       return;
     }
     if (row.targetKind === "item") {
-      const item = model.sprint.subsprints.flatMap((sub) => sub.items).find((candidate) => candidate.id === row.id);
-      if (!item) return;
-      selectedSubId = item.subsprint_id;
-      if (!expandedItemIds.includes(item.id)) expandedItemIds = [...expandedItemIds, item.id];
+      openItem(row.id);
     }
+  }
+
+  function openItem(id: string): void {
+    if (!model) return;
+    const item = model.sprint.subsprints.flatMap((sub) => sub.items).find((candidate) => candidate.id === id);
+    if (!item) return;
+    selectedSubId = item.subsprint_id;
+    if (!expandedItemIds.includes(item.id)) expandedItemIds = [...expandedItemIds, item.id];
   }
 
   function collapseSelectedItems(): void {
@@ -291,7 +296,7 @@
                   <div class="tree-row-main">
                     <span class={statusDot(subsprintDotStatus(sub))}></span>
                     <span class="tree-id">{sub.id}</span>
-                    <span class="tree-label">{sub.label}</span>
+                    <span class="tree-label" title={sub.label}>{sub.label}</span>
                   </div>
                   <div class="tree-row-progress">
                     <span><b>{sub.progress.done}</b>/{sub.progress.total}</span>
@@ -347,7 +352,16 @@
                       <div class="detail-grid">
                         <div><span>Files</span><strong>{item.code_locations.join(", ")}</strong></div>
                         <div><span>Gates</span><strong>{gateSummary(item)}</strong></div>
-                        {#if item.dependencies.length}<div><span>Depends on</span><strong>{item.dependencies.join(", ")}</strong></div>{/if}
+                        {#if item.dependencies.length}
+                          <div>
+                            <span>Depends on</span>
+                            <strong class="dependency-list">
+                              {#each item.dependencies as dependency}
+                                <button type="button" class="dependency-link" on:click={() => openItem(dependency)}>{dependency}</button>
+                              {/each}
+                            </strong>
+                          </div>
+                        {/if}
                         {#if item.commit_id}<div><span>Commit</span><strong>{item.commit_id}</strong></div>{/if}
                         {#if item.changelog}<div><span>Changelog</span><strong>{item.changelog.verb}: {item.changelog.line}</strong></div>{/if}
                         {#if item.artifacts.length}<div><span>Artifacts</span><strong>{item.artifacts.map((artifact) => artifact.title).join(", ")}</strong></div>{/if}

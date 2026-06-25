@@ -29,4 +29,16 @@ describe("dashboard presentation", () => {
     expect(cssBlock(".ledger-chip")).not.toContain("ring-1");
     expect(cssBlock(".ledger-chip")).toContain("font-semibold");
   });
+
+  it("keeps expanded item descriptions full width before metadata", () => {
+    expect(cssBlock(".todo-detail")).not.toContain("lg:grid-cols");
+    expect(app.indexOf("detail-copy")).toBeLessThan(app.indexOf("detail-grid"));
+  });
+
+  it("uses clickable dependency ids and clipped subsprint labels", () => {
+    expect(app).toContain('class="tree-label" title={sub.label}');
+    expect(cssBlock(".tree-label")).toContain("truncate");
+    expect(app).toContain('class="dependency-link"');
+    expect(app).toContain("on:click={() => openItem(dependency)}");
+  });
 });
