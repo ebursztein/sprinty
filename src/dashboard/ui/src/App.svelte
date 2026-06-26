@@ -1,9 +1,21 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onDestroy, onMount, tick as svelteTick } from "svelte";
+  import {
+    BarController,
+    BarElement,
+    CategoryScale,
+    Chart,
+    LineController,
+    LineElement,
+    LinearScale,
+    PointElement,
+    Tooltip,
+    type ChartConfiguration,
+  } from "chart.js";
   import DOMPurify from "dompurify";
   import { marked } from "marked";
   import { deriveDashboardModel, filterLedgerRows, ledgerVerbIcon, statusDotClass, statusPillClass, type DashboardModel, type LedgerEntity, type LedgerRow, type LedgerVerb, type TreeSubsprint } from "../model";
-  import type { ArtifactView, ItemView, SprintView, SubsprintView } from "../../../domain/projection";
+  import type { ArtifactView, ItemView, SprintView, SubsprintView, TimelineEntry } from "../../../domain/projection";
 
   let sprint: SprintView | null = null;
   let model: DashboardModel | null = null;
@@ -17,9 +29,53 @@
   let ledgerVerbFilter: LedgerVerb | "all" = "all";
   let theme: "light" | "dark" = "dark";
   let themeMounted = false;
+  let eventChartCanvas: HTMLCanvasElement | null = null;
+  let completionChartCanvas: HTMLCanvasElement | null = null;
+  let eventChart: Chart | null = null;
+  let completionChart: Chart | null = null;
+  let chartSignature = "";
+  let chartRenderQueued = false;
+
+  type CompletionPoint = { time: number; movingAverageMs: number; durationMs: number };
+  type CompletionRatePoint = { time: number; percent: number; completed: number };
+  type CodeMetricRow = { label: string; value: number; max: number; tone: string };
+
+  type EventSegment = { category: string; count: number };
+
+  type EventBucket = { label: string; total: number; segments: EventSegment[] };
+
+  type CompletionSummary = {
+    points: CompletionPoint[];
+    ratePoints: CompletionRatePoint[];
+    rateStart: number | null;
+    rateEnd: number | null;
+    avgMs: number | null;
+    medianMs: number | null;
+    minMs: number | null;
+    maxMs: number | null;
+    etaMs: number | null;
+    etaAt: string | null;
+    projectedAt: number | null;
+    openItems: number;
+    remainingItems: number;
+  };
 
   const pageSize = 8;
   const themeKey = "sprinty-dashboard-theme";
+  const targetEventBuckets = 30;
+  const movingAverageWindow = 5;
+  const chartCategories = [
+    "sprint",
+    "subsprint",
+    "item",
+    "note",
+    "artifact",
+    "dependency",
+    "follow_up",
+    "spike",
+    "other",
+  ];
+  Chart.register(BarController, BarElement, CategoryScale, LineController, LineElement, LinearScale, PointElement, Tooltip);
 
   $: model = sprint ? deriveDashboardModel(sprint) : null;
   $: if (model && !selectedSubId) selectedSubId = model.activeSubsprint?.id ?? model.sprint.subsprints[0]?.id ?? null;
@@ -34,6 +90,12 @@
   $: if (ledgerPage > ledgerPages - 1) ledgerPage = ledgerPages - 1;
   $: visibleLedger = filteredLedgerRows.slice(ledgerPage * pageSize, ledgerPage * pageSize + pageSize);
   $: selectedExpandedCount = selectedSub?.items.filter((item) => expandedItemIds.includes(item.id)).length ?? 0;
+  $: sprintGoals = model ? dedupePreserveOrder(model.sprint.subsprints.flatMap((sub) => sub.goals)).slice(0, 8) : [];
+  $: sprintSuccessCriteria = model ? dedupePreserveOrder(model.sprint.context_notes).slice(0, 8) : [];
+  $: eventsByBucket = model ? buildEventBuckets(model.sprint.timeline) : [];
+  $: completionSummary = model ? buildCompletionSummary(model.sprint.timeline, model.progress.items.open, model.progress.items.total) : null;
+  $: codeMetricRows = model ? buildCodeMetricRows(model) : [];
+  $: if (themeMounted && completionSummary) queueChartRender();
 
   onMount(() => {
     const saved = window.localStorage.getItem(themeKey);
@@ -44,6 +106,11 @@
     void tick();
     const timer = setInterval(() => void tick(), 2000);
     return () => clearInterval(timer);
+  });
+
+  onDestroy(() => {
+    eventChart?.destroy();
+    completionChart?.destroy();
   });
 
   function applyTheme(next: "light" | "dark"): void {
@@ -198,6 +265,392 @@
     if (title?.trim()) return title;
     return item.description.split(/\s+/).slice(0, 10).join(" ");
   }
+
+  function dedupePreserveOrder(values: string[]): string[] {
+    const out: string[] = [];
+    const seen = new Set<string>();
+    for (const value of values) {
+      const normalized = value?.trim();
+      if (!normalized || seen.has(normalized)) continue;
+      seen.add(normalized);
+      out.push(normalized);
+    }
+    return out;
+  }
+
+  function parseTs(ts: string | null | undefined): number | null {
+    if (!ts) return null;
+    const value = Date.parse(ts);
+    return Number.isNaN(value) ? null : value;
+  }
+
+  function formatDuration(ms: number | null | undefined): string {
+    if (ms === null || ms === undefined || ms <= 0) return "--";
+    const totalMinutes = Math.max(1, Math.round(ms / 60000));
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+    if (hours > 0) return `${hours}h ${minutes}m`;
+    return `${minutes}m`;
+  }
+
+  function formatBucketLabel(ts: number): string {
+    return new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  }
+
+  function buildEventBuckets(entries: TimelineEntry[]): EventBucket[] {
+    const normalized = entries
+      .map((entry) => ({ entry, time: parseTs(entry.ts) }))
+      .filter((row): row is { entry: TimelineEntry; time: number } => row.time !== null)
+      .sort((a, b) => a.time - b.time);
+
+    if (!normalized.length) return [];
+
+    const timestamps = normalized.map((row) => row.time);
+    const firstTs = timestamps[0] ?? 0;
+    const lastTs = timestamps[timestamps.length - 1] ?? firstTs;
+    const spanMs = Math.max(1, lastTs - firstTs);
+    const bucketCount = targetEventBuckets;
+    const bucketMs = spanMs / bucketCount;
+
+    const buckets: { label: string; total: number; counts: Map<string, number> }[] = Array.from({ length: bucketCount }, (_, index) => ({
+      label: formatBucketLabel(firstTs + index * bucketMs),
+      total: 0,
+      counts: new Map(),
+    }));
+
+    const categories = new Set<string>(chartCategories);
+
+    for (const { entry, time } of normalized) {
+      const bucketIndex = Math.min(bucketCount - 1, Math.max(0, Math.floor((time - firstTs) / bucketMs)));
+      const bucket = buckets[bucketIndex];
+      if (!bucket) continue;
+
+      const category =
+        entry.type === "sprint_created" ? "sprint"
+        : entry.type === "subsprint_created" ? "subsprint"
+        : entry.type === "item_added" || entry.type === "item_updated" || entry.type === "item_resolved" ? "item"
+        : entry.type === "note_added" || entry.type === "note_updated" ? "note"
+        : entry.type === "artifact_added" || entry.type === "artifact_amended" || entry.type === "artifact_deprecated" ? "artifact"
+        : entry.type === "dependencies_added" || entry.type === "dependencies_replaced" ? "dependency"
+        : entry.type === "follow_up_added" ? "follow_up"
+        : entry.type === "spike_concluded" || entry.type === "spike_deprecated" ? "spike"
+        : "other";
+
+      bucket.total += 1;
+      bucket.counts.set(category, (bucket.counts.get(category) ?? 0) + 1);
+      categories.add(category);
+    }
+
+    const orderedCategories = [...chartCategories, ...Array.from(categories)]
+      .filter((category, index, arr) => arr.indexOf(category) === index);
+    return buckets.map((bucket) => ({
+      label: bucket.label,
+      total: bucket.total,
+      segments: orderedCategories
+        .map((category) => ({ category, count: bucket.counts.get(category) ?? 0 }))
+        .filter((segment) => segment.count > 0),
+    }));
+  }
+
+  function buildCompletionSummary(entries: TimelineEntry[], openItems: number, totalItems: number): CompletionSummary {
+    const normalized = entries
+      .map((entry) => ({ entry, time: parseTs(entry.ts) }))
+      .filter((row): row is { entry: TimelineEntry; time: number } => row.time !== null)
+      .sort((a, b) => a.time - b.time);
+
+    const starts = new Map<string, number>();
+    const points: CompletionPoint[] = [];
+    const ratePoints: CompletionRatePoint[] = [];
+    const rateTotal = Math.max(0, totalItems);
+    let completedItems = 0;
+    const firstTime = normalized[0]?.time ?? null;
+    const lastTime = normalized[normalized.length - 1]?.time ?? firstTime;
+
+    if (rateTotal > 0 && firstTime !== null) {
+      ratePoints.push({ time: firstTime, percent: 0, completed: 0 });
+    }
+
+    for (const { entry, time } of normalized) {
+      if (entry.type === "item_added") {
+        starts.set(entry.id, time);
+        continue;
+      }
+
+      if (entry.type === "item_resolved") {
+        const started = starts.get(entry.id);
+        if (started === undefined) continue;
+        const durationMs = Math.max(0, time - started);
+        starts.delete(entry.id);
+        points.push({ time, durationMs, movingAverageMs: 0 });
+        if (rateTotal > 0) {
+          completedItems = Math.min(rateTotal, completedItems + 1);
+          ratePoints.push({
+            time,
+            percent: Math.round((completedItems / rateTotal) * 100),
+            completed: completedItems,
+          });
+        }
+      }
+    }
+
+    for (let i = 0; i < points.length; i++) {
+      const start = Math.max(0, i - movingAverageWindow + 1);
+      const window = points.slice(start, i + 1);
+      const sum = window.reduce((acc, point) => acc + point.durationMs, 0);
+      points[i] = { ...points[i], movingAverageMs: Math.round(sum / window.length) };
+    }
+
+    const durations = points.map((point) => point.durationMs);
+    if (!durations.length) {
+      return {
+        points: [],
+        ratePoints,
+        rateStart: firstTime,
+        rateEnd: lastTime,
+        avgMs: null,
+        medianMs: null,
+        minMs: null,
+        maxMs: null,
+        etaMs: null,
+        etaAt: null,
+        projectedAt: null,
+        openItems,
+        remainingItems: Math.max(0, openItems),
+      };
+    }
+
+    const avgMs = Math.round(durations.reduce((sum, value) => sum + value, 0) / durations.length);
+    const sorted = [...durations].sort((a, b) => a - b);
+    const medianMs = sorted.length === 0
+      ? null
+      : sorted.length % 2 === 1
+        ? sorted[Math.floor(sorted.length / 2)]
+        : (sorted[sorted.length / 2 - 1] + sorted[sorted.length / 2]) / 2;
+    const minMs = sorted.length > 0 ? sorted[0] : null;
+    const maxMs = sorted.length > 0 ? sorted[sorted.length - 1] : null;
+    const remainingItems = Math.max(0, openItems);
+    const etaMs = avgMs > 0 ? avgMs * remainingItems : null;
+    const projectedAt = etaMs && ratePoints.length ? ratePoints[ratePoints.length - 1]!.time + etaMs : null;
+    const etaAt = projectedAt ? new Date(projectedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : null;
+    const rateEnd = projectedAt && projectedAt > (lastTime ?? projectedAt) ? projectedAt : lastTime;
+
+    return {
+      points,
+      ratePoints,
+      rateStart: firstTime,
+      rateEnd,
+      avgMs,
+      medianMs,
+      minMs,
+      maxMs,
+      etaMs,
+      etaAt,
+      projectedAt,
+      openItems,
+      remainingItems,
+    };
+  }
+
+
+  function buildCodeMetricRows(model: DashboardModel): CodeMetricRow[] {
+    const rows = [
+      { label: "Added", value: model.progress.code.additions, tone: "add" },
+      { label: "Deleted", value: model.progress.code.deletions, tone: "delete" },
+      { label: "Files", value: model.progress.code.files, tone: "file" },
+      { label: "Hotspots", value: model.progress.code.hotspots, tone: "file" },
+      { label: "Gates passed", value: model.progress.gates.passed, tone: "gate" },
+      { label: "Gates pending", value: model.progress.gates.pending, tone: "gate" },
+    ];
+    const max = Math.max(1, ...rows.map((row) => row.value));
+    return rows.map((row) => ({ ...row, max }));
+  }
+
+  function renderCharts(): void {
+    if (!eventChartCanvas || !completionChartCanvas || !completionSummary) return;
+    const signature = JSON.stringify({
+      theme,
+      eventsByBucket,
+      completion: {
+        ratePoints: completionSummary.ratePoints,
+        rateStart: completionSummary.rateStart,
+        rateEnd: completionSummary.rateEnd,
+      },
+    });
+    if (signature === chartSignature) return;
+
+    const nextEventChart = new Chart(eventChartCanvas, eventChartConfig(eventsByBucket));
+    const nextCompletionChart = new Chart(completionChartCanvas, completionChartConfig(completionSummary));
+    eventChart?.destroy();
+    completionChart?.destroy();
+    eventChart = nextEventChart;
+    completionChart = nextCompletionChart;
+    chartSignature = signature;
+
+    requestAnimationFrame(() => {
+      eventChart?.resize();
+      completionChart?.resize();
+      eventChart?.update("none");
+      completionChart?.update("none");
+    });
+  }
+
+  function queueChartRender(): void {
+    if (chartRenderQueued) return;
+    chartRenderQueued = true;
+    void svelteTick().then(() => {
+      chartRenderQueued = false;
+      renderCharts();
+    });
+  }
+
+  function chartPalette(): Record<string, string> {
+    return {
+      sprint: "#71717a",
+      subsprint: "#3b82f6",
+      item: "#10b981",
+      note: "#f59e0b",
+      artifact: "#8b5cf6",
+      dependency: "#ec4899",
+      follow_up: "#06b6d4",
+      spike: "#f97316",
+      other: "#52525b",
+      axis: theme === "dark" ? "#475569" : "#cbd5e1",
+      grid: theme === "dark" ? "rgba(71, 85, 105, 0.42)" : "rgba(148, 163, 184, 0.38)",
+      label: theme === "dark" ? "#a1a1aa" : "#52525b",
+    };
+  }
+
+  function eventChartConfig(buckets: EventBucket[]): ChartConfiguration<"bar"> {
+    const palette = chartPalette();
+    return {
+      type: "bar",
+      data: {
+        labels: buckets.map((bucket) => bucket.label),
+        datasets: chartCategories.map((category) => ({
+          label: category.replace("_", " "),
+          data: buckets.map((bucket) => bucket.segments.find((segment) => segment.category === category)?.count ?? 0),
+          backgroundColor: palette[category],
+          borderRadius: 2,
+          borderSkipped: false,
+          maxBarThickness: 14,
+          stack: "events",
+        })),
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            mode: "index",
+            intersect: false,
+            filter: (item) => Number(item.raw) > 0,
+          },
+        },
+        scales: {
+          x: {
+            stacked: true,
+            grid: { display: false },
+            ticks: {
+              color: palette.label,
+              autoSkip: true,
+              maxTicksLimit: 4,
+              maxRotation: 0,
+            },
+          },
+          y: {
+            stacked: true,
+            beginAtZero: true,
+            grid: { color: palette.grid },
+            border: { color: palette.axis },
+            ticks: {
+              color: palette.label,
+              precision: 0,
+              maxTicksLimit: 4,
+            },
+          },
+        },
+      },
+    };
+  }
+
+  function completionChartConfig(summary: CompletionSummary): ChartConfiguration<"line"> {
+    const palette = chartPalette();
+    const points = summary.ratePoints.map((point) => ({ x: point.time, y: point.percent }));
+    const last = summary.ratePoints[summary.ratePoints.length - 1];
+    const projection = last && summary.rateEnd && summary.rateEnd > last.time
+      ? [{ x: last.time, y: last.percent }, { x: summary.rateEnd, y: 100 }]
+      : [];
+
+    return {
+      type: "line",
+      data: {
+        datasets: [
+          {
+            label: "Completion",
+            data: points,
+            borderColor: "#3b82f6",
+            backgroundColor: "#3b82f6",
+            borderWidth: 3,
+            pointRadius: 4,
+            pointHoverRadius: 5,
+            tension: 0.28,
+          },
+          {
+            label: "Projected",
+            data: projection,
+            borderColor: "#60a5fa",
+            backgroundColor: "#60a5fa",
+            borderDash: [6, 5],
+            borderWidth: 3,
+            pointRadius: 0,
+            tension: 0,
+          },
+        ],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: false,
+        parsing: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              title: (items) => formatBucketLabel(Number(items[0]?.parsed.x ?? 0)),
+              label: (item) => `${item.dataset.label}: ${Math.round(Number(item.parsed.y))}%`,
+            },
+          },
+        },
+        scales: {
+          x: {
+            type: "linear",
+            min: summary.rateStart ?? undefined,
+            max: summary.rateEnd ?? undefined,
+            grid: { display: false },
+            border: { color: palette.axis },
+            ticks: {
+              color: palette.label,
+              maxTicksLimit: 3,
+              callback: (value) => formatBucketLabel(Number(value)),
+            },
+          },
+          y: {
+            min: 0,
+            max: 100,
+            grid: { color: palette.grid },
+            border: { color: palette.axis },
+            ticks: {
+              color: palette.label,
+              stepSize: 50,
+              callback: (value) => `${value}%`,
+            },
+          },
+        },
+      },
+    };
+  }
 </script>
 
 <svelte:head>
@@ -216,16 +669,9 @@
   <div class:dark={isDark} class="dashboard-frame" data-theme={theme}>
     <div class="dashboard-canvas">
       <header class="topbar">
-        <div class="min-w-0">
+        <div class="topbar-title">
           <div class="eyebrow">Sprinty dashboard</div>
-          <h1>{model.sprint.goal}</h1>
-          <div class="meta-line">
-            <span>{model.sprint.branch || "detached"}</span>
-            <span class="truncate">git {model.sprint.dir || model.sprint.worktree}</span>
-            <span class="truncate">data {model.sprint.data_dir || "not configured"}</span>
-            <span>started {fmt(model.sprint.created_at)}</span>
-            {#if stale}<span class="warning-text">stale connection</span>{/if}
-          </div>
+          <h1 class="sprint-title">{model.sprint.goal}</h1>
         </div>
         <div class="topbar-actions">
           <span class={statusClass(model.sprint.status)}>{model.sprint.status}</span>
@@ -242,6 +688,47 @@
             <span class="theme-switch-thumb" aria-hidden="true"></span>
           </button>
         </div>
+        <details class="sprint-metadata-fold">
+          <summary class="sprint-metadata-summary">Sprint details</summary>
+          <div class="sprint-metadata">
+            <div>
+              <span>Details</span>
+              <ul>
+                <li>Branch {model.sprint.branch || "detached"}</li>
+                <li>Git {model.sprint.dir || model.sprint.worktree}</li>
+                <li>Data {model.sprint.data_dir || "not configured"}</li>
+                <li>Started {fmt(model.sprint.created_at)}</li>
+                {#if stale}
+                  <li class="warning-text">stale connection</li>
+                {/if}
+              </ul>
+            </div>
+            <div>
+              <span>Goals</span>
+              {#if sprintGoals.length}
+                <ul>
+                  {#each sprintGoals as goal}
+                    <li>{goal}</li>
+                  {/each}
+                </ul>
+              {:else}
+                <ul><li>No goals set.</li></ul>
+              {/if}
+            </div>
+            <div>
+              <span>Success criteria</span>
+              {#if sprintSuccessCriteria.length}
+                <ul>
+                  {#each sprintSuccessCriteria as criterion}
+                    <li>{criterion}</li>
+                  {/each}
+                </ul>
+              {:else}
+                <ul><li>No success criteria set.</li></ul>
+              {/if}
+            </div>
+          </div>
+        </details>
       </header>
 
       <main class="dashboard-main">
@@ -272,14 +759,66 @@
 
             <div class="metric-panel code-metrics">
               <div class="metric-heading"><span>Code stats</span><strong>{model.progress.code.churn}</strong></div>
-              <div class="code-grid">
-                <span><b>{model.progress.code.additions}</b> added</span>
-                <span><b>{model.progress.code.deletions}</b> deleted</span>
-                <span><b>{model.progress.code.files}</b> files</span>
-                <span><b>{model.progress.code.hotspots}</b> hotspots</span>
-                <span><b>{model.progress.gates.passed}</b> gates passed</span>
-                <span><b>{model.progress.gates.pending}</b> gates pending</span>
+              <div class="code-bars">
+                {#each codeMetricRows as row}
+                  <div class="code-bar-row">
+                    <span>{row.label}</span>
+                    <div class="code-bar-track">
+                      <div class={`code-bar-fill code-bar-${row.tone}`} style={`width:${Math.max(4, (row.value / row.max) * 100)}%`}></div>
+                    </div>
+                    <strong>{row.value}</strong>
+                  </div>
+                {/each}
               </div>
+            </div>
+
+            <div class="metric-panel completion-stats">
+              <div class="metric-heading"><span>Completion stats</span></div>
+              <div class="completion-stats-grid">
+                <div><span>Avg</span><strong>{formatDuration(completionSummary?.avgMs)}</strong></div>
+                <div><span>Median</span><strong>{formatDuration(completionSummary?.medianMs)}</strong></div>
+                <div><span>Fastest</span><strong>{formatDuration(completionSummary?.minMs)}</strong></div>
+                <div><span>Slowest</span><strong>{formatDuration(completionSummary?.maxMs)}</strong></div>
+                <div><span>ETA</span><strong>{formatDuration(completionSummary?.etaMs)} ({completionSummary?.remainingItems ?? 0} items)</strong></div>
+                <div><span>ETA time</span><strong>{completionSummary?.etaAt ?? "--"}</strong></div>
+                <div><span>Completed</span><strong>{completionSummary?.points.length ?? 0}</strong></div>
+                <div><span>Open</span><strong>{completionSummary?.openItems ?? model.progress.items.open}</strong></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="charts-band">
+            <div class="metric-panel chart-panel">
+              <div class="metric-heading"><span>Event activity (stacked)</span></div>
+              {#if eventsByBucket.length}
+                <div class="chart-stack" aria-label="Stacked event chart">
+                  <canvas bind:this={eventChartCanvas} aria-label="Stacked event chart"></canvas>
+                </div>
+                <div class="chart-legend" aria-label="Event category legend">
+                  {#each chartCategories as category}
+                    <span class={`legend-chip bucket-${category}`}>
+                      {category.replace("_", " ")}
+                    </span>
+                  {/each}
+                </div>
+              {:else}
+                <div class="empty-inline">No timeline activity yet.</div>
+              {/if}
+            </div>
+
+            <div class="metric-panel chart-panel">
+              <div class="metric-heading"><span>Completion rate over time</span></div>
+              {#if completionSummary && completionSummary.ratePoints.length}
+                <div class="completion-chart-shell">
+                  <canvas bind:this={completionChartCanvas} aria-label="Completion rate trend"></canvas>
+                  <div class="completion-scale">
+                    <span>{completionSummary.ratePoints.at(-1)?.percent ?? 0}% complete</span>
+                    <span>{completionSummary.points.length} finished item{completionSummary.points.length === 1 ? "" : "s"}</span>
+                  </div>
+                </div>
+              {:else}
+                <div class="empty-inline">No completed items yet.</div>
+              {/if}
             </div>
           </div>
         </section>

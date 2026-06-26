@@ -143,19 +143,51 @@ button {
   }
 
   .topbar {
-    @apply sticky top-0 z-20 flex flex-col gap-3 border-b border-base-300 bg-base-100 px-5 py-4 shadow-sm backdrop-blur lg:flex-row lg:items-center lg:justify-between;
+    @apply sticky top-0 z-20 grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3 border-b border-base-300 bg-base-100 px-5 py-4 shadow-sm backdrop-blur;
   }
 
-  .topbar h1 {
+  .topbar-title {
+    @apply min-w-0;
+  }
+
+  .sprint-title {
     @apply mt-1 max-w-[82rem] text-balance text-xl font-semibold leading-snug text-base-content lg:text-2xl;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
   }
 
   .eyebrow {
     @apply text-xs font-semibold uppercase text-primary;
   }
 
-  .meta-line {
-    @apply mt-2 flex max-w-full flex-wrap gap-x-3 gap-y-1 text-xs text-zinc-500 dark:text-zinc-400;
+  .sprint-metadata-fold {
+    @apply col-span-2 mt-1 w-full rounded-md border border-base-300 bg-base-100;
+  }
+
+  .sprint-metadata-fold[open] {
+    @apply bg-base-200;
+  }
+
+  .sprint-metadata-summary {
+    @apply cursor-pointer px-3 py-2 text-xs font-semibold text-zinc-700 dark:text-zinc-300;
+  }
+
+  .sprint-metadata {
+    @apply grid gap-3 border-t border-base-300 px-3 py-3 text-xs sm:grid-cols-3;
+  }
+
+  .sprint-metadata span {
+    @apply font-semibold text-zinc-600 dark:text-zinc-300;
+  }
+
+  .sprint-metadata ul {
+    @apply mt-1 list-disc space-y-1 pl-4 text-zinc-500 dark:text-zinc-400;
+  }
+
+  .sprint-metadata li {
+    @apply break-words;
   }
 
   .warning-text {
@@ -163,7 +195,7 @@ button {
   }
 
   .topbar-actions {
-    @apply flex shrink-0 flex-wrap items-center gap-2;
+    @apply ml-auto flex shrink-0 flex-wrap items-start justify-end gap-2 self-start;
   }
 
   .coverage-chip {
@@ -208,7 +240,7 @@ button {
   }
 
   .metrics-grid {
-    @apply grid gap-3 md:grid-cols-3;
+    @apply grid gap-3 md:grid-cols-4;
   }
 
   .metric-panel {
@@ -288,12 +320,169 @@ button {
     @apply text-zinc-500;
   }
 
-  .code-grid {
-    @apply mt-4 grid grid-cols-2 gap-x-4 gap-y-2 text-sm text-zinc-500 dark:text-zinc-400;
+  .code-bars {
+    @apply mt-4 grid gap-2;
   }
 
-  .code-grid b {
-    @apply mr-1 text-base font-semibold text-base-content;
+  .code-bar-row {
+    @apply grid grid-cols-[5.75rem_minmax(0,1fr)_2rem] items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400;
+  }
+
+  .code-bar-track {
+    @apply h-2 overflow-hidden rounded-full bg-base-300;
+  }
+
+  .code-bar-fill {
+    @apply h-full rounded-full;
+  }
+
+  .code-bar-add {
+    @apply bg-success;
+  }
+
+  .code-bar-delete {
+    @apply bg-error;
+  }
+
+  .code-bar-file {
+    @apply bg-zinc-500;
+  }
+
+  .code-bar-gate {
+    @apply bg-primary;
+  }
+
+  .code-bar-row strong {
+    @apply text-right text-sm font-semibold text-base-content;
+  }
+
+  .completion-stats-grid {
+    @apply mt-3 grid gap-2 text-sm text-zinc-500 dark:text-zinc-400;
+  }
+
+  .completion-stats-grid div {
+    @apply flex items-baseline justify-between gap-3 border-b border-base-300 pb-1 last:border-b-0 last:pb-0;
+  }
+
+  .completion-stats-grid span {
+    @apply min-w-0 text-xs;
+  }
+
+  .completion-stats-grid strong {
+    @apply text-right text-sm font-semibold leading-tight text-base-content;
+  }
+
+  .charts-band {
+    @apply mt-4 grid gap-3 md:grid-cols-2;
+  }
+
+  .chart-panel {
+    @apply min-h-[20rem];
+  }
+
+  .chart-stack {
+    @apply mt-4 h-52 rounded-md border border-base-300 p-3;
+  }
+
+  .chart-stack canvas {
+    @apply h-full min-h-0 w-full;
+  }
+
+  .completion-chart-shell {
+    @apply mt-4 grid h-52 grid-rows-[minmax(0,1fr)_auto] gap-2 rounded-md border border-base-300 p-3;
+  }
+
+  .completion-chart-shell canvas {
+    @apply min-h-0 w-full;
+    height: 100% !important;
+  }
+
+  .completion-scale {
+    @apply flex justify-between text-xs text-zinc-500;
+  }
+
+  .chart-legend {
+    @apply mt-3 flex flex-wrap gap-2;
+  }
+
+  .legend-chip {
+    @apply inline-flex items-center gap-1 rounded-full border border-base-300 px-2 py-0.5 text-xs font-semibold text-zinc-600 dark:text-zinc-300;
+  }
+
+  .legend-chip::before {
+    @apply inline-block h-2 w-2 rounded-full content-[""];
+  }
+
+  .legend-chip.bucket-sprint::before {
+    @apply bg-zinc-500;
+  }
+
+  .legend-chip.bucket-subsprint::before {
+    @apply bg-blue-500;
+  }
+
+  .legend-chip.bucket-item::before {
+    @apply bg-emerald-500;
+  }
+
+  .legend-chip.bucket-note::before {
+    @apply bg-amber-500;
+  }
+
+  .legend-chip.bucket-artifact::before {
+    @apply bg-purple-500;
+  }
+
+  .legend-chip.bucket-dependency::before {
+    @apply bg-pink-500;
+  }
+
+  .legend-chip.bucket-follow_up::before {
+    @apply bg-cyan-500;
+  }
+
+  .legend-chip.bucket-spike::before {
+    @apply bg-orange-500;
+  }
+
+  .legend-chip.bucket-other::before {
+    @apply bg-zinc-700;
+  }
+
+  .stack-segment.bucket-sprint {
+    @apply fill-zinc-500;
+  }
+
+  .stack-segment.bucket-subsprint {
+    @apply fill-blue-500;
+  }
+
+  .stack-segment.bucket-item {
+    @apply fill-emerald-500;
+  }
+
+  .stack-segment.bucket-note {
+    @apply fill-amber-500;
+  }
+
+  .stack-segment.bucket-artifact {
+    @apply fill-purple-500;
+  }
+
+  .stack-segment.bucket-dependency {
+    @apply fill-pink-500;
+  }
+
+  .stack-segment.bucket-follow_up {
+    @apply fill-cyan-500;
+  }
+
+  .stack-segment.bucket-spike {
+    @apply fill-orange-500;
+  }
+
+  .stack-segment.bucket-other {
+    @apply fill-zinc-700;
   }
 
   .workbench {

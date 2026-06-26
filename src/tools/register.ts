@@ -100,7 +100,10 @@ export function buildToolHandlers(
       }),
     next: def(S.NextInput, "Compact work window for choosing the next item.",
       async (i) => {
-        const view = windowCurrent((await getStore()).read(), i.past, i.future ?? i.future_per_subsprint, { include_high_priority: i.include_high_priority });
+        const view = windowCurrent((await getStore()).read(), i.past, i.future ?? i.future_per_subsprint, {
+          include_high_priority: i.include_high_priority,
+          ...(i.future === undefined ? {} : { future_total: i.future }),
+        });
         return withHelp(renameCurrentWindow(view), view.current?.id ?? "sprint");
       }),
     subsprint_new: def(S.SubsprintNewInput, "Create a subsprint (description, goals, gates).",
@@ -288,17 +291,43 @@ function overviewNotes(view: SprintView, store: SprintStore) {
 }
 
 function renameCurrentWindow(view: ReturnType<typeof windowCurrent>) {
+  const proposed = view.next.map(compactNextQueueRow);
+  const proposedIds = new Set(proposed.map((item) => item.id));
   return {
-    info: "Compact work window. Use item_get({ id }), subsprint_get({ id }), note_get({ id }), or artifact_get({ id }) for full untruncated detail.",
+    info: "Compact work window. item is the selected recommendation; next is the compact proposed task list. Use item_get({ id }), subsprint_get({ id }), note_get({ id }), or artifact_get({ id }) for full untruncated detail.",
     last_resolved: view.last_resolved,
     item: view.current,
-    next: view.next,
+    next: proposed,
     blocked: view.blocked_open,
-    current_subsprint: view.current_subsprint,
+    current_subsprint: view.current_subsprint ? compactNextSubsprintRow(view.current_subsprint) : null,
     relations: view.relations,
     artifacts: view.artifacts,
     recent_artifacts: view.recent_artifacts,
-    recent: view.recent_activity,
+    recent: view.recent_activity.filter((entry) => !proposedIds.has(entry.id)),
+  };
+}
+
+function compactNextQueueRow(item: ReturnType<typeof windowCurrent>["next"][number]) {
+  return {
+    id: item.id,
+    subsprint_id: item.subsprint_id,
+    title: item.title,
+    high_priority: item.high_priority,
+    status: item.status,
+    dependencies: item.dependencies,
+  };
+}
+
+function compactNextSubsprintRow(sub: NonNullable<ReturnType<typeof windowCurrent>["current_subsprint"]>) {
+  return {
+    id: sub.id,
+    kind: sub.kind,
+    description: sub.description,
+    status: sub.status,
+    dependencies: sub.dependencies,
+    goal_count: sub.goals.length,
+    gate_count: sub.gates.length,
+    note_count: sub.notes.length,
   };
 }
 
@@ -327,7 +356,7 @@ function subsprintGet(view: SprintView, id: string) {
   const sub = view.subsprints.find((candidate) => candidate.id === id);
   if (!sub) throw new Error(`Unknown subsprint ${id}.`);
   return {
-    info: "Full subsprint detail. Use item_get({ id }) for full untruncated item detail.",
+    info: "Full subsprint detail with compact item rows. Use item_get({ id }) for full untruncated item detail.",
     id: sub.id,
     title: sub.description,
     status: sub.status,
@@ -337,9 +366,8 @@ function subsprintGet(view: SprintView, id: string) {
     items: sub.items.map((item) => ({
       id: item.id,
       title: item.title,
-      description: item.description,
       status: item.status,
-      dependencies: item.dependencies,
+      dependency_count: item.dependencies.length,
     })),
   };
 }

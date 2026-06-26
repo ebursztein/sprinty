@@ -317,8 +317,10 @@ describe("sprinty e2e over MCP", () => {
       const next = await call(c, "next", { past: 1, future: 3 });
       expect(next.json.item.id).toBe("S02-001");
       expect(next.json.next.map((i: { id: string }) => i.id)).toEqual(["S02-001"]);
+      expect(next.json.next[0].description).toBeUndefined();
       expect(next.json.blocked.items).toEqual([{ id: "S02-002", title: "Sketch preorders" }]);
       expect(next.json.graph).toBeUndefined();
+      expect(next.json.current_subsprint.gates).toBeUndefined();
 
       await call(c, "artifact_add", {
         title: "Bookshop catalog fixture",

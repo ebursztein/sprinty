@@ -64,6 +64,7 @@ export interface RelationRow {
 
 export interface CurrentOptions {
   include_high_priority?: boolean;
+  future_total?: number;
 }
 
 export function windowCurrent(view: SprintView, past: number, futurePerSubsprint: number, options: CurrentOptions = {}): CurrentWindow {
@@ -71,7 +72,7 @@ export function windowCurrent(view: SprintView, past: number, futurePerSubsprint
   const resolved = items.filter((i) => i.status !== "open");
   const { available, blocked } = orderOpenItems(view, items);
   const lastResolved = resolved.slice(-past);
-  const next = selectNextItems(available, futurePerSubsprint, options.include_high_priority ?? true);
+  const next = selectNextItems(available, futurePerSubsprint, options.include_high_priority ?? true, options.future_total);
   const currentItem = next[0] ?? null;
   const current = currentItem
     ? view.subsprints.find((sub) => sub.id === currentItem.subsprint_id) ?? null
@@ -158,12 +159,14 @@ function orderOpenItems(view: SprintView, items: ItemView[]): { available: ItemV
   return { available, blocked };
 }
 
-function selectNextItems(available: ItemView[], perSubsprint: number, includeHighPriority: boolean): ItemView[] {
+function selectNextItems(available: ItemView[], perSubsprint: number, includeHighPriority: boolean, totalLimit?: number): ItemView[] {
   const selected: ItemView[] = [];
   const selectedIds = new Set<string>();
+  const limitReached = () => totalLimit !== undefined && selected.length >= totalLimit;
 
   if (includeHighPriority) {
     for (const item of available) {
+      if (limitReached()) break;
       if (!item.high_priority) continue;
       selected.push(item);
       selectedIds.add(item.id);
@@ -172,6 +175,7 @@ function selectNextItems(available: ItemView[], perSubsprint: number, includeHig
 
   const counts = new Map<string, number>();
   for (const item of available) {
+    if (limitReached()) break;
     if (selectedIds.has(item.id)) continue;
     const count = counts.get(item.subsprint_id) ?? 0;
     if (count >= perSubsprint) continue;

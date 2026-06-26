@@ -41,4 +41,29 @@ describe("dashboard presentation", () => {
     expect(app).toContain('class="dependency-link"');
     expect(app).toContain("on:click={() => openItem(dependency)}");
   });
+
+  it("renders readable dashboard analytics charts and stats", () => {
+    expect(app).toContain('from "chart.js"');
+    expect(app).toContain("Chart.register");
+    expect(app).toContain("const targetEventBuckets = 30");
+    expect(app).toContain("new Chart(eventChartCanvas");
+    expect(app).toContain("new Chart(completionChartCanvas");
+    expect(app).toContain("<canvas bind:this={eventChartCanvas}");
+    expect(app).toContain("<canvas bind:this={completionChartCanvas}");
+    expect(app).toContain("Completion rate over time");
+    expect(app).toContain('label: "Projected"');
+    expect(app).toContain("borderDash");
+    expect(app).not.toContain("Completion pace (5-item moving avg)");
+    expect(app).toContain('class="code-bars"');
+    expect(app).toContain('code-bar-${row.tone}');
+    expect(styles).toContain(".code-bar-add");
+    expect(styles).toContain(".code-bar-delete");
+    expect(styles).toContain(".code-bar-file");
+    expect(styles).toContain(".code-bar-gate");
+    expect(cssBlock(".completion-stats-grid")).not.toContain("grid-cols-2");
+    expect(cssBlock(".completion-stats-grid div")).toContain("justify-between");
+    expect(cssBlock(".topbar")).toContain("grid-cols");
+    expect(cssBlock(".sprint-metadata-fold")).toContain("col-span-2");
+    expect(cssBlock(".code-bar-row")).toContain("grid-cols");
+  });
 });

@@ -143,6 +143,46 @@ describe("windowCurrent", () => {
     expect(w.current?.id).toBe("S01-002");
   });
 
+  it("caps proposed tasks by total future when requested", () => {
+    const v = view();
+    const first = v.subsprints[0]!;
+    const open = first.items[1]!;
+    first.items = [
+      { ...open, id: "S01-002", title: "First normal", description: "first normal", dependencies: [], high_priority: false },
+      { ...open, id: "S01-003", title: "First urgent", description: "first urgent", dependencies: [], high_priority: true },
+      { ...open, id: "S01-004", title: "First later", description: "first later", dependencies: [], high_priority: false },
+    ];
+    v.subsprints.push({
+      ...first,
+      id: "S02",
+      description: "second feature",
+      artifacts: [],
+      notes: [],
+      items: [
+        { ...open, id: "S02-001", subsprint_id: "S02", title: "Second normal", description: "second normal", dependencies: [], high_priority: false, artifacts: [], follow_ups: [] },
+        { ...open, id: "S02-002", subsprint_id: "S02", title: "Second later", description: "second later", dependencies: [], high_priority: false, artifacts: [], follow_ups: [] },
+      ],
+    });
+    v.graph = {
+      nodes: [
+        { id: "S01-002", kind: "item", label: "First normal", status: "open" },
+        { id: "S01-003", kind: "item", label: "First urgent", status: "open" },
+        { id: "S01-004", kind: "item", label: "First later", status: "open" },
+        { id: "S02-001", kind: "item", label: "Second normal", status: "open" },
+        { id: "S02-002", kind: "item", label: "Second later", status: "open" },
+      ],
+      edges: [],
+      blocked_by: { "S01-002": [], "S01-003": [], "S01-004": [], "S02-001": [], "S02-002": [] },
+      unblocks: { "S01-002": [], "S01-003": [], "S01-004": [], "S02-001": [], "S02-002": [] },
+      topological_order: ["S01-002", "S01-003", "S01-004", "S02-001", "S02-002"],
+      cycles: [],
+    };
+
+    const w = windowCurrent(v, 1, 3, { future_total: 3 });
+
+    expect(w.next.map((item) => item.id)).toEqual(["S01-003", "S01-002", "S01-004"]);
+  });
+
   it("keeps blocked open dependents out of current and returns relation context", () => {
     const v = view();
     const sub = v.subsprints[0]!;
