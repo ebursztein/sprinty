@@ -1,8 +1,9 @@
 import { z } from "zod";
-import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { project } from "../domain/projection.js";
 import type { ItemView, SprintView } from "../domain/projection.js";
+import type { SearchMatch } from "../domain/search.js";
 import { SprintStore } from "../store/store.js";
 import { windowCurrent } from "./current.js";
 import * as S from "./schemas.js";
@@ -129,7 +130,7 @@ export function buildToolHandlers(
         const view = store.updateItem({ target: i.id, note: i.note, title: i.title, description: i.description, high_priority: i.high_priority, dependencies: i.dependencies });
         return ack("item_update", view, { id: i.id });
       }),
-    item_done: def(S.ItemDoneInput, "Resolve an item as completed with commit id + gate results.",
+    item_done: def(S.ItemDoneInput, "Resolve an item as completed with commit id, gate results, and a semver changelog verb (added/fixed/changed/removed/deprecated/security).",
       async (i) => {
         const id = requiredId(i, "id", "item");
         return ack("item_done", (await getStore()).done({ ...i, item: id }), { item: id, commit_id: i.commit_id, status: "completed" });
@@ -180,7 +181,7 @@ export function buildToolHandlers(
     search: def(S.SearchInput, "Regex search over sprint text with character context around each match.",
       async (i) => {
         const allMatches = (await getStore()).search(i.pattern, i.context_size);
-        const matches = allMatches.slice(0, 20);
+        const matches = selectSearchMatches(allMatches, 10);
         return {
           info: "Compact search results. Use the tool_call on a row for full untruncated detail. If truncated is true, refine pattern.",
           matches,
@@ -188,8 +189,14 @@ export function buildToolHandlers(
           help: helpLine(i.pattern),
         };
       }),
-    changelog: def(S.ChangelogInput, "Render the sprint changelog as Markdown with change-map and coverage tables.",
-      async () => ({ markdown: (await getStore()).changelog() })),
+    changelog: def(S.ChangelogInput, "Write the semver Markdown changelog and return only its path.",
+      async (i) => {
+        const store = await getStore();
+        const path = i.path ?? join(store.dataDir, "CHANGELOG.md");
+        mkdirSync(dirname(path), { recursive: true });
+        writeFileSync(path, store.changelog());
+        return { path };
+      }),
     dashboard_info: def(S.DashboardInfoInput, "Return the current dashboard URL and port without starting or restarting it.",
       async () => dashboard.info()),
     dashboard_restart: def(S.DashboardRestartInput, "Restart the follow-along dashboard and return its URL and port.",
@@ -265,14 +272,14 @@ function overview(view: SprintView, store: SprintStore) {
   return {
     info: "Compact overview. Use subsprint_get({ id }) for item rows, item_get({ id }), note_get({ id }), or artifact_get({ id }) for full untruncated detail.",
     title: view.goal,
-    details: view.context_notes.map((note) => truncate(note, 240)),
+    details: view.context_notes.slice(0, 4).map((note) => truncate(note, 180)),
     notes: overviewNotes(view, store),
-    artifacts: artifactRows(view),
+    artifacts: artifactRows(view).slice(-10).reverse(),
     subsprints: view.subsprints.map((sub) => ({
       id: sub.id,
-      title: truncate(sub.description, 160),
+      title: truncate(sub.description, 120),
       status: sub.status,
-      dependencies: sub.dependencies,
+      dependency_count: sub.dependencies.length,
       item_counts: itemCounts(view, sub.items),
     })),
   };
@@ -282,12 +289,13 @@ function overviewNotes(view: SprintView, store: SprintStore) {
   const itemIds = new Set(view.subsprints.flatMap((sub) => sub.items.map((item) => item.id)));
   return store.listAllNotes()
     .filter((note) => itemIds.has(note.item))
+    .slice(-10)
+    .reverse()
     .map((note) => ({
       id: note.id,
       item: note.item,
-      text: truncate(note.text, 160),
-    }))
-    .slice(0, 20);
+      text: truncate(note.text, 120),
+    }));
 }
 
 function renameCurrentWindow(view: ReturnType<typeof windowCurrent>) {
@@ -305,6 +313,25 @@ function renameCurrentWindow(view: ReturnType<typeof windowCurrent>) {
     recent_artifacts: view.recent_artifacts,
     recent: view.recent_activity.filter((entry) => !proposedIds.has(entry.id)),
   };
+}
+
+function selectSearchMatches(matches: SearchMatch[], limit: number): SearchMatch[] {
+  const selected: SearchMatch[] = [];
+  const seen = new Set<string>();
+  const add = (match: SearchMatch) => {
+    const key = `${match.type}:${match.id}:${match.tool_call}:${match.text}`;
+    if (selected.length >= limit || seen.has(key)) return;
+    selected.push(match);
+    seen.add(key);
+  };
+
+  for (const type of ["sprint", "subsprint", "item", "note", "artifact", "update", "dependency", "follow_up"]) {
+    const source = type === "note" || type === "artifact" || type === "update" ? [...matches].reverse() : matches;
+    const match = source.find((candidate) => candidate.type === type);
+    if (match) add(match);
+  }
+  for (const match of matches) add(match);
+  return selected;
 }
 
 function compactNextQueueRow(item: ReturnType<typeof windowCurrent>["next"][number]) {
@@ -385,8 +412,10 @@ function itemGet(view: SprintView, id: string) {
     dependencies: item.dependencies,
     code_locations: item.code_locations,
     gates: item.gates,
-    updates: item.updates,
-    notes: item.notes,
+    updates: compactStrings(item.updates, 5, 160),
+    notes: compactStrings(item.notes, 5, 160),
+    note_count: item.notes.length,
+    update_count: item.updates.length,
     commit_id: item.commit_id,
     gate_results: item.gate_results,
     reason: item.reason,
@@ -395,10 +424,16 @@ function itemGet(view: SprintView, id: string) {
   };
 }
 
+function compactStrings(values: string[], maxRows: number, maxChars: number): string[] {
+  return values.slice(-maxRows).reverse().map((value) => truncate(value, maxChars));
+}
+
 function noteList(store: SprintStore, id: string) {
+  const notes = store.listNotes(id);
   return {
     info: "Compact view. Use note_get({ id }) for full untruncated detail.",
-    notes: store.listNotes(id).map((note) => ({ id: note.id, text: truncate(note.text, 160) })),
+    total_notes: notes.length,
+    notes: notes.slice(-5).reverse().map((note) => ({ id: note.id, text: truncate(note.text, 120) })),
   };
 }
 

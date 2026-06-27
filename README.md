@@ -120,8 +120,8 @@ overview({})
 subsprint_new({ description, goals, gates, dependencies? })
 item_add({ subsprint, title, description, code_locations, gates, dependencies?, high_priority? })
 next({})
-item_done({ id, commit_id, gate_results, changelog })
-changelog({})
+item_done({ id, commit_id, gate_results, changelog: { verb: "added" | "fixed" | "changed" | "removed" | "deprecated" | "security", line } })
+changelog({ path? }) -> { path }
 sprint_close({ coverage: { path, format: "lcov", command? } })
 ```
 
@@ -166,7 +166,7 @@ Dashboard tools:
 | `overview` | Compact sprint summary for orientation. |
 | `next` | Compact active work window with available and blocked items. |
 | `search` | Regex search over the immutable sprint ledger. |
-| `changelog` | Render the sprint changelog and change-map summary as Markdown. |
+| `changelog` | Write the semver Markdown changelog to `path` or the sprint data dir and return only the path. |
 
 ### Work Tools
 
@@ -178,7 +178,7 @@ Dashboard tools:
 | `item_add` | Create one atomic, gated item. |
 | `item_get` | Read full item detail. |
 | `item_update` | Update item metadata, notes, priority, or dependency edges. |
-| `item_done` | Complete an item with a real commit, passing gate evidence, and changelog line. |
+| `item_done` | Complete an item with a real commit, passing gate evidence, and a semver changelog verb plus line. |
 | `item_split` | Resolve an oversized item by creating a new subsprint. |
 | `item_deprecate` | Drop an item with an explicit reason. |
 

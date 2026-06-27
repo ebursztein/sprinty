@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { SprintStore } from "../store/store.js";
@@ -216,7 +216,66 @@ describe("tool handlers", () => {
     })).rejects.toThrow();
     await expect(tools.item_add!.handler(addInput({ title: "Everything", description: "too broad" }))).rejects.toThrow();
     await expect(tools.item_add!.handler(addInput({ title: "A".repeat(81) }))).rejects.toThrow(/create more than one item/);
-    await expect(tools.item_add!.handler(addInput({ description: "x".repeat(501) }))).rejects.toThrow(/create more than one item/);
+    await expect(tools.item_add!.handler(addInput({ description: "x".repeat(801) }))).rejects.toThrow(/add more items|artifact/);
+  });
+
+  it("rejects plan-dump item and subsprint payloads at the MCP boundary", async () => {
+    await tools.sprint_new!.handler(sprintInput("g"));
+    await tools.subsprint_new!.handler({ description: "d", goals: ["go"], gates: [{ kind: "command", spec: "true" }] });
+    const dump = [
+      "Phase 1 implementation plan",
+      "- Build the first broad path",
+      "- Build the second broad path",
+      "- Build the third broad path",
+      "- Build the fourth broad path",
+    ].join("\n");
+
+    await expect(tools.item_add!.handler(addInput({ description: dump }))).rejects.toThrow(/multiple items|more items/);
+    await expect(tools.subsprint_new!.handler({ description: dump, goals: ["go"], gates: [{ kind: "command", spec: "true" }] })).rejects.toThrow(/multiple items|more items/);
+    await expect(tools.subsprint_new!.handler({
+      description: "Bounded subsprint",
+      goals: ["one", "two", "three", "four", "five", "six"],
+      gates: [{ kind: "command", spec: "true" }],
+    })).rejects.toThrow(/at most 5|5/);
+    await expect(tools.item_add!.handler(addInput({
+      gates: [
+        { kind: "command", spec: "true" },
+        { kind: "command", spec: "true" },
+        { kind: "command", spec: "true" },
+        { kind: "command", spec: "true" },
+      ],
+    }))).rejects.toThrow(/at most 3|3/);
+    await expect(tools.item_add!.handler(addInput({
+      gates: [{ kind: "command", spec: "verify the whole product behaves correctly" }],
+    }))).rejects.toThrow(/manual|executable/);
+  });
+
+  it("writes changelog markdown and returns only its path", async () => {
+    await tools.sprint_new!.handler(sprintInput("g"));
+    await tools.subsprint_new!.handler({ description: "d", goals: ["go"], gates: [{ kind: "command", spec: "true" }] });
+    await tools.item_add!.handler(addInput());
+    await tools.item_done!.handler({
+      id: "S01-001",
+      commit_id: sha,
+      gate_results: [{ kind: "command", spec: "true", passed: true, evidence: "ok" }],
+      changelog: { verb: "changed", line: "Changed compact changelog response." },
+    });
+
+    const generated = await tools.changelog!.handler({}) as { path: string; entries?: unknown[]; markdown?: string };
+    expect(generated.path).toBe(join(dir, ".sprinty", "CHANGELOG.md"));
+    expect(generated.markdown).toBeUndefined();
+    expect(generated.entries).toBeUndefined();
+    expect(readFileSync(generated.path, "utf8")).toContain("## Changed");
+
+    const path = join(dir, "CHANGELOG.md");
+    const written = await tools.changelog!.handler({ path }) as { path: string; stats?: unknown; entries?: unknown[]; markdown?: string };
+    expect(written).toEqual(expect.objectContaining({ path }));
+    expect(written.stats).toBeUndefined();
+    expect(written.entries).toBeUndefined();
+    expect(written.markdown).toBeUndefined();
+    const markdown = readFileSync(path, "utf8");
+    expect(markdown).toContain("- `S01-001` **Atomic item**: Changed compact changelog response.");
+    expect(markdown).toContain("  - Commit:");
   });
 
   it("records dependency edges through item_update and exposes them on focused reads", async () => {

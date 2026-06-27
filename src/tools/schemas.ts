@@ -27,7 +27,9 @@ export const SprintListInput = z.object({
 });
 export const SprintCloseInput = z.object({ coverage: z.union([CoverageInput, CoverageNotApplicableInput]).optional() });
 export const SprintArchiveInput = z.object({ reason: z.string().min(1) });
-export const ChangelogInput = z.object({});
+export const ChangelogInput = z.object({
+  path: z.string().min(1).optional(),
+});
 export const OverviewInput = z.object({});
 export const NextInput = z.object({
   past: z.number().int().nonnegative().default(1),
@@ -35,10 +37,42 @@ export const NextInput = z.object({
   future_per_subsprint: z.number().int().nonnegative().default(1),
   include_high_priority: z.boolean().default(true),
 });
+
+const PLAN_DUMP_MESSAGE = "This looks like multiple items. Add more items, or attach long reference context as an artifact.";
+const SUBSPRINT_DESCRIPTION_MAX = 500;
+const SUBSPRINT_GOAL_MAX = 160;
+const SUBSPRINT_GOALS_MAX = 5;
+const GATES_MAX = 3;
+
+function looksLikePlanDump(value: string): boolean {
+  const lines = value.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  const bulletish = lines.filter((line) => /^([-*+]\s+|\d+[.)]\s+)/.test(line)).length;
+  const headings = lines.filter((line) => /^#{1,6}\s+/.test(line)).length;
+  const phases = /\bphase\s+\d+\b/i.test(value) || /\bphase\s+(one|two|three|four|five)\b/i.test(value);
+  return bulletish >= 3 || headings >= 2 || phases;
+}
+
+const BoundedDescription = (max: number) => z.string().trim().min(1).max(max).refine((value) => !looksLikePlanDump(value), {
+  message: PLAN_DUMP_MESSAGE,
+});
+
+const GateInput = Gate.superRefine((gate, ctx) => {
+  if (gate.kind === "manual") return;
+  const wordCount = gate.spec.trim().split(/\s+/).filter(Boolean).length;
+  const hasShellSignal = /[./_$'"|&;<>:=*-]/.test(gate.spec) || /^(npm|pnpm|yarn|node|npx|uv|pytest|cargo|go|just|make|rg|test|tsc|vite|vitest|true|false)\b/.test(gate.spec);
+  if (wordCount >= 5 && !hasShellSignal) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["spec"],
+      message: "Gate spec looks like prose. Use kind: manual for human checks or provide an executable command/test/build/typecheck spec.",
+    });
+  }
+});
+
 export const SubsprintNewInput = z.object({
-  description: z.string().min(1),
-  goals: z.array(z.string().min(1)).min(1),
-  gates: z.array(Gate).min(1),
+  description: BoundedDescription(SUBSPRINT_DESCRIPTION_MAX),
+  goals: z.array(z.string().trim().min(1).max(SUBSPRINT_GOAL_MAX)).min(1).max(SUBSPRINT_GOALS_MAX),
+  gates: z.array(GateInput).min(1).max(GATES_MAX),
   dependencies: z.array(z.string().min(1)).default([]),
 });
 export const SubsprintGetInput = z.object({ id: z.string().min(1) });
@@ -47,7 +81,7 @@ export const SubsprintListInput = z.object({});
 export const ITEM_TITLE_MIN = 3;
 export const ITEM_TITLE_MAX = 80;
 export const ITEM_DESCRIPTION_MIN = 20;
-export const ITEM_DESCRIPTION_MAX = 500;
+export const ITEM_DESCRIPTION_MAX = 800;
 
 export const ItemTitleInput = z.string().trim().min(ITEM_TITLE_MIN).max(ITEM_TITLE_MAX, {
   message: `Item title is too large for one tree row; create more than one item with item_add() or split the work into smaller atomic items.`,
@@ -55,7 +89,9 @@ export const ItemTitleInput = z.string().trim().min(ITEM_TITLE_MIN).max(ITEM_TIT
   message: "Item title must fit on one line.",
 });
 export const ItemDescriptionInput = z.string().trim().min(ITEM_DESCRIPTION_MIN).max(ITEM_DESCRIPTION_MAX, {
-  message: `Item description is too large for one Sprinty item; create more than one item with item_add() instead of using notes or one oversized item.`,
+  message: `Item description is too large for one Sprinty item; add more items with item_add() or attach long reference context as an artifact.`,
+}).refine((value) => !looksLikePlanDump(value), {
+  message: PLAN_DUMP_MESSAGE,
 });
 
 export const AddInput = z.object({
@@ -64,7 +100,7 @@ export const AddInput = z.object({
   description: ItemDescriptionInput,
   high_priority: z.boolean().default(false),
   code_locations: z.array(z.string().min(1)).min(1),
-  gates: z.array(Gate).min(1),
+  gates: z.array(GateInput).min(1).max(GATES_MAX),
   dependencies: z.array(z.string().min(1)).default([]),
 });
 export const ItemAddInput = AddInput;
@@ -86,9 +122,9 @@ export const DoneInput = z.object({
 export const ItemDoneInput = DoneInput;
 export const SplitInput = z.object({
   id: z.string().min(1),
-  description: z.string().min(1),
-  goals: z.array(z.string().min(1)).min(1),
-  gates: z.array(Gate).min(1),
+  description: BoundedDescription(SUBSPRINT_DESCRIPTION_MAX),
+  goals: z.array(z.string().trim().min(1).max(SUBSPRINT_GOAL_MAX)).min(1).max(SUBSPRINT_GOALS_MAX),
+  gates: z.array(GateInput).min(1).max(GATES_MAX),
   dependencies: z.array(z.string().min(1)).default([]),
 });
 export const ItemSplitInput = SplitInput;

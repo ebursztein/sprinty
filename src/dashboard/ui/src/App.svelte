@@ -1,10 +1,14 @@
 <script lang="ts">
   import { onDestroy, onMount, tick as svelteTick } from "svelte";
   import {
+    ArcElement,
     BarController,
     BarElement,
     CategoryScale,
     Chart,
+    DoughnutController,
+    Filler,
+    Legend,
     LineController,
     LineElement,
     LinearScale,
@@ -29,8 +33,10 @@
   let ledgerVerbFilter: LedgerVerb | "all" = "all";
   let theme: "light" | "dark" = "dark";
   let themeMounted = false;
+  let changelogVerbChartCanvas: HTMLCanvasElement | null = null;
   let eventChartCanvas: HTMLCanvasElement | null = null;
   let completionChartCanvas: HTMLCanvasElement | null = null;
+  let changelogVerbChart: Chart | null = null;
   let eventChart: Chart | null = null;
   let completionChart: Chart | null = null;
   let chartSignature = "";
@@ -38,7 +44,8 @@
 
   type CompletionPoint = { time: number; movingAverageMs: number; durationMs: number };
   type CompletionRatePoint = { time: number; percent: number; completed: number };
-  type CodeMetricRow = { label: string; value: number; max: number; tone: string };
+  type ProgressMetricRow = { label: string; count: number; done: number; total: number; tone: string };
+  type ChangelogVerbMetricRow = { label: string; value: number; tone: string };
 
   type EventSegment = { category: string; count: number };
 
@@ -64,18 +71,9 @@
   const themeKey = "sprinty-dashboard-theme";
   const targetEventBuckets = 30;
   const movingAverageWindow = 5;
-  const chartCategories = [
-    "sprint",
-    "subsprint",
-    "item",
-    "note",
-    "artifact",
-    "dependency",
-    "follow_up",
-    "spike",
-    "other",
-  ];
-  Chart.register(BarController, BarElement, CategoryScale, LineController, LineElement, LinearScale, PointElement, Tooltip);
+  const chartCategories = ["added", "edited", "closed"];
+  const changelogVerbCategories = ["added", "fixed", "changed", "removed", "deprecated", "security"];
+  Chart.register(ArcElement, BarController, BarElement, CategoryScale, DoughnutController, Filler, Legend, LineController, LineElement, LinearScale, PointElement, Tooltip);
 
   $: model = sprint ? deriveDashboardModel(sprint) : null;
   $: if (model && !selectedSubId) selectedSubId = model.activeSubsprint?.id ?? model.sprint.subsprints[0]?.id ?? null;
@@ -94,7 +92,8 @@
   $: sprintSuccessCriteria = model ? dedupePreserveOrder(model.sprint.context_notes).slice(0, 8) : [];
   $: eventsByBucket = model ? buildEventBuckets(model.sprint.timeline) : [];
   $: completionSummary = model ? buildCompletionSummary(model.sprint.timeline, model.progress.items.open, model.progress.items.total) : null;
-  $: codeMetricRows = model ? buildCodeMetricRows(model) : [];
+  $: progressMetricRows = model ? buildProgressMetricRows(model) : [];
+  $: changelogVerbRows = model ? buildChangelogVerbRows(model.sprint) : [];
   $: if (themeMounted && completionSummary) queueChartRender();
 
   onMount(() => {
@@ -109,6 +108,7 @@
   });
 
   onDestroy(() => {
+    changelogVerbChart?.destroy();
     eventChart?.destroy();
     completionChart?.destroy();
   });
@@ -247,15 +247,6 @@
     return `${passed}/${item.gates.length} passed${failed ? `, ${failed} failed` : ""}${pending ? `, ${pending} pending` : ""}`;
   }
 
-  function statusDonut(model: DashboardModel): string {
-    const total = Math.max(1, model.progress.statuses.total);
-    const done = model.progress.statuses.completed / total * 100;
-    const open = model.progress.statuses.open / total * 100;
-    const split = model.progress.statuses.split / total * 100;
-    const deprecated = model.progress.statuses.deprecated / total * 100;
-    return `conic-gradient(#16a34a 0 ${done}%, #fbbf24 ${done}% ${done + open}%, #71717a ${done + open}% ${done + open + split}%, #71717a ${done + open + split}% ${done + open + split + deprecated}%, #d4d4d8 0)`;
-  }
-
   function targetLabel(artifact: ArtifactView): string {
     return artifact.target_id === "sprint" ? "sprint" : artifact.target_id;
   }
@@ -318,38 +309,55 @@
       counts: new Map(),
     }));
 
-    const categories = new Set<string>(chartCategories);
-
     for (const { entry, time } of normalized) {
+      const category = eventAction(entry);
+      if (!category) continue;
+
       const bucketIndex = Math.min(bucketCount - 1, Math.max(0, Math.floor((time - firstTs) / bucketMs)));
       const bucket = buckets[bucketIndex];
       if (!bucket) continue;
 
-      const category =
-        entry.type === "sprint_created" ? "sprint"
-        : entry.type === "subsprint_created" ? "subsprint"
-        : entry.type === "item_added" || entry.type === "item_updated" || entry.type === "item_resolved" ? "item"
-        : entry.type === "note_added" || entry.type === "note_updated" ? "note"
-        : entry.type === "artifact_added" || entry.type === "artifact_amended" || entry.type === "artifact_deprecated" ? "artifact"
-        : entry.type === "dependencies_added" || entry.type === "dependencies_replaced" ? "dependency"
-        : entry.type === "follow_up_added" ? "follow_up"
-        : entry.type === "spike_concluded" || entry.type === "spike_deprecated" ? "spike"
-        : "other";
-
       bucket.total += 1;
       bucket.counts.set(category, (bucket.counts.get(category) ?? 0) + 1);
-      categories.add(category);
     }
 
-    const orderedCategories = [...chartCategories, ...Array.from(categories)]
-      .filter((category, index, arr) => arr.indexOf(category) === index);
     return buckets.map((bucket) => ({
       label: bucket.label,
       total: bucket.total,
-      segments: orderedCategories
+      segments: chartCategories
         .map((category) => ({ category, count: bucket.counts.get(category) ?? 0 }))
         .filter((segment) => segment.count > 0),
     }));
+  }
+
+  function eventAction(entry: TimelineEntry): string | null {
+    if (
+      entry.type === "sprint_created" ||
+      entry.type === "subsprint_created" ||
+      entry.type === "item_added" ||
+      entry.type === "note_added" ||
+      entry.type === "artifact_added" ||
+      entry.type === "follow_up_added" ||
+      entry.type === "dependencies_added"
+    ) return "added";
+
+    if (
+      entry.type === "item_updated" ||
+      entry.type === "note_updated" ||
+      entry.type === "dependencies_replaced" ||
+      entry.type === "artifact_amended"
+    ) return "edited";
+
+    if (
+      entry.type === "sprint_closed" ||
+      entry.type === "sprint_archived" ||
+      entry.type === "item_resolved" ||
+      entry.type === "artifact_deprecated" ||
+      entry.type === "spike_concluded" ||
+      entry.type === "spike_deprecated"
+    ) return "closed";
+
+    return null;
   }
 
   function buildCompletionSummary(entries: TimelineEntry[], openItems: number, totalItems: number): CompletionSummary {
@@ -452,23 +460,68 @@
   }
 
 
-  function buildCodeMetricRows(model: DashboardModel): CodeMetricRow[] {
-    const rows = [
-      { label: "Added", value: model.progress.code.additions, tone: "add" },
-      { label: "Deleted", value: model.progress.code.deletions, tone: "delete" },
-      { label: "Files", value: model.progress.code.files, tone: "file" },
-      { label: "Hotspots", value: model.progress.code.hotspots, tone: "file" },
-      { label: "Gates passed", value: model.progress.gates.passed, tone: "gate" },
-      { label: "Gates pending", value: model.progress.gates.pending, tone: "gate" },
+  function buildProgressMetricRows(model: DashboardModel): ProgressMetricRow[] {
+    const totalSubsprints = model.sprint.subsprints.length;
+    const closedSubsprints = model.sprint.subsprints.filter((sub) => sub.status === "closed").length;
+    return [
+      {
+        label: "Items",
+        count: model.progress.items.total,
+        done: model.progress.items.done,
+        total: model.progress.items.total,
+        tone: "item",
+      },
+      {
+        label: "Subsprints",
+        count: totalSubsprints,
+        done: closedSubsprints,
+        total: totalSubsprints,
+        tone: "subsprint",
+      },
     ];
-    const max = Math.max(1, ...rows.map((row) => row.value));
-    return rows.map((row) => ({ ...row, max }));
+  }
+
+  function buildChangelogVerbRows(sprint: SprintView): ChangelogVerbMetricRow[] {
+    const counts = new Map<string, number>();
+    for (const category of changelogVerbCategories) counts.set(category, 0);
+    for (const entry of sprint.changelog) counts.set(entry.verb, (counts.get(entry.verb) ?? 0) + 1);
+    return changelogVerbCategories
+      .map((category) => ({ label: category, value: counts.get(category) ?? 0, tone: category }))
+      .filter((row) => row.value > 0);
+  }
+
+  function eventEntity(entry: TimelineEntry): string {
+    if (entry.type.startsWith("sprint_")) return "sprint";
+    if (entry.type.startsWith("subsprint_")) return "subsprint";
+    if (entry.type.startsWith("item_")) return "item";
+    if (entry.type.startsWith("note_")) return "note";
+    if (entry.type.startsWith("artifact_")) return "artifact";
+    if (entry.type.startsWith("dependencies_") || entry.type.startsWith("dependency_")) return "dependency";
+    if (entry.type.startsWith("follow_up_")) return "follow_up";
+    if (entry.type.startsWith("spike_")) return "spike";
+    return "other";
+  }
+
+  function countProgressClass(tone: string): string {
+    const color =
+      tone === "artifact" ? "progress-secondary"
+      : tone === "dependency" ? "progress-accent"
+      : tone === "follow_up" ? "progress-info"
+      : tone === "note" ? "progress-warning"
+      : tone === "other" ? "progress-neutral"
+      : tone === "spike" ? "progress-error"
+      : tone === "subsprint" ? "progress-info"
+      : tone === "item" ? "progress-success"
+      : tone === "sprint" ? "progress-neutral"
+      : "progress-primary";
+    return `progress count-progress ${color}`;
   }
 
   function renderCharts(): void {
     if (!eventChartCanvas || !completionChartCanvas || !completionSummary) return;
     const signature = JSON.stringify({
       theme,
+      changelogVerbRows,
       eventsByBucket,
       completion: {
         ratePoints: completionSummary.ratePoints,
@@ -478,17 +531,28 @@
     });
     if (signature === chartSignature) return;
 
-    const nextEventChart = new Chart(eventChartCanvas, eventChartConfig(eventsByBucket));
-    const nextCompletionChart = new Chart(completionChartCanvas, completionChartConfig(completionSummary));
+    Chart.getChart(changelogVerbChartCanvas ?? "")?.destroy();
+    Chart.getChart(eventChartCanvas)?.destroy();
+    Chart.getChart(completionChartCanvas)?.destroy();
+    changelogVerbChart?.destroy();
     eventChart?.destroy();
     completionChart?.destroy();
+
+    const nextChangelogVerbChart = changelogVerbChartCanvas && changelogVerbRows.length
+      ? new Chart(changelogVerbChartCanvas, changelogVerbChartConfig(changelogVerbRows))
+      : null;
+    const nextEventChart = new Chart(eventChartCanvas, eventChartConfig(eventsByBucket));
+    const nextCompletionChart = new Chart(completionChartCanvas, completionChartConfig(completionSummary));
+    changelogVerbChart = nextChangelogVerbChart;
     eventChart = nextEventChart;
     completionChart = nextCompletionChart;
     chartSignature = signature;
 
     requestAnimationFrame(() => {
+      changelogVerbChart?.resize();
       eventChart?.resize();
       completionChart?.resize();
+      changelogVerbChart?.update("none");
       eventChart?.update("none");
       completionChart?.update("none");
     });
@@ -508,6 +572,14 @@
       sprint: "#71717a",
       subsprint: "#3b82f6",
       item: "#10b981",
+      added: "#3b82f6",
+      edited: "#f59e0b",
+      closed: "#10b981",
+      fixed: "#22c55e",
+      changed: "#f59e0b",
+      removed: "#ef4444",
+      deprecated: "#71717a",
+      security: "#a855f7",
       note: "#f59e0b",
       artifact: "#8b5cf6",
       dependency: "#ec4899",
@@ -517,6 +589,49 @@
       axis: theme === "dark" ? "#475569" : "#cbd5e1",
       grid: theme === "dark" ? "rgba(71, 85, 105, 0.42)" : "rgba(148, 163, 184, 0.38)",
       label: theme === "dark" ? "#a1a1aa" : "#52525b",
+    };
+  }
+
+  function changelogVerbChartConfig(rows: ChangelogVerbMetricRow[]): ChartConfiguration<"doughnut"> {
+    const palette = chartPalette();
+    return {
+      type: "doughnut",
+      data: {
+        labels: rows.map((row) => `${titleCase(row.label)} ${row.value}`),
+        datasets: [{
+          data: rows.map((row) => row.value),
+          backgroundColor: rows.map((row) => palette[row.tone] ?? palette.other),
+          borderColor: theme === "dark" ? "#020617" : "#f8fafc",
+          borderWidth: 2,
+        }],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: false,
+        cutout: "62%",
+        plugins: {
+          legend: {
+            display: true,
+            position: "right",
+            labels: {
+              boxHeight: 10,
+              boxWidth: 10,
+              color: palette.label,
+              padding: 14,
+              usePointStyle: true,
+            },
+          },
+          tooltip: {
+            callbacks: {
+              label: (item) => {
+                const row = rows[item.dataIndex];
+                return `${titleCase(row?.label ?? "change")}: ${item.formattedValue}`;
+              },
+            },
+          },
+        },
+      },
     };
   }
 
@@ -579,9 +694,7 @@
     const palette = chartPalette();
     const points = summary.ratePoints.map((point) => ({ x: point.time, y: point.percent }));
     const last = summary.ratePoints[summary.ratePoints.length - 1];
-    const projection = last && summary.rateEnd && summary.rateEnd > last.time
-      ? [{ x: last.time, y: last.percent }, { x: summary.rateEnd, y: 100 }]
-      : [];
+    const projection = buildProjectedRateSteps(summary).map((point) => ({ x: point.time, y: point.percent }));
 
     return {
       type: "line",
@@ -591,20 +704,24 @@
             label: "Completion",
             data: points,
             borderColor: "#3b82f6",
-            backgroundColor: "#3b82f6",
+            backgroundColor: "rgba(59, 130, 246, 0.22)",
             borderWidth: 3,
+            fill: "origin",
             pointRadius: 4,
             pointHoverRadius: 5,
+            stepped: "after",
             tension: 0.28,
           },
           {
             label: "Projected",
             data: projection,
             borderColor: "#60a5fa",
-            backgroundColor: "#60a5fa",
+            backgroundColor: "rgba(96, 165, 250, 0.12)",
             borderDash: [6, 5],
             borderWidth: 3,
+            fill: "origin",
             pointRadius: 0,
+            stepped: "after",
             tension: 0,
           },
         ],
@@ -632,7 +749,7 @@
             border: { color: palette.axis },
             ticks: {
               color: palette.label,
-              maxTicksLimit: 3,
+              maxTicksLimit: 5,
               callback: (value) => formatBucketLabel(Number(value)),
             },
           },
@@ -643,13 +760,45 @@
             border: { color: palette.axis },
             ticks: {
               color: palette.label,
-              stepSize: 50,
+              stepSize: 25,
               callback: (value) => `${value}%`,
             },
           },
         },
       },
     };
+  }
+
+  function buildProjectedRateSteps(summary: CompletionSummary): CompletionRatePoint[] {
+    const last = summary.ratePoints[summary.ratePoints.length - 1];
+    if (!last || !summary.avgMs || summary.avgMs <= 0 || summary.remainingItems <= 0) return [];
+
+    const total = Math.max(1, last.completed + summary.remainingItems);
+    const steps: CompletionRatePoint[] = [last];
+    for (let index = 1; index <= summary.remainingItems; index++) {
+      const completed = Math.min(total, last.completed + index);
+      steps.push({
+        time: last.time + summary.avgMs * index,
+        percent: Math.round((completed / total) * 100),
+        completed,
+      });
+    }
+    return steps;
+  }
+
+  function completionStatsLine(summary: CompletionSummary | null): string {
+    if (!summary) return "Median -- / fastest -- / slowest -- / ETA -- / ETA time --";
+    return [
+      `Median ${formatDuration(summary.medianMs)}`,
+      `Fastest ${formatDuration(summary.minMs)}`,
+      `Slowest ${formatDuration(summary.maxMs)}`,
+      `ETA ${formatDuration(summary.etaMs)} (${summary.remainingItems} item${summary.remainingItems === 1 ? "" : "s"})`,
+      `ETA time ${summary.etaAt ?? "--"}`,
+    ].join(" / ");
+  }
+
+  function titleCase(value: string): string {
+    return value.replace(/(^|[_ -])([a-z])/g, (_match, prefix: string, letter: string) => `${prefix === "_" ? " " : prefix}${letter.toUpperCase()}`);
   }
 </script>
 
@@ -739,57 +888,41 @@
                 <span>Sprint progress</span>
                 <strong>{model.progress.items.percent}%</strong>
               </div>
-              <div class="progress-track">
-                <div class="progress-fill" style={`width:${model.progress.items.percent}%`}></div>
-              </div>
-              <div class="metric-foot">{model.progress.items.done}/{model.progress.items.total} items terminal</div>
-            </div>
-
-            <div class="metric-panel metric-status">
-              <div class="donut" style={`background:${statusDonut(model)}`}>
-                <span>{model.progress.statuses.total}</span>
-              </div>
-              <div class="status-legend">
-                <span><b class="legend-done">{model.progress.statuses.completed}</b> done</span>
-                <span><b class="legend-open">{model.progress.statuses.open}</b> todo</span>
-                <span><b class="legend-split">{model.progress.statuses.split}</b> split</span>
-                <span><b class="legend-muted">{model.progress.statuses.deprecated}</b> deprecated</span>
-              </div>
-            </div>
-
-            <div class="metric-panel code-metrics">
-              <div class="metric-heading"><span>Code stats</span><strong>{model.progress.code.churn}</strong></div>
-              <div class="code-bars">
-                {#each codeMetricRows as row}
-                  <div class="code-bar-row">
-                    <span>{row.label}</span>
-                    <div class="code-bar-track">
-                      <div class={`code-bar-fill code-bar-${row.tone}`} style={`width:${Math.max(4, (row.value / row.max) * 100)}%`}></div>
-                    </div>
-                    <strong>{row.value}</strong>
+              <progress
+                class="progress progress-primary progress-track"
+                value={model.progress.items.done}
+                max={Math.max(1, model.progress.items.total)}
+                aria-label="Item progress"
+              ></progress>
+              <div class="metric-foot">{model.progress.items.done}/{model.progress.items.total} items done</div>
+              <div class="progress-bars" aria-label="Progress ratios">
+                {#each progressMetricRows as row}
+                  <div class="progress-bar-row">
+                    <span><b>{row.label}</b><small>{row.count}</small></span>
+                    <progress class={countProgressClass(row.tone)} value={row.done} max={Math.max(1, row.total)} aria-label={row.label}></progress>
+                    <strong>{row.done}/{row.total}</strong>
                   </div>
                 {/each}
               </div>
             </div>
 
-            <div class="metric-panel completion-stats">
-              <div class="metric-heading"><span>Completion stats</span></div>
-              <div class="completion-stats-grid">
-                <div><span>Avg</span><strong>{formatDuration(completionSummary?.avgMs)}</strong></div>
-                <div><span>Median</span><strong>{formatDuration(completionSummary?.medianMs)}</strong></div>
-                <div><span>Fastest</span><strong>{formatDuration(completionSummary?.minMs)}</strong></div>
-                <div><span>Slowest</span><strong>{formatDuration(completionSummary?.maxMs)}</strong></div>
-                <div><span>ETA</span><strong>{formatDuration(completionSummary?.etaMs)} ({completionSummary?.remainingItems ?? 0} items)</strong></div>
-                <div><span>ETA time</span><strong>{completionSummary?.etaAt ?? "--"}</strong></div>
-                <div><span>Completed</span><strong>{completionSummary?.points.length ?? 0}</strong></div>
-                <div><span>Open</span><strong>{completionSummary?.openItems ?? model.progress.items.open}</strong></div>
-              </div>
+            <div class="metric-panel metric-stats">
+              <div class="metric-heading"><span>Changelog verbs</span></div>
+              {#if changelogVerbRows.length}
+                <div class="verb-chart-layout" aria-label="Changelog verb chart">
+                  <div class="verb-chart-shell">
+                    <canvas bind:this={changelogVerbChartCanvas} aria-label="Changelog verb doughnut chart"></canvas>
+                  </div>
+                </div>
+              {:else}
+                <div class="empty-inline">No changelog entries yet.</div>
+              {/if}
             </div>
           </div>
 
           <div class="charts-band">
             <div class="metric-panel chart-panel">
-              <div class="metric-heading"><span>Event activity (stacked)</span></div>
+              <div class="metric-heading"><span>Event activity by action</span></div>
               {#if eventsByBucket.length}
                 <div class="chart-stack" aria-label="Stacked event chart">
                   <canvas bind:this={eventChartCanvas} aria-label="Stacked event chart"></canvas>
@@ -807,7 +940,9 @@
             </div>
 
             <div class="metric-panel chart-panel">
-              <div class="metric-heading"><span>Completion rate over time</span></div>
+              <div class="metric-heading">
+                <span>Completion rate over time</span>
+              </div>
               {#if completionSummary && completionSummary.ratePoints.length}
                 <div class="completion-chart-shell">
                   <canvas bind:this={completionChartCanvas} aria-label="Completion rate trend"></canvas>
@@ -816,6 +951,7 @@
                     <span>{completionSummary.points.length} finished item{completionSummary.points.length === 1 ? "" : "s"}</span>
                   </div>
                 </div>
+                <div class="completion-summary-line">{completionStatsLine(completionSummary)}</div>
               {:else}
                 <div class="empty-inline">No completed items yet.</div>
               {/if}

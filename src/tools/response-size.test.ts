@@ -11,8 +11,8 @@ import { buildToolHandlers, type ToolHandlers } from "./register.js";
 const root = dirname(dirname(dirname(fileURLToPath(import.meta.url))));
 const fixtureDir = join(root, "tests/data/capsem-sprinty-baseline");
 const gitDir = root;
-const item = "S02-003";
-const subsprint = "S02";
+const item = "S03-008";
+const subsprint = "S03";
 const headCommit = execFileSync("git", ["rev-parse", "HEAD"], { cwd: root }).toString().trim();
 
 const publicTools = [
@@ -162,7 +162,7 @@ describe("public Sprinty tool responses", () => {
       { tool: "artifact_get", seed: "fixture", maxChars: 1_000, maxMs: 25, args: async ({ tools }) => ({ id: ((await tools.artifact_add!.handler({ title: "Response stats", path: "reports/response-stats.json", related_items: [item] })) as { artifact: string }).artifact }) },
       { tool: "artifact_list", seed: "fixture", maxChars: 1_200, maxMs: 25, args: async ({ tools }) => { await tools.artifact_add!.handler({ title: "Response stats", path: "reports/response-stats.json", related_items: [item] }); return {}; } },
       { tool: "artifact_update", seed: "fixture", maxChars: 900, maxMs: 100, args: async ({ tools }) => ({ id: ((await tools.artifact_add!.handler({ title: "Response stats", path: "reports/response-stats.json", related_items: [item] })) as { artifact: string }).artifact, title: "Response stats v2" }) },
-      { tool: "changelog", seed: "fixture", maxChars: 30_000, maxMs: 75, args: () => ({}) },
+      { tool: "changelog", seed: "fixture", maxChars: 900, maxMs: 75, args: () => ({}) },
       { tool: "dashboard_info", seed: "fixture", maxChars: 900, maxMs: 25, args: () => ({}) },
       { tool: "dashboard_restart", seed: "fixture", maxChars: 900, maxMs: 25, args: () => ({}) },
       { tool: "item_add", seed: "fixture", maxChars: 900, maxMs: 100, args: () => ({ subsprint, title: "Response stats item", description: "Measure one representative response size.", code_locations: ["src/tools/register.ts"], gates: [{ kind: "command", spec: "true" }] }) },
@@ -177,7 +177,7 @@ describe("public Sprinty tool responses", () => {
       { tool: "note_list", seed: "fixture", maxChars: 2_000, maxMs: 25, args: () => ({ id: item }) },
       { tool: "note_update", seed: "fixture", maxChars: 900, maxMs: 100, args: async ({ tools }) => ({ id: ((await tools.note_add!.handler({ id: item, text: "Response stats note." })) as { note: string }).note, text: "Updated response stats note." }) },
       { tool: "overview", seed: "fixture", maxChars: 8_000, maxMs: 25, args: () => ({}) },
-      { tool: "search", seed: "fixture", maxChars: 6_000, maxMs: 25, args: () => ({ pattern: "Finish|Provider|S02-003|AGY searchable|AGY artifact", context_size: 512 }) },
+      { tool: "search", seed: "fixture", maxChars: 6_000, maxMs: 25, args: () => ({ pattern: "Finish|Provider|S03-008|AGY searchable|AGY artifact", context_size: 512 }) },
       { tool: "sprint_archive", seed: "fixture", maxChars: 900, maxMs: 100, args: () => ({ reason: "Response stats archive." }) },
       { tool: "sprint_close", seed: "empty", maxChars: 1_000, maxMs: 500, args: async ({ tools, dataDir, rootDir }) => { await seedMiniSprint(tools, dataDir); await tools.item_done!.handler({ id: "S01-001", commit_id: headCommit, gate_results: [{ kind: "command", spec: "true", passed: true, evidence: "ok" }], changelog: { verb: "added", line: "Added response stats item." } }); return { coverage: { path: writeCoverage(rootDir), format: "lcov" } }; } },
       { tool: "sprint_detach", seed: "fixture", maxChars: 900, maxMs: 25, args: () => ({}) },
@@ -223,7 +223,7 @@ describe("public Sprinty tool responses", () => {
       ["subsprint_get", { id: subsprint }, 7_500],
       ["item_get", { id: item }, 8_000],
       ["note_list", { id: item }, 2_000],
-      ["search", { pattern: "Finish|Provider|S02-003|AGY searchable|AGY artifact", context_size: 512 }, 6_000],
+      ["search", { pattern: "Finish|Provider|S03-008|AGY searchable|AGY artifact", context_size: 512 }, 6_000],
       ["sprint_list", { data_dir: "$dataDir" }, 2_000],
     ];
     for (const [tool, rawArgs, maxChars] of cases) {
@@ -281,7 +281,7 @@ describe("public Sprinty tool responses", () => {
       ["subsprint_get", { id: subsprint }],
       ["item_get", { id: item }],
       ["note_list", { id: item }],
-      ["search", { pattern: "Finish|Provider|S02-003|AGY searchable|AGY artifact", context_size: 512 }],
+      ["search", { pattern: "Finish|Provider|S03-008|AGY searchable|AGY artifact", context_size: 512 }],
       ["sprint_list", { data_dir: "$dataDir" }],
     ];
     await withFixture(async (tools, dataDir) => {
@@ -325,7 +325,7 @@ describe("public Sprinty tool responses", () => {
     await withFixture(async (tools) => {
       await tools.artifact_add!.handler({ title: "AGY artifact fixture", path: "reports/agy.json", related_items: [item] });
       const note = await tools.note_add!.handler({ id: item, text: "AGY searchable note fixture" }) as { note: string };
-      const result = await tools.search!.handler({ pattern: "Finish|Provider|S02-003|AGY searchable|AGY artifact", context_size: 512 }) as { matches: Array<{ id: string; type: string; text: string; tool_call: string }> };
+      const result = await tools.search!.handler({ pattern: "Finish|Provider|S03-008|AGY searchable|AGY artifact", context_size: 512 }) as { matches: Array<{ id: string; type: string; text: string; tool_call: string }> };
       const types = new Set(result.matches.map((match) => match.type));
       expect(types.has("sprint")).toBe(true);
       expect(types.has("subsprint")).toBe(true);

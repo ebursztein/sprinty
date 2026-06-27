@@ -44,6 +44,7 @@ describe("changelog markdown", () => {
         items: [{
           id: "S01-001",
           subsprint_id: "S01",
+          title: "Catalog item",
           description: "Catalog item",
           created_at: "2026-06-14T00:01:00.000Z",
           resolved_at: "2026-06-14T00:02:00.000Z",
@@ -68,7 +69,9 @@ describe("changelog markdown", () => {
     const md = renderChangelogMarkdown(sprint);
     expect(md).toContain("# Changelog: Bookshop");
     expect(md).toContain("## Added");
-    expect(md).toContain("- Added searchable catalog. (`S01-001`)");
+    expect(md).toContain("- `S01-001` **Catalog item**: Added searchable catalog.");
+    expect(md).toContain("  - Subsprint: `S01`");
+    expect(md).toContain("  - Commit: `abc123`");
     expect(md).toContain("| File | Language | Directory | Items | Commits | + | - | Net | Churn |");
     expect(md).toContain("| src/bookshop/catalog.ts | TypeScript | src/bookshop | S01-001 | abc123 | 10 | 2 | 8 | 12 |");
     expect(md).toContain("## Coverage");

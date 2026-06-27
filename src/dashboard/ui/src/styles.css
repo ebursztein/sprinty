@@ -240,11 +240,15 @@ button {
   }
 
   .metrics-grid {
-    @apply grid gap-3 md:grid-cols-4;
+    @apply grid gap-3 lg:grid-cols-2;
   }
 
   .metric-panel {
-    @apply min-h-32 rounded-lg border border-base-300 bg-base-100 p-4 shadow-sm;
+    @apply min-h-32 min-w-0 overflow-hidden rounded-lg border border-base-300 bg-base-100 p-4 shadow-sm;
+  }
+
+  .metric-progress {
+    @apply grid content-start gap-4;
   }
 
   .metric-heading {
@@ -260,116 +264,56 @@ button {
     @apply text-4xl font-semibold leading-none text-base-content;
   }
 
-  .code-metrics .metric-heading strong {
-    @apply text-3xl;
-  }
-
   .progress-track {
-    @apply mt-5 h-3 overflow-hidden rounded-full bg-base-300;
-  }
-
-  .progress-fill {
-    @apply h-full rounded-full bg-primary;
+    @apply mt-5 h-3 w-full;
   }
 
   .metric-foot {
-    @apply mt-4;
+    @apply text-xs font-medium text-zinc-500 dark:text-zinc-400;
   }
 
-  .metric-status {
-    @apply flex items-center gap-5;
+  .progress-bars {
+    @apply grid gap-2 border-t border-base-300 pt-3;
   }
 
-  .donut {
-    @apply relative grid h-28 w-28 shrink-0 place-items-center rounded-full;
+  .progress-bar-row {
+    @apply grid grid-cols-[7.5rem_minmax(0,1fr)_4.75rem] items-center gap-3 text-xs text-zinc-500 dark:text-zinc-400;
   }
 
-  .donut::after {
-    content: "";
-    position: absolute;
-    inset: 26px;
-    border-radius: 9999px;
-    background: var(--color-base-100);
+  .count-progress {
+    @apply h-2 w-full;
   }
 
-  .donut span {
-    @apply relative z-10 text-base font-semibold text-base-content;
+  .progress-bar-row > span {
+    @apply flex min-w-0 items-baseline gap-2;
   }
 
-  .status-legend {
-    @apply grid gap-1.5 text-sm text-zinc-500 dark:text-zinc-400;
+  .progress-bar-row b {
+    @apply min-w-0 truncate font-medium;
   }
 
-  .status-legend b {
-    @apply mr-1 font-semibold;
+  .progress-bar-row small {
+    @apply font-semibold text-base-content;
   }
 
-  .legend-done {
-    @apply text-success;
-  }
-
-  .legend-open {
-    @apply text-warning;
-  }
-
-  .legend-split {
-    @apply text-zinc-500;
-  }
-
-  .legend-muted {
-    @apply text-zinc-500;
-  }
-
-  .code-bars {
-    @apply mt-4 grid gap-2;
-  }
-
-  .code-bar-row {
-    @apply grid grid-cols-[5.75rem_minmax(0,1fr)_2rem] items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400;
-  }
-
-  .code-bar-track {
-    @apply h-2 overflow-hidden rounded-full bg-base-300;
-  }
-
-  .code-bar-fill {
-    @apply h-full rounded-full;
-  }
-
-  .code-bar-add {
-    @apply bg-success;
-  }
-
-  .code-bar-delete {
-    @apply bg-error;
-  }
-
-  .code-bar-file {
-    @apply bg-zinc-500;
-  }
-
-  .code-bar-gate {
-    @apply bg-primary;
-  }
-
-  .code-bar-row strong {
+  .progress-bar-row strong {
     @apply text-right text-sm font-semibold text-base-content;
   }
 
-  .completion-stats-grid {
-    @apply mt-3 grid gap-2 text-sm text-zinc-500 dark:text-zinc-400;
+  .metric-stats {
+    @apply grid content-start gap-4;
   }
 
-  .completion-stats-grid div {
-    @apply flex items-baseline justify-between gap-3 border-b border-base-300 pb-1 last:border-b-0 last:pb-0;
+  .verb-chart-layout {
+    @apply min-h-52;
   }
 
-  .completion-stats-grid span {
-    @apply min-w-0 text-xs;
+  .verb-chart-shell {
+    @apply h-52 min-h-0;
   }
 
-  .completion-stats-grid strong {
-    @apply text-right text-sm font-semibold leading-tight text-base-content;
+  .verb-chart-shell canvas {
+    @apply h-full min-h-0 w-full;
   }
 
   .charts-band {
@@ -381,7 +325,7 @@ button {
   }
 
   .chart-stack {
-    @apply mt-4 h-52 rounded-md border border-base-300 p-3;
+    @apply mt-4 h-52;
   }
 
   .chart-stack canvas {
@@ -389,7 +333,7 @@ button {
   }
 
   .completion-chart-shell {
-    @apply mt-4 grid h-52 grid-rows-[minmax(0,1fr)_auto] gap-2 rounded-md border border-base-300 p-3;
+    @apply mt-4 grid h-52 grid-rows-[minmax(0,1fr)_auto] gap-2;
   }
 
   .completion-chart-shell canvas {
@@ -399,6 +343,10 @@ button {
 
   .completion-scale {
     @apply flex justify-between text-xs text-zinc-500;
+  }
+
+  .completion-summary-line {
+    @apply mt-3 text-right text-xs font-medium leading-snug text-zinc-500 dark:text-zinc-400;
   }
 
   .chart-legend {
@@ -413,76 +361,16 @@ button {
     @apply inline-block h-2 w-2 rounded-full content-[""];
   }
 
-  .legend-chip.bucket-sprint::before {
-    @apply bg-zinc-500;
-  }
-
-  .legend-chip.bucket-subsprint::before {
+  .legend-chip.bucket-added::before {
     @apply bg-blue-500;
   }
 
-  .legend-chip.bucket-item::before {
-    @apply bg-emerald-500;
-  }
-
-  .legend-chip.bucket-note::before {
+  .legend-chip.bucket-edited::before {
     @apply bg-amber-500;
   }
 
-  .legend-chip.bucket-artifact::before {
-    @apply bg-purple-500;
-  }
-
-  .legend-chip.bucket-dependency::before {
-    @apply bg-pink-500;
-  }
-
-  .legend-chip.bucket-follow_up::before {
-    @apply bg-cyan-500;
-  }
-
-  .legend-chip.bucket-spike::before {
-    @apply bg-orange-500;
-  }
-
-  .legend-chip.bucket-other::before {
-    @apply bg-zinc-700;
-  }
-
-  .stack-segment.bucket-sprint {
-    @apply fill-zinc-500;
-  }
-
-  .stack-segment.bucket-subsprint {
-    @apply fill-blue-500;
-  }
-
-  .stack-segment.bucket-item {
-    @apply fill-emerald-500;
-  }
-
-  .stack-segment.bucket-note {
-    @apply fill-amber-500;
-  }
-
-  .stack-segment.bucket-artifact {
-    @apply fill-purple-500;
-  }
-
-  .stack-segment.bucket-dependency {
-    @apply fill-pink-500;
-  }
-
-  .stack-segment.bucket-follow_up {
-    @apply fill-cyan-500;
-  }
-
-  .stack-segment.bucket-spike {
-    @apply fill-orange-500;
-  }
-
-  .stack-segment.bucket-other {
-    @apply fill-zinc-700;
+  .legend-chip.bucket-closed::before {
+    @apply bg-emerald-500;
   }
 
   .workbench {
@@ -535,7 +423,7 @@ button {
   }
 
   .tree-row-done {
-    @apply opacity-55 grayscale;
+    @apply text-zinc-500 dark:text-zinc-400;
   }
 
   .tree-row-active:not(.tree-row-selected) {
@@ -921,19 +809,6 @@ button {
 
   .metric-panel {
     min-height: 0;
-  }
-
-  .metric-status {
-    align-items: flex-start;
-  }
-
-  .donut {
-    width: 6rem;
-    height: 6rem;
-  }
-
-  .donut::after {
-    inset: 22px;
   }
 
   .code-grid {

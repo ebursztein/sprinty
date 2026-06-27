@@ -361,8 +361,17 @@ describe("sprinty e2e over MCP", () => {
       expect(state.timeline.map((e: { type: string }) => e.type)).toContain("note_added");
 
       const changelog = await call(c, "changelog", {});
-      expect(changelog.json.markdown).toContain("# Changelog: Build a neighborhood bookshop catalog");
-      expect(changelog.json.markdown).toContain("## Added");
+      expect(changelog.json).toEqual(expect.objectContaining({ path: join(fresh.dir, ".sprinty", "CHANGELOG.md") }));
+      expect(changelog.json.markdown).toBeUndefined();
+      expect(changelog.json.entries).toBeUndefined();
+      expect(readFileSync(changelog.json.path, "utf8")).toContain("## Added");
+      const changelogPath = join(fresh.dir, "CHANGELOG.md");
+      const fullChangelog = await call(c, "changelog", { path: changelogPath });
+      expect(fullChangelog.json.path).toBe(changelogPath);
+      expect(readFileSync(changelogPath, "utf8")).toContain("# Changelog: Build a neighborhood bookshop catalog");
+      expect(readFileSync(changelogPath, "utf8")).toContain("## Added");
+      expect(readFileSync(changelogPath, "utf8")).toContain("- `S02-001` **Search book listing**: Added searchable book listing for staff-curated inventory.");
+      expect(readFileSync(changelogPath, "utf8")).toContain(`  - Commit: \`${fresh.sha}\``);
 
       const closedMissingCoverage = await call(c, "sprint_close", {});
       expect(closedMissingCoverage.isError).toBe(true);
