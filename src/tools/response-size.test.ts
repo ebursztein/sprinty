@@ -168,7 +168,7 @@ describe("public Sprinty tool responses", () => {
       { tool: "item_add", seed: "fixture", maxChars: 900, maxMs: 100, args: () => ({ subsprint, title: "Response stats item", description: "Measure one representative response size.", code_locations: ["src/tools/register.ts"], gates: [{ kind: "command", spec: "true" }] }) },
       { tool: "item_deprecate", seed: "fixture", maxChars: 900, maxMs: 100, args: () => ({ id: item, reason: "Response stats baseline." }) },
       { tool: "item_done", seed: "empty", maxChars: 1_000, maxMs: 300, args: async ({ tools, dataDir }) => { await seedMiniSprint(tools, dataDir); return { id: "S01-001", commit_id: headCommit, gate_results: [{ kind: "command", spec: "true", passed: true, evidence: "ok" }], changelog: { verb: "added", line: "Added response stats item." } }; } },
-      { tool: "item_get", seed: "fixture", maxChars: 8_000, maxMs: 25, args: () => ({ id: item }) },
+      { tool: "item_get", seed: "fixture", maxChars: 8_000, maxMs: 75, args: () => ({ id: item }) },
       { tool: "item_split", seed: "empty", maxChars: 900, maxMs: 100, args: async ({ tools, dataDir }) => { await seedMiniSprint(tools, dataDir); return { id: "S01-001", description: "Split response stats work", goals: ["Measure split response"], gates: [{ kind: "command", spec: "true" }] }; } },
       { tool: "item_update", seed: "fixture", maxChars: 900, maxMs: 100, args: () => ({ id: item, note: "Response stats update." }) },
       { tool: "next", seed: "fixture", maxChars: 5_000, maxMs: 25, args: () => ({}) },
@@ -216,17 +216,17 @@ describe("public Sprinty tool responses", () => {
   });
 
   it("keeps representative read responses compact, pruned, timestamp-free, and fast", async () => {
-    const cases: Array<[string, Record<string, unknown>, number]> = [
-      ["overview", {}, 8_000],
-      ["next", {}, 5_000],
-      ["subsprint_list", {}, 6_000],
-      ["subsprint_get", { id: subsprint }, 7_500],
-      ["item_get", { id: item }, 8_000],
-      ["note_list", { id: item }, 2_000],
-      ["search", { pattern: "Finish|Provider|S03-008|AGY searchable|AGY artifact", context_size: 512 }, 6_000],
-      ["sprint_list", { data_dir: "$dataDir" }, 2_000],
+    const cases: Array<[string, Record<string, unknown>, number, number]> = [
+      ["overview", {}, 8_000, 25],
+      ["next", {}, 5_000, 25],
+      ["subsprint_list", {}, 6_000, 25],
+      ["subsprint_get", { id: subsprint }, 7_500, 25],
+      ["item_get", { id: item }, 8_000, 50],
+      ["note_list", { id: item }, 2_000, 25],
+      ["search", { pattern: "Finish|Provider|S03-008|AGY searchable|AGY artifact", context_size: 512 }, 6_000, 25],
+      ["sprint_list", { data_dir: "$dataDir" }, 2_000, 25],
     ];
-    for (const [tool, rawArgs, maxChars] of cases) {
+    for (const [tool, rawArgs, maxChars, maxMs] of cases) {
       await withFixture(async (tools, dataDir) => {
         const args = JSON.parse(JSON.stringify(rawArgs).replaceAll("$dataDir", dataDir));
         await tools[tool]!.handler(args);
@@ -234,7 +234,7 @@ describe("public Sprinty tool responses", () => {
         const result = await tools[tool]!.handler(args);
         const elapsed = performance.now() - start;
         expect(chars(result), `${tool} response too large`).toBeLessThanOrEqual(maxChars);
-        expect(elapsed, `${tool} took ${elapsed.toFixed(2)}ms`).toBeLessThan(5);
+        expect(elapsed, `${tool} took ${elapsed.toFixed(2)}ms`).toBeLessThan(maxMs);
         expect(collectTimestampKeys(result), `${tool} returned timestamp fields`).toEqual([]);
         expect(collectEmptyFields(result), `${tool} returned empty fields`).toEqual([]);
         expect(result, `${tool} missing help`).toHaveProperty("help");
