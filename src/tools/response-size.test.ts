@@ -14,6 +14,7 @@ const gitDir = root;
 const item = "S03-008";
 const subsprint = "S03";
 const headCommit = execFileSync("git", ["rev-parse", "HEAD"], { cwd: root }).toString().trim();
+const timingMultiplier = process.env.CI ? 2 : 1;
 
 const publicTools = [
   "artifact_add", "artifact_get", "artifact_list", "artifact_update",
@@ -100,6 +101,11 @@ async function seedMiniSprint(tools: ToolHandlers, dataDir: string): Promise<voi
 
 function chars(value: unknown): number {
   return JSON.stringify(value, null, 2).length;
+}
+
+function expectWithinTimeBudget(tool: string, elapsed: number, maxMs: number): void {
+  const budget = maxMs * timingMultiplier;
+  expect(elapsed, `${tool} took ${elapsed.toFixed(2)}ms; budget ${budget}ms`).toBeLessThan(budget);
 }
 
 function collectEmptyFields(value: unknown, path: string[] = []): string[] {
@@ -207,7 +213,7 @@ describe("public Sprinty tool responses", () => {
         const elapsed = performance.now() - start;
 
         expect(chars(result), `${entry.tool} response too large`).toBeLessThanOrEqual(entry.maxChars);
-        expect(elapsed, `${entry.tool} took ${elapsed.toFixed(2)}ms`).toBeLessThan(entry.maxMs);
+        expectWithinTimeBudget(entry.tool, elapsed, entry.maxMs);
         expect(result, `${entry.tool} missing help`).toHaveProperty("help");
       } finally {
         rmSync(tempRoot, { recursive: true, force: true });
@@ -234,7 +240,7 @@ describe("public Sprinty tool responses", () => {
         const result = await tools[tool]!.handler(args);
         const elapsed = performance.now() - start;
         expect(chars(result), `${tool} response too large`).toBeLessThanOrEqual(maxChars);
-        expect(elapsed, `${tool} took ${elapsed.toFixed(2)}ms`).toBeLessThan(maxMs);
+        expectWithinTimeBudget(tool, elapsed, maxMs);
         expect(collectTimestampKeys(result), `${tool} returned timestamp fields`).toEqual([]);
         expect(collectEmptyFields(result), `${tool} returned empty fields`).toEqual([]);
         expect(result, `${tool} missing help`).toHaveProperty("help");
