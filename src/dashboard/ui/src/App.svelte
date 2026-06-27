@@ -222,6 +222,13 @@
     return `ledger-target ledger-target-${row.targetKind}`;
   }
 
+  function ledgerEntryCountLabel(filteredCount: number, totalCount: number): string {
+    const entryLabel = totalCount === 1 ? "entry" : "entries";
+    return filteredCount === totalCount
+      ? `${totalCount} ${entryLabel}`
+      : `${filteredCount} of ${totalCount} ${entryLabel}`;
+  }
+
   function treeRowClass(sub: TreeSubsprint): string {
     const classes = ["tree-row"];
     if (selectedSubId === sub.id) classes.push("tree-row-selected");
@@ -1074,7 +1081,7 @@
           <div class="ledger-header">
             <div class="section-title">
               <span>Ledger</span>
-              <span>{filteredLedgerRows.length}/{ledgerRows.length} rows</span>
+              <span>{ledgerEntryCountLabel(filteredLedgerRows.length, ledgerRows.length)}</span>
             </div>
             <div class="ledger-controls" aria-label="Ledger filters">
               <input

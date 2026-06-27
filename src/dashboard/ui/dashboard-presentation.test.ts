@@ -22,6 +22,9 @@ describe("dashboard presentation", () => {
     expect(app).not.toContain("<th>Event</th>");
     expect(app).not.toContain("<td>{row.seq}</td>");
     expect(app).not.toContain("<td><code>{row.type}</code></td>");
+    expect(app).toContain("ledgerEntryCountLabel(filteredLedgerRows.length, ledgerRows.length)");
+    expect(app).toContain('"entries"');
+    expect(app).not.toContain("{filteredLedgerRows.length}/{ledgerRows.length} rows");
   });
 
   it("uses color-coded ledger text instead of pill styling", () => {
