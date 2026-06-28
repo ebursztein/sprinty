@@ -1,14 +1,11 @@
 <script lang="ts">
   import { onDestroy, onMount, tick as svelteTick } from "svelte";
   import {
-    ArcElement,
     BarController,
     BarElement,
     CategoryScale,
     Chart,
-    DoughnutController,
     Filler,
-    Legend,
     LineController,
     LineElement,
     LinearScale,
@@ -33,10 +30,8 @@
   let ledgerVerbFilter: LedgerVerb | "all" = "all";
   let theme: "light" | "dark" = "dark";
   let themeMounted = false;
-  let changelogVerbChartCanvas: HTMLCanvasElement | null = null;
   let eventChartCanvas: HTMLCanvasElement | null = null;
   let completionChartCanvas: HTMLCanvasElement | null = null;
-  let changelogVerbChart: Chart | null = null;
   let eventChart: Chart | null = null;
   let completionChart: Chart | null = null;
   let chartSignature = "";
@@ -46,6 +41,7 @@
   type CompletionRatePoint = { time: number; percent: number; completed: number };
   type ProgressMetricRow = { label: string; count: number; done: number; total: number; tone: string };
   type ChangelogVerbMetricRow = { label: string; value: number; tone: string };
+  type CodeMetricRow = { label: string; value: number; tone: string };
 
   type EventSegment = { category: string; count: number };
 
@@ -74,7 +70,7 @@
   const movingAverageWindow = 5;
   const chartCategories = ["added", "edited", "closed"];
   const changelogVerbCategories = ["added", "fixed", "changed", "removed", "deprecated", "security"];
-  Chart.register(ArcElement, BarController, BarElement, CategoryScale, DoughnutController, Filler, Legend, LineController, LineElement, LinearScale, PointElement, Tooltip);
+  Chart.register(BarController, BarElement, CategoryScale, Filler, LineController, LineElement, LinearScale, PointElement, Tooltip);
 
   $: model = sprint ? deriveDashboardModel(sprint) : null;
   $: if (model && !selectedSubId) selectedSubId = model.activeSubsprint?.id ?? model.sprint.subsprints[0]?.id ?? null;
@@ -96,6 +92,7 @@
   $: completionSummary = model ? buildCompletionSummary(model.sprint.timeline, model.progress.items.open, model.progress.items.total, chartWindowMs) : null;
   $: progressMetricRows = model ? buildProgressMetricRows(model) : [];
   $: changelogVerbRows = model ? buildChangelogVerbRows(model.sprint) : [];
+  $: codeMetricRows = model ? buildCodeMetricRows(model) : [];
   $: if (themeMounted && completionSummary) queueChartRender();
 
   onMount(() => {
@@ -110,7 +107,6 @@
   });
 
   onDestroy(() => {
-    changelogVerbChart?.destroy();
     eventChart?.destroy();
     completionChart?.destroy();
   });
@@ -515,6 +511,21 @@
       .filter((row) => row.value > 0);
   }
 
+  function buildCodeMetricRows(model: DashboardModel): CodeMetricRow[] {
+    const commits = new Set(
+      model.sprint.subsprints
+        .flatMap((sub) => sub.items)
+        .map((item) => item.commit_id)
+        .filter((commit): commit is string => Boolean(commit)),
+    );
+    return [
+      { label: "Added", value: model.progress.code.additions, tone: "added" },
+      { label: "Changed", value: model.progress.code.churn, tone: "changed" },
+      { label: "Files edited", value: model.progress.code.files, tone: "file" },
+      { label: "Commits", value: commits.size, tone: "commit" },
+    ];
+  }
+
   function eventEntity(entry: TimelineEntry): string {
     if (entry.type.startsWith("sprint_")) return "sprint";
     if (entry.type.startsWith("subsprint_")) return "subsprint";
@@ -546,7 +557,6 @@
     if (!eventChartCanvas || !completionChartCanvas || !completionSummary) return;
     const signature = JSON.stringify({
       theme,
-      changelogVerbRows,
       eventsByBucket,
       completion: {
         ratePoints: completionSummary.ratePoints,
@@ -556,28 +566,20 @@
     });
     if (signature === chartSignature) return;
 
-    Chart.getChart(changelogVerbChartCanvas ?? "")?.destroy();
     Chart.getChart(eventChartCanvas)?.destroy();
     Chart.getChart(completionChartCanvas)?.destroy();
-    changelogVerbChart?.destroy();
     eventChart?.destroy();
     completionChart?.destroy();
 
-    const nextChangelogVerbChart = changelogVerbChartCanvas && changelogVerbRows.length
-      ? new Chart(changelogVerbChartCanvas, changelogVerbChartConfig(changelogVerbRows))
-      : null;
     const nextEventChart = new Chart(eventChartCanvas, eventChartConfig(eventsByBucket));
     const nextCompletionChart = new Chart(completionChartCanvas, completionChartConfig(completionSummary));
-    changelogVerbChart = nextChangelogVerbChart;
     eventChart = nextEventChart;
     completionChart = nextCompletionChart;
     chartSignature = signature;
 
     requestAnimationFrame(() => {
-      changelogVerbChart?.resize();
       eventChart?.resize();
       completionChart?.resize();
-      changelogVerbChart?.update("none");
       eventChart?.update("none");
       completionChart?.update("none");
     });
@@ -614,49 +616,6 @@
       axis: theme === "dark" ? "#475569" : "#cbd5e1",
       grid: theme === "dark" ? "rgba(71, 85, 105, 0.42)" : "rgba(148, 163, 184, 0.38)",
       label: theme === "dark" ? "#a1a1aa" : "#52525b",
-    };
-  }
-
-  function changelogVerbChartConfig(rows: ChangelogVerbMetricRow[]): ChartConfiguration<"doughnut"> {
-    const palette = chartPalette();
-    return {
-      type: "doughnut",
-      data: {
-        labels: rows.map((row) => `${titleCase(row.label)} ${row.value}`),
-        datasets: [{
-          data: rows.map((row) => row.value),
-          backgroundColor: rows.map((row) => palette[row.tone] ?? palette.other),
-          borderColor: theme === "dark" ? "#020617" : "#f8fafc",
-          borderWidth: 2,
-        }],
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        animation: false,
-        cutout: "62%",
-        plugins: {
-          legend: {
-            display: true,
-            position: "right",
-            labels: {
-              boxHeight: 10,
-              boxWidth: 10,
-              color: palette.label,
-              padding: 14,
-              usePointStyle: true,
-            },
-          },
-          tooltip: {
-            callbacks: {
-              label: (item) => {
-                const row = rows[item.dataIndex];
-                return `${titleCase(row?.label ?? "change")}: ${item.formattedValue}`;
-              },
-            },
-          },
-        },
-      },
     };
   }
 
@@ -732,8 +691,8 @@
             backgroundColor: "rgba(59, 130, 246, 0.22)",
             borderWidth: 3,
             fill: "origin",
-            pointRadius: 4,
-            pointHoverRadius: 5,
+            pointRadius: 0,
+            pointHoverRadius: 0,
             stepped: "after",
             tension: 0.28,
           },
@@ -934,14 +893,39 @@
             <div class="metric-panel metric-stats">
               <div class="metric-heading"><span>Changelog verbs</span></div>
               {#if changelogVerbRows.length}
-                <div class="verb-chart-layout" aria-label="Changelog verb chart">
-                  <div class="verb-chart-shell">
-                    <canvas bind:this={changelogVerbChartCanvas} aria-label="Changelog verb doughnut chart"></canvas>
-                  </div>
-                </div>
+                <table class="summary-table" aria-label="Changelog verb table">
+                  <thead>
+                    <tr><th>Verb</th><th>Num</th></tr>
+                  </thead>
+                  <tbody>
+                    {#each changelogVerbRows as row}
+                      <tr>
+                        <td><span class={`summary-dot summary-${row.tone}`}></span>{titleCase(row.label)}</td>
+                        <td>{row.value}</td>
+                      </tr>
+                    {/each}
+                  </tbody>
+                </table>
               {:else}
                 <div class="empty-inline">No changelog entries yet.</div>
               {/if}
+            </div>
+
+            <div class="metric-panel metric-code">
+              <div class="metric-heading"><span>Code counts</span></div>
+              <table class="summary-table" aria-label="Code count table">
+                <thead>
+                  <tr><th>Metric</th><th>Num</th></tr>
+                </thead>
+                <tbody>
+                  {#each codeMetricRows as row}
+                    <tr>
+                      <td><span class={`summary-dot summary-${row.tone}`}></span>{row.label}</td>
+                      <td>{row.value}</td>
+                    </tr>
+                  {/each}
+                </tbody>
+              </table>
             </div>
           </div>
 
