@@ -24,8 +24,8 @@ Build is item-driven: sprint_new(goal, git_dir, data_dir, context_notes?) -> das
 Each subsprint should be one feature. Notes attach only to item ids: use note_add(id, text), note_list(id), note_get(id), and note_update(id, text).
 Use artifact_add/list/get/update for durable file outputs attached to the sprint, optionally related to item ids.
 next() returns a compact work window, blocked item ids/titles, scoped relations, artifacts, and recent activity. It deliberately omits the full dependency graph.
-item_done() records a Git-backed file change map and a semver changelog verb in the ledger; compact tool responses omit change maps. changelog({ path? }) writes Markdown with semver sections, coverage, and change-map tables, then returns only the path.
-Subsprints close automatically when their items are completed, split, or deprecated. sprint_close re-runs executable gates;
+item_done() records a Git-backed file change map and a semver changelog verb in the ledger; compact tool responses omit change maps. changelog({ path? }) generates SemVer Markdown with sections, coverage, and change-map tables, then returns only the path.
+Before sprint_close, call changelog({ path? }) so the SemVer Markdown changelog is written for the sprint. Subsprints close automatically when their items are completed, split, or deprecated. sprint_close re-runs executable gates;
 it refuses to close if anything is open, uncommitted, missing changelog, missing coverage, or failing a gate. IDs are minted by the server.
 Use search(pattern, context_size) to query the immutable record with bounded character context and focused tool_call hints. sprint_new and sprint_resume return a live dashboard URL; dashboard_info reports it and dashboard_restart refreshes it.`;
 

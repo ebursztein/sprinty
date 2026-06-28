@@ -121,8 +121,8 @@ subsprint_new({ description, goals, gates, dependencies? })
 item_add({ subsprint, title, description, code_locations, gates, dependencies?, high_priority? })
 next({})
 item_done({ id, commit_id, gate_results, changelog: { verb: "added" | "fixed" | "changed" | "removed" | "deprecated" | "security", line } })
-changelog({ path? }) -> { path }
-sprint_close({ coverage: { path, format: "lcov", command? } })
+changelog({ path? }) -> { path } // generates SemVer Markdown
+sprint_close({ coverage: { path, format: "lcov", command? } }) // after changelog generation
 ```
 
 Use `item_split` when an item is too large and `item_deprecate` when an item is intentionally
@@ -161,12 +161,12 @@ Dashboard tools:
 | `sprint_resume` | Reattach to an existing sprint after an MCP restart; returns dashboard info. |
 | `sprint_list` | List ledgers in a `data_dir` without creating a sprint. |
 | `sprint_detach` | Clear this MCP process binding and stop the dashboard. |
-| `sprint_close` | Re-run gates, require coverage evidence, and close only when all work is resolved. |
+| `sprint_close` | After `changelog({ path? })` has generated SemVer Markdown, re-run gates, require coverage evidence, and close only when all work is resolved. |
 | `sprint_archive` | Archive an active sprint with a recovery reason. |
 | `overview` | Compact sprint summary for orientation. |
 | `next` | Compact active work window with available and blocked items. |
 | `search` | Regex search over the immutable sprint ledger. |
-| `changelog` | Write the semver Markdown changelog to `path` or the sprint data dir and return only the path. |
+| `changelog` | Generate the SemVer Markdown changelog at `path` or the sprint data dir and return only the path. |
 
 ### Work Tools
 
@@ -209,8 +209,9 @@ keep it out of git unless you intentionally want to preserve it elsewhere. Sprin
 ledger into compact read models for agents and into the dashboard for humans.
 
 Completed items record the commit id, gate results, changelog entry, and Git-backed file change map.
-`sprint_close` re-checks commits, re-runs executable gates, requires coverage evidence, and refuses
-to close while any item is still open.
+Call `changelog({ path? })` before close to generate the SemVer Markdown file from those entries.
+`sprint_close` then re-checks commits, re-runs executable gates, requires coverage evidence, and
+refuses to close while any item is still open.
 
 ## More Documentation
 

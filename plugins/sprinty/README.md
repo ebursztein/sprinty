@@ -25,7 +25,8 @@ Expected agent loop:
 4. Record durable outputs with `artifact_add/list/amend/deprecate`.
 5. Record follow-up bugs with `follow_up(...)` and at least one bug id.
 6. Use `spike(...)` for investigations; spikes are still subsprints with normal child items, but they close only through `spike_conclude(...)` or `spike_deprecate(...)`.
-7. Resolve each item with `done(...)`, passing gate evidence, and a Git commit before `sprint_close(...)`.
+7. Resolve each item with `done(...)`, passing gate evidence, a Git commit, and a SemVer changelog verb plus line.
+8. Run `changelog(...)` to generate Sprinty's SemVer Markdown changelog, then run `sprint_close(...)`.
 
 For MCP-only setup without plugin skills:
 

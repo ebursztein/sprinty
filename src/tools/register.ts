@@ -82,7 +82,7 @@ export function buildToolHandlers(
           return { current: null, sprints: [], hint: "Pass data_dir to inspect existing Sprinty ledgers while this MCP session is unbound." };
         }
       }),
-    sprint_close: def(S.SprintCloseInput, "Close the sprint after a programmatic re-check of all gates.",
+    sprint_close: def(S.SprintCloseInput, "Close the sprint after changelog({path?}) has generated the SemVer Markdown and after a programmatic re-check of all gates.",
       async (i) => {
         const view = (await getStore()).closeSprint(i);
         await dashboard.close();
@@ -189,7 +189,7 @@ export function buildToolHandlers(
           help: helpLine(i.pattern),
         };
       }),
-    changelog: def(S.ChangelogInput, "Write the semver Markdown changelog and return only its path.",
+    changelog: def(S.ChangelogInput, "Generate the SemVer Markdown changelog and return only its path.",
       async (i) => {
         const store = await getStore();
         const path = i.path ?? join(store.dataDir, "CHANGELOG.md");
@@ -211,7 +211,7 @@ function orientation(): { skills: string[]; how: string } {
       "One sprint per session. Build item-driven: subsprint_new -> item_add -> item_done/item_split/item_deprecate. " +
       "Start with explicit git_dir and a worktree-scoped, uncommitted data_dir, such as <git_dir>/.sprinty when it is gitignored, so Sprinty cannot bind to a temp MCP cwd or shared state. " +
       "Items need a short title, bounded description, code_locations, and gates; keep them atomic. Each subsprint should represent one feature. " +
-      "sprint_new and sprint_resume return a dashboard URL for the human; use dashboard_info to inspect it or dashboard_restart to refresh it. Resolve every item, then sprint_close re-runs gates.",
+      "sprint_new and sprint_resume return a dashboard URL for the human; use dashboard_info to inspect it or dashboard_restart to refresh it. Resolve every item, generate the SemVer Markdown with changelog({path?}), then sprint_close re-runs gates.",
   };
 }
 
@@ -234,7 +234,7 @@ function helpLine(target: string) {
   const item = itemTarget(target);
   const subsprint = subsprintTarget(target);
   const overviewCall = target === "sprint" ? "overview()" : `item_get({ id: "${item}" })`;
-  return `Help: use next({}) for the active work window; ${overviewCall} for focused detail; subsprint_get({ id: "${subsprint}" }) for a subsprint's item list; note_list({ id: "${item}" }) for item notes; search({ pattern: "${target}", context_size: 512 }) for text matches; item_add({ subsprint: "${subsprint}", ... }) or subsprint_new({ ... }) for new tracked work; item_split({ id: "${item}", ... }) if the item is too large; item_done({ id: "${item}", commit_id, gate_results, changelog }) when complete; read skills using-sprinty and how-to-run-a-sprint for the full command workflow.`;
+  return `Help: use next({}) for the active work window; ${overviewCall} for focused detail; subsprint_get({ id: "${subsprint}" }) for a subsprint's item list; note_list({ id: "${item}" }) for item notes; search({ pattern: "${target}", context_size: 512 }) for text matches; item_add({ subsprint: "${subsprint}", ... }) or subsprint_new({ ... }) for new tracked work; item_split({ id: "${item}", ... }) if the item is too large; item_done({ id: "${item}", commit_id, gate_results, changelog }) when complete; before sprint_close, call changelog({ path? }) to generate the SemVer Markdown; read skills using-sprinty and how-to-run-a-sprint for the full command workflow.`;
 }
 
 function withHelp(value: unknown, target: string): unknown {

@@ -16,7 +16,8 @@ A Sprinty sprint is item-driven. Do not keep parallel prose trackers when tools 
 5. Work against one owning item. Use `item_update({ id, note })` for progress, `item_update({ id, title, description, high_priority })` for metadata, `item_update({ id, dependencies })` to replace graph edges, `note_add({ id, text })` only for item-scoped observations, and `artifact_add({ title, path, description, related_items })` for durable files.
 6. Resolve each item exactly once: `item_done({ id, commit_id, gate_results, changelog })`, `item_split({ id, description, goals, gates, dependencies })`, or `item_deprecate({ id, reason })`.
 7. Use `search({ pattern, context_size:512 })`, `*_list`, and focused `*_get` tools when you need detail.
-8. Finish with `changelog({})`, then `sprint_close({ coverage:{ path, format:"lcov", command } })`.
+8. Generate the sprint changelog with `changelog({ path? })`; Sprinty writes SemVer Markdown and returns only the path.
+9. Close only after the changelog exists: `sprint_close({ coverage:{ path, format:"lcov", command } })`.
 
 ## Rules
 
@@ -25,4 +26,5 @@ A Sprinty sprint is item-driven. Do not keep parallel prose trackers when tools 
 - Keep responses compact. Prefer `next`, `overview`, `search`, and list/get pairs over full views. `next({})` returns all available high-priority items, then one normal available item per subsprint by default.
 - Notes must be bound to an item id. Work needs an item.
 - Gates prove items. `item_done` requires a real commit and passing evidence for every declared gate.
-- `sprint_close` is the final gate: it rejects open items, missing commits/changelog/coverage, and failing executable gates.
+- `item_done` records each item's SemVer changelog verb and line; `changelog({ path? })` generates the Markdown file from those entries.
+- `sprint_close` is the final gate and comes after changelog generation: it rejects open items, missing commits/changelog/coverage, and failing executable gates.

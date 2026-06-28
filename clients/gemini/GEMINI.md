@@ -34,8 +34,8 @@ subsprint should be one feature; use `spike()` for feature investigations, then 
 outputs and `follow_up()` with bug ids for bugs found while moving fast. `next()` returns the active
 work window with relevant artifacts and recent activity: all available `high_priority` items first
 by default, then normal available items per subsprint. `item_update({ id, dependencies })` replaces
-dependencies, so pass `dependencies: []` to remove a bad edge. `done` records a Git-backed change map. `changelog()` returns Markdown with
-changelog and change-map tables. `sprint_close` rechecks commits, re-runs executable gates, requires
+dependencies, so pass `dependencies: []` to remove a bad edge. `done` records a Git-backed change map and each item's SemVer changelog entry. `changelog({ path? })` generates the SemVer Markdown file with
+sections, item entries, commits, coverage, and change-map tables; run it before `sprint_close`. `sprint_close` rechecks commits, re-runs executable gates, requires
 an LCOV coverage report path, and refuses to close on any blocker. Use `search(pattern,
 context_lines)` to query the immutable ledger. Show the dashboard URL returned by `sprint_new()` or
 `sprint_resume()` to the human so they can watch the sprint timeline; use `dashboard_info()` to

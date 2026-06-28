@@ -31,7 +31,7 @@ Prefer compact commands first. Lists are compact and say which `_get()` tool ret
 | `item_add` | `{ subsprint, title, description, code_locations[], gates[], dependencies?[], high_priority? }` | Create an atomic item. Title 3-80 chars; description 20-500 chars. Oversized inputs mean create more than one item. |
 | `item_get` | `{ id }` | Full item detail. |
 | `item_update` | `{ id, note?, title?, description?, high_priority?, dependencies?[] }` | Mutate item metadata and/or replace dependency ids. Use `dependencies:[]` to remove all dependencies. |
-| `item_done` | `{ id, commit_id, gate_results[], changelog }` | Complete an item. Commit must resolve; every declared gate needs passing evidence. |
+| `item_done` | `{ id, commit_id, gate_results[], changelog }` | Complete an item. Commit must resolve; every declared gate needs passing evidence, and `changelog` supplies the SemVer verb plus line. |
 | `item_split` | `{ id, description, goals[], gates[], dependencies?[] }` | Resolve an oversized item by creating a new subsprint. |
 | `item_deprecate` | `{ id, reason }` | Resolve an item as intentionally dropped. |
 
@@ -50,7 +50,7 @@ Prefer compact commands first. Lists are compact and say which `_get()` tool ret
 
 ## Close
 
-Use `changelog({})` for Markdown. Use `sprint_close({ coverage:{ path, format:"lcov", command? } })`; close re-runs executable gates and refuses open items, missing commits, missing changelog, missing coverage, or failing gates. Use `sprint_archive({ reason })` only for recovery.
+Sprinty generates the changelog for you. First call `changelog({ path? })` to write the SemVer Markdown file with sections, item entries, commits, coverage, and change-map tables; the response returns only `{ path }`. Then call `sprint_close({ coverage:{ path, format:"lcov", command? } })`; close re-runs executable gates and refuses open items, missing commits, missing changelog entries, missing coverage, or failing gates. Use `sprint_archive({ reason })` only for recovery.
 
 ## Rules
 
