@@ -302,16 +302,32 @@ function renameCurrentWindow(view: ReturnType<typeof windowCurrent>) {
   const proposed = view.next.map(compactNextQueueRow);
   const proposedIds = new Set(proposed.map((item) => item.id));
   return {
-    info: "Compact work window. item is the selected recommendation; next is the compact proposed task list. Use item_get({ id }), subsprint_get({ id }), note_get({ id }), or artifact_get({ id }) for full untruncated detail.",
+    info: "Compact work window. Use item_get, subsprint_get, note_get, or artifact_get for full detail.",
     last_resolved: view.last_resolved,
-    item: view.current,
+    item: view.current ? compactNextQueueRow(view.current) : null,
     next: proposed,
     blocked: view.blocked_open,
     current_subsprint: view.current_subsprint ? compactNextSubsprintRow(view.current_subsprint) : null,
     relations: view.relations,
     artifacts: view.artifacts,
     recent_artifacts: view.recent_artifacts,
+    items_with_notes: compactNotePressure(view.items_with_notes),
     recent: view.recent_activity.filter((entry) => !proposedIds.has(entry.id)),
+  };
+}
+
+function compactNotePressure(pressure: ReturnType<typeof windowCurrent>["items_with_notes"]) {
+  return {
+    open_count: pressure.open_count,
+    budget: pressure.open_budget,
+    ...(pressure.pressure ? { pressure: "Close or split noted items before adding notes elsewhere." } : {}),
+    ...(pressure.truncated ? { truncated: true } : {}),
+    items: pressure.items.map((item) => ({
+      id: item.id,
+      title: truncate(item.title, 56),
+      notes: item.note_count,
+      ...(item.over_item_note_budget ? { over_budget: true } : {}),
+    })),
   };
 }
 
@@ -349,7 +365,7 @@ function compactNextSubsprintRow(sub: NonNullable<ReturnType<typeof windowCurren
   return {
     id: sub.id,
     kind: sub.kind,
-    description: sub.description,
+    description: truncate(sub.description, 100),
     status: sub.status,
     dependencies: sub.dependencies,
     goal_count: sub.goals.length,

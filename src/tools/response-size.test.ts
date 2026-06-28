@@ -12,6 +12,7 @@ const root = dirname(dirname(dirname(fileURLToPath(import.meta.url))));
 const fixtureDir = join(root, "tests/data/capsem-sprinty-baseline");
 const gitDir = root;
 const item = "S03-008";
+const noteWritableItem = "S06-019";
 const subsprint = "S03";
 const headCommit = execFileSync("git", ["rev-parse", "HEAD"], { cwd: root }).toString().trim();
 const timingMultiplier = process.env.CI ? 2 : 1;
@@ -178,10 +179,10 @@ describe("public Sprinty tool responses", () => {
       { tool: "item_split", seed: "empty", maxChars: 900, maxMs: 100, args: async ({ tools, dataDir }) => { await seedMiniSprint(tools, dataDir); return { id: "S01-001", description: "Split response stats work", goals: ["Measure split response"], gates: [{ kind: "command", spec: "true" }] }; } },
       { tool: "item_update", seed: "fixture", maxChars: 900, maxMs: 100, args: () => ({ id: item, note: "Response stats update." }) },
       { tool: "next", seed: "fixture", maxChars: 5_000, maxMs: 25, args: () => ({}) },
-      { tool: "note_add", seed: "fixture", maxChars: 900, maxMs: 100, args: () => ({ id: item, text: "Response stats note." }) },
-      { tool: "note_get", seed: "fixture", maxChars: 900, maxMs: 25, args: async ({ tools }) => ({ id: ((await tools.note_add!.handler({ id: item, text: "Response stats note." })) as { note: string }).note }) },
+      { tool: "note_add", seed: "fixture", maxChars: 900, maxMs: 100, args: () => ({ id: noteWritableItem, text: "Response stats note." }) },
+      { tool: "note_get", seed: "fixture", maxChars: 900, maxMs: 25, args: async ({ tools }) => ({ id: ((await tools.note_add!.handler({ id: noteWritableItem, text: "Response stats note." })) as { note: string }).note }) },
       { tool: "note_list", seed: "fixture", maxChars: 2_000, maxMs: 25, args: () => ({ id: item }) },
-      { tool: "note_update", seed: "fixture", maxChars: 900, maxMs: 100, args: async ({ tools }) => ({ id: ((await tools.note_add!.handler({ id: item, text: "Response stats note." })) as { note: string }).note, text: "Updated response stats note." }) },
+      { tool: "note_update", seed: "fixture", maxChars: 900, maxMs: 100, args: async ({ tools }) => ({ id: ((await tools.note_add!.handler({ id: noteWritableItem, text: "Response stats note." })) as { note: string }).note, text: "Updated response stats note." }) },
       { tool: "overview", seed: "fixture", maxChars: 8_000, maxMs: 25, args: () => ({}) },
       { tool: "search", seed: "fixture", maxChars: 6_000, maxMs: 25, args: () => ({ pattern: "Finish|Provider|S03-008|AGY searchable|AGY artifact", context_size: 512 }) },
       { tool: "sprint_archive", seed: "fixture", maxChars: 900, maxMs: 100, args: () => ({ reason: "Response stats archive." }) },
@@ -312,7 +313,7 @@ describe("public Sprinty tool responses", () => {
     const cases: Array<[string, Record<string, unknown>, number]> = [
       ["item_add", { subsprint, title: "Response stats item", description: "Measure one representative response size.", code_locations: ["src/tools/register.ts"], gates: [{ kind: "command", spec: "true" }] }, 900],
       ["item_update", { id: item, note: "Response stats update." }, 700],
-      ["note_add", { id: item, text: "Response stats note." }, 800],
+      ["note_add", { id: noteWritableItem, text: "Response stats note." }, 800],
       ["item_deprecate", { id: item, reason: "Response stats baseline." }, 800],
       ["artifact_add", { title: "Response stats", path: "reports/response-stats.json", related_items: [item] }, 900],
       ["subsprint_new", { description: "Response stats subsprint", goals: ["Measure response sizes"], gates: [{ kind: "command", spec: "true" }] }, 900],
@@ -330,7 +331,7 @@ describe("public Sprinty tool responses", () => {
   it("search returns sprint, subsprint, item, note, and artifact hits from the real fixture", async () => {
     await withFixture(async (tools) => {
       await tools.artifact_add!.handler({ title: "AGY artifact fixture", path: "reports/agy.json", related_items: [item] });
-      const note = await tools.note_add!.handler({ id: item, text: "AGY searchable note fixture" }) as { note: string };
+      const note = await tools.note_add!.handler({ id: noteWritableItem, text: "AGY searchable note fixture" }) as { note: string };
       const result = await tools.search!.handler({ pattern: "Finish|Provider|S03-008|AGY searchable|AGY artifact", context_size: 512 }) as { matches: Array<{ id: string; type: string; text: string; tool_call: string }> };
       const types = new Set(result.matches.map((match) => match.type));
       expect(types.has("sprint")).toBe(true);
@@ -345,7 +346,7 @@ describe("public Sprinty tool responses", () => {
 
   it("search accepts regex patterns", async () => {
     await withFixture(async (tools) => {
-      await tools.note_add!.handler({ id: item, text: "Regex power note: AGY and Gemini both appear here." });
+      await tools.note_add!.handler({ id: noteWritableItem, text: "Regex power note: AGY and Gemini both appear here." });
       const result = await tools.search!.handler({ pattern: "AGY|Gemini", context_size: 256 }) as { matches: Array<{ text: string; tool_call: string }> };
       expect(result.matches.length).toBeGreaterThan(1);
       expect(result.matches.some((match) => /AGY|Gemini/.test(match.text))).toBe(true);
@@ -367,7 +368,7 @@ describe("public Sprinty tool responses", () => {
 
   it("overview summarizes subsprints without embedding item rows and keeps compact notes/artifacts", async () => {
     await withFixture(async (tools) => {
-      await tools.note_add!.handler({ id: item, text: "Overview should expose compact note rows." });
+      await tools.note_add!.handler({ id: noteWritableItem, text: "Overview should expose compact note rows." });
       await tools.artifact_add!.handler({ title: "Overview artifact", path: "reports/overview.json", related_items: [item] });
       const overview = await tools.overview!.handler({}) as {
         info: string;
@@ -380,7 +381,7 @@ describe("public Sprinty tool responses", () => {
       expect(overview.info).toContain("artifact_get");
       expect(overview.subsprints.every((sub) => sub.items === undefined)).toBe(true);
       expect(overview.subsprints.every((sub) => typeof sub.item_counts.open === "number")).toBe(true);
-      expect(overview.notes.some((note) => note.item === item && note.text.includes("compact note"))).toBe(true);
+      expect(overview.notes.some((note) => note.item === noteWritableItem && note.text.includes("compact note"))).toBe(true);
       expect(overview.artifacts.some((artifact) => artifact.title === "Overview artifact")).toBe(true);
     });
   });

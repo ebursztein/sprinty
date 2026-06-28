@@ -11,6 +11,7 @@ import { GraphCycleError, buildDependencyGraph } from "../domain/graph.js";
 import { buildItemChangeMap, emptyChangeMap } from "../domain/change-map.js";
 import { parseCoverageReport, type CoverageInput, type CoverageState, type CoverageSummary } from "../domain/coverage.js";
 import { renderChangelogMarkdown } from "../domain/changelog.js";
+import { NOTE_PER_ITEM_MAX, OPEN_ITEMS_WITH_NOTES_MAX, notePressure, validateNoteText } from "../domain/note-policy.js";
 import type { ArtifactKind, ChangelogEntry, LedgerEvent } from "../domain/events.js";
 import type { Gate, GateResult } from "../domain/gates.js";
 
@@ -264,6 +265,7 @@ export class SprintStore {
       if (subsprint) throw new StoreError(`Notes must attach to a specific item, not subsprint ${input.element}. Add one or more atomic items with item_add() for trackable work, then attach notes to the relevant item id.`);
       throw new StoreError(`Unknown item ${input.element}. Notes must attach to a specific item id.`);
     }
+    this.validateNoteAdd(s, item, input.text);
     const event = this.append({ type: "note_added", element_id: input.element, text: input.text });
     return { id: noteId(event.seq), view: this.requireState() };
   }
@@ -394,6 +396,8 @@ export class SprintStore {
   updateNote(input: { id: string; text: string }): { id: string; item: string; text: string } {
     this.requireActiveState();
     this.getNote(input.id);
+    const textError = validateNoteText(input.text);
+    if (textError) throw new StoreError(textError);
     this.append({ type: "note_updated", note_id: input.id, text: input.text });
     return this.getNote(input.id);
   }
@@ -488,6 +492,26 @@ export class SprintStore {
     for (const gate of gates) {
       if (gate.kind === "command" && looksLikeProse(gate.spec)) {
         throw new StoreError(`Command gate looks like prose. Use a manual gate or provide a shell command: ${gate.spec}`);
+      }
+    }
+  }
+
+  private validateNoteAdd(s: SprintView, item: SprintView["subsprints"][number]["items"][number], text: string): void {
+    const textError = validateNoteText(text);
+    if (textError) throw new StoreError(textError);
+
+    const itemNotes = item.notes.length;
+    if (itemNotes >= NOTE_PER_ITEM_MAX) {
+      throw new StoreError(`Item ${item.id} already has ${NOTE_PER_ITEM_MAX} notes. Close it with item_done, split it, or attach long context as an artifact.`);
+    }
+
+    if (item.status === "open" && itemNotes === 0) {
+      const pressure = notePressure(s);
+      if (pressure.open_count >= OPEN_ITEMS_WITH_NOTES_MAX) {
+        throw new StoreError(
+          pressure.pressure ?? `${OPEN_ITEMS_WITH_NOTES_MAX} open items already have notes.`,
+          pressure.items.map((noted) => `${noted.id}: ${noted.title} (${noted.note_count} note${noted.note_count === 1 ? "" : "s"})`),
+        );
       }
     }
   }

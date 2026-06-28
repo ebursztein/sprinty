@@ -1,4 +1,5 @@
 import type { ArtifactView, SprintView, ItemView, SubsprintView, TimelineEntry } from "../domain/projection.js";
+import { notePressure, type NotePressureSummary } from "../domain/note-policy.js";
 
 export interface CurrentWindow {
   goal: string;
@@ -10,6 +11,7 @@ export interface CurrentWindow {
   relations: RelationRow[];
   artifacts: ArtifactView[];
   recent_artifacts: ArtifactView[];
+  items_with_notes: NotePressureSummary;
   recent_activity: RecentActivityRow[];
 }
 
@@ -87,6 +89,7 @@ export function windowCurrent(view: SprintView, past: number, futurePerSubsprint
     relations: collectRelations(view, [...lastResolved, ...next].map((item) => item.id)),
     artifacts: collectRelevantArtifacts(view, current, lastResolved, next),
     recent_artifacts: collectArtifacts(view).filter((artifact) => artifact.status === "active").slice(-Math.max(futurePerSubsprint, next.length)),
+    items_with_notes: notePressure(view),
     recent_activity: view.timeline.slice(-Math.max(5, past + next.length)).map(compactActivity),
   };
 }

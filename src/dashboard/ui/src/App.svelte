@@ -70,6 +70,7 @@
   const pageSize = 8;
   const themeKey = "sprinty-dashboard-theme";
   const targetEventBuckets = 30;
+  const chartWindowMs = 4 * 60 * 60 * 1000;
   const movingAverageWindow = 5;
   const chartCategories = ["added", "edited", "closed"];
   const changelogVerbCategories = ["added", "fixed", "changed", "removed", "deprecated", "security"];
@@ -90,8 +91,9 @@
   $: selectedExpandedCount = selectedSub?.items.filter((item) => expandedItemIds.includes(item.id)).length ?? 0;
   $: sprintGoals = model ? dedupePreserveOrder(model.sprint.subsprints.flatMap((sub) => sub.goals)).slice(0, 8) : [];
   $: sprintSuccessCriteria = model ? dedupePreserveOrder(model.sprint.context_notes).slice(0, 8) : [];
-  $: eventsByBucket = model ? buildEventBuckets(model.sprint.timeline) : [];
-  $: completionSummary = model ? buildCompletionSummary(model.sprint.timeline, model.progress.items.open, model.progress.items.total) : null;
+  $: recentTimeline = model ? recentTimelineWindow(model.sprint.timeline, chartWindowMs) : [];
+  $: eventsByBucket = model ? buildEventBuckets(recentTimeline) : [];
+  $: completionSummary = model ? buildCompletionSummary(model.sprint.timeline, model.progress.items.open, model.progress.items.total, chartWindowMs) : null;
   $: progressMetricRows = model ? buildProgressMetricRows(model) : [];
   $: changelogVerbRows = model ? buildChangelogVerbRows(model.sprint) : [];
   $: if (themeMounted && completionSummary) queueChartRender();
@@ -295,6 +297,17 @@
     return new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   }
 
+  function recentTimelineWindow(entries: TimelineEntry[], windowMs: number): TimelineEntry[] {
+    const times = entries.map((entry) => parseTs(entry.ts)).filter((time): time is number => time !== null);
+    if (!times.length) return entries;
+    const latest = Math.max(...times);
+    const cutoff = latest - windowMs;
+    return entries.filter((entry) => {
+      const time = parseTs(entry.ts);
+      return time === null || time >= cutoff;
+    });
+  }
+
   function buildEventBuckets(entries: TimelineEntry[]): EventBucket[] {
     const normalized = entries
       .map((entry) => ({ entry, time: parseTs(entry.ts) }))
@@ -342,7 +355,6 @@
       entry.type === "sprint_created" ||
       entry.type === "subsprint_created" ||
       entry.type === "item_added" ||
-      entry.type === "note_added" ||
       entry.type === "artifact_added" ||
       entry.type === "follow_up_added" ||
       entry.type === "dependencies_added"
@@ -350,6 +362,7 @@
 
     if (
       entry.type === "item_updated" ||
+      entry.type === "note_added" ||
       entry.type === "note_updated" ||
       entry.type === "dependencies_replaced" ||
       entry.type === "artifact_amended"
@@ -367,7 +380,7 @@
     return null;
   }
 
-  function buildCompletionSummary(entries: TimelineEntry[], openItems: number, totalItems: number): CompletionSummary {
+  function buildCompletionSummary(entries: TimelineEntry[], openItems: number, totalItems: number, windowMs: number): CompletionSummary {
     const normalized = entries
       .map((entry) => ({ entry, time: parseTs(entry.ts) }))
       .filter((row): row is { entry: TimelineEntry; time: number } => row.time !== null)
@@ -378,11 +391,15 @@
     const ratePoints: CompletionRatePoint[] = [];
     const rateTotal = Math.max(0, totalItems);
     let completedItems = 0;
-    const firstTime = normalized[0]?.time ?? null;
+    const latestTime = normalized[normalized.length - 1]?.time ?? null;
+    const cutoff = latestTime === null ? null : latestTime - windowMs;
+    const firstTime = cutoff;
     const lastTime = normalized[normalized.length - 1]?.time ?? firstTime;
 
     if (rateTotal > 0 && firstTime !== null) {
-      ratePoints.push({ time: firstTime, percent: 0, completed: 0 });
+      const completedBeforeWindow = normalized.filter((row) => row.entry.type === "item_resolved" && row.time < firstTime).length;
+      completedItems = Math.min(rateTotal, completedBeforeWindow);
+      ratePoints.push({ time: firstTime, percent: Math.round((completedItems / rateTotal) * 100), completed: completedItems });
     }
 
     for (const { entry, time } of normalized) {
@@ -392,9 +409,10 @@
       }
 
       if (entry.type === "item_resolved") {
+        if (cutoff !== null && time < cutoff) continue;
         const started = starts.get(entry.id);
-        if (started === undefined) continue;
-        const durationMs = Math.max(0, time - started);
+        const durationStart = cutoff === null ? started : Math.max(started ?? cutoff, cutoff);
+        const durationMs = Math.max(0, time - durationStart);
         starts.delete(entry.id);
         points.push({ time, durationMs, movingAverageMs: 0 });
         if (rateTotal > 0) {

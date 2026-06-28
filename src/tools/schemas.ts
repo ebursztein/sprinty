@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { ChangelogEntry } from "../domain/events.js";
 import { Gate, GateResult } from "../domain/gates.js";
+import { NOTE_TEXT_MAX, validateNoteText } from "../domain/note-policy.js";
 
 export const CoverageInput = z.object({
   path: z.string().min(1),
@@ -130,10 +131,14 @@ export const SplitInput = z.object({
 export const ItemSplitInput = SplitInput;
 export const DeprecateInput = z.object({ id: z.string().min(1), reason: z.string().min(1) });
 export const ItemDeprecateInput = DeprecateInput;
-export const NoteInput = z.object({ id: z.string().min(1), text: z.string().min(1) });
+const NoteTextInput = z.string().trim().min(1).max(NOTE_TEXT_MAX).refine((value) => !validateNoteText(value), {
+  message: "Notes must be short evidence breadcrumbs, not bullet lists or plans. Add more items or attach long context as an artifact.",
+});
+
+export const NoteInput = z.object({ id: z.string().min(1), text: NoteTextInput });
 export const NoteGetInput = z.object({ id: z.string().min(1) });
 export const NoteListInput = z.object({ id: z.string().min(1) });
-export const NoteUpdateInput = z.object({ id: z.string().min(1), text: z.string().min(1) });
+export const NoteUpdateInput = z.object({ id: z.string().min(1), text: NoteTextInput });
 export const ArtifactAddInput = z.object({
   id: z.string().min(1).optional(),
   title: z.string().min(1),
