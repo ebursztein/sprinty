@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 
 const app = readFileSync(new URL("./src/App.svelte", import.meta.url), "utf8");
 const styles = readFileSync(new URL("./src/styles.css", import.meta.url), "utf8");
+const chartWindows = readFileSync(new URL("./chart-windows.ts", import.meta.url), "utf8");
 
 function cssBlock(selector: string): string {
   const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -55,9 +56,10 @@ describe("dashboard presentation", () => {
     expect(app).not.toContain("Legend");
     expect(app).toContain("const targetEventBuckets = 30");
     expect(app).toContain("const chartWindowMs = 4 * 60 * 60 * 1000");
-    expect(app).toContain("recentTimelineWindow(model.sprint.timeline, chartWindowMs)");
-    expect(app).toContain("buildEventBuckets(recentTimeline)");
-    expect(app).toContain("buildCompletionSummary(model.sprint.timeline, model.progress.items.open, model.progress.items.total, chartWindowMs)");
+    expect(app).toContain("sprintStartedAtMs = model ? parseTs(model.sprint.created_at) : null");
+    expect(app).toContain("recentTimelineWindow(model.sprint.timeline, chartWindowMs, nowMs, sprintStartedAtMs)");
+    expect(app).toContain("buildEventBuckets(recentTimeline, { nowMs, windowMs: chartWindowMs, sprintStartedAtMs");
+    expect(app).toContain("buildCompletionSummary(model.sprint.timeline, model.progress.items.open, model.progress.items.total, {");
     expect(app).toContain("const changelogVerbCategories");
     expect(app).toContain("new Chart(eventChartCanvas");
     expect(app).toContain("new Chart(completionChartCanvas");
@@ -73,8 +75,8 @@ describe("dashboard presentation", () => {
     expect(app).toContain("Event activity by action");
     expect(app).toContain("Changelog verbs");
     expect(app).toContain('const chartCategories = ["added", "edited", "closed"]');
-    expect(app).toContain('entry.type === "note_added"');
-    expect(app).toContain('entry.type === "note_updated"');
+    expect(chartWindows).toContain('entry.type === "note_added"');
+    expect(chartWindows).toContain('entry.type === "note_updated"');
     expect(app).toContain('label: "Projected"');
     expect(app).toContain("borderDash");
     expect(app).toContain('fill: "origin"');

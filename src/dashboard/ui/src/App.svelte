@@ -15,8 +15,9 @@
   } from "chart.js";
   import DOMPurify from "dompurify";
   import { marked } from "marked";
+  import { buildCompletionSummary, buildEventBuckets, parseTs, recentTimelineWindow, type CompletionRatePoint, type CompletionSummary, type EventBucket } from "../chart-windows";
   import { deriveDashboardModel, filterLedgerRows, ledgerVerbIcon, statusDotClass, statusPillClass, type DashboardModel, type LedgerEntity, type LedgerRow, type LedgerVerb, type TreeSubsprint } from "../model";
-  import type { ArtifactView, ItemView, SprintView, SubsprintView, TimelineEntry } from "../../../domain/projection";
+  import type { ArtifactView, ItemView, SprintView } from "../../../domain/projection";
 
   let sprint: SprintView | null = null;
   let model: DashboardModel | null = null;
@@ -29,6 +30,7 @@
   let ledgerEntityFilter: LedgerEntity | "all" = "all";
   let ledgerVerbFilter: LedgerVerb | "all" = "all";
   let theme: "light" | "dark" = "dark";
+  let nowMs = Date.now();
   let themeMounted = false;
   let eventChartCanvas: HTMLCanvasElement | null = null;
   let completionChartCanvas: HTMLCanvasElement | null = null;
@@ -37,31 +39,9 @@
   let chartSignature = "";
   let chartRenderQueued = false;
 
-  type CompletionPoint = { time: number; movingAverageMs: number; durationMs: number };
-  type CompletionRatePoint = { time: number; percent: number; completed: number };
   type ProgressMetricRow = { label: string; count: number; done: number; total: number; tone: string };
   type ChangelogVerbMetricRow = { label: string; value: number; tone: string };
   type CodeMetricRow = { label: string; value: number; tone: string };
-
-  type EventSegment = { category: string; count: number };
-
-  type EventBucket = { label: string; total: number; segments: EventSegment[] };
-
-  type CompletionSummary = {
-    points: CompletionPoint[];
-    ratePoints: CompletionRatePoint[];
-    rateStart: number | null;
-    rateEnd: number | null;
-    avgMs: number | null;
-    medianMs: number | null;
-    minMs: number | null;
-    maxMs: number | null;
-    etaMs: number | null;
-    etaAt: string | null;
-    projectedAt: number | null;
-    openItems: number;
-    remainingItems: number;
-  };
 
   const pageSize = 8;
   const themeKey = "sprinty-dashboard-theme";
@@ -87,9 +67,16 @@
   $: selectedExpandedCount = selectedSub?.items.filter((item) => expandedItemIds.includes(item.id)).length ?? 0;
   $: sprintGoals = model ? dedupePreserveOrder(model.sprint.subsprints.flatMap((sub) => sub.goals)).slice(0, 8) : [];
   $: sprintSuccessCriteria = model ? dedupePreserveOrder(model.sprint.context_notes).slice(0, 8) : [];
-  $: recentTimeline = model ? recentTimelineWindow(model.sprint.timeline, chartWindowMs) : [];
-  $: eventsByBucket = model ? buildEventBuckets(recentTimeline) : [];
-  $: completionSummary = model ? buildCompletionSummary(model.sprint.timeline, model.progress.items.open, model.progress.items.total, chartWindowMs) : null;
+  $: sprintStartedAtMs = model ? parseTs(model.sprint.created_at) : null;
+  $: recentTimeline = model ? recentTimelineWindow(model.sprint.timeline, chartWindowMs, nowMs, sprintStartedAtMs) : [];
+  $: eventsByBucket = model ? buildEventBuckets(recentTimeline, { nowMs, windowMs: chartWindowMs, sprintStartedAtMs, bucketCount: targetEventBuckets, categories: chartCategories, formatLabel: formatBucketLabel }) : [];
+  $: completionSummary = model ? buildCompletionSummary(model.sprint.timeline, model.progress.items.open, model.progress.items.total, {
+    nowMs,
+    windowMs: chartWindowMs,
+    sprintStartedAtMs,
+    movingAverageWindow,
+    formatEta: (ts) => new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+  }) : null;
   $: progressMetricRows = model ? buildProgressMetricRows(model) : [];
   $: changelogVerbRows = model ? buildChangelogVerbRows(model.sprint) : [];
   $: codeMetricRows = model ? buildCodeMetricRows(model) : [];
@@ -125,6 +112,7 @@
   }
 
   async function tick(): Promise<void> {
+    nowMs = Date.now();
     try {
       const response = await fetch("/state");
       if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
@@ -274,12 +262,6 @@
     return out;
   }
 
-  function parseTs(ts: string | null | undefined): number | null {
-    if (!ts) return null;
-    const value = Date.parse(ts);
-    return Number.isNaN(value) ? null : value;
-  }
-
   function formatDuration(ms: number | null | undefined): string {
     if (ms === null || ms === undefined || ms <= 0) return "--";
     const totalMinutes = Math.max(1, Math.round(ms / 60000));
@@ -291,193 +273,6 @@
 
   function formatBucketLabel(ts: number): string {
     return new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-  }
-
-  function recentTimelineWindow(entries: TimelineEntry[], windowMs: number): TimelineEntry[] {
-    const times = entries.map((entry) => parseTs(entry.ts)).filter((time): time is number => time !== null);
-    if (!times.length) return entries;
-    const latest = Math.max(...times);
-    const cutoff = latest - windowMs;
-    return entries.filter((entry) => {
-      const time = parseTs(entry.ts);
-      return time === null || time >= cutoff;
-    });
-  }
-
-  function buildEventBuckets(entries: TimelineEntry[]): EventBucket[] {
-    const normalized = entries
-      .map((entry) => ({ entry, time: parseTs(entry.ts) }))
-      .filter((row): row is { entry: TimelineEntry; time: number } => row.time !== null)
-      .sort((a, b) => a.time - b.time);
-
-    if (!normalized.length) return [];
-
-    const timestamps = normalized.map((row) => row.time);
-    const firstTs = timestamps[0] ?? 0;
-    const lastTs = timestamps[timestamps.length - 1] ?? firstTs;
-    const spanMs = Math.max(1, lastTs - firstTs);
-    const bucketCount = targetEventBuckets;
-    const bucketMs = spanMs / bucketCount;
-
-    const buckets: { label: string; total: number; counts: Map<string, number> }[] = Array.from({ length: bucketCount }, (_, index) => ({
-      label: formatBucketLabel(firstTs + index * bucketMs),
-      total: 0,
-      counts: new Map(),
-    }));
-
-    for (const { entry, time } of normalized) {
-      const category = eventAction(entry);
-      if (!category) continue;
-
-      const bucketIndex = Math.min(bucketCount - 1, Math.max(0, Math.floor((time - firstTs) / bucketMs)));
-      const bucket = buckets[bucketIndex];
-      if (!bucket) continue;
-
-      bucket.total += 1;
-      bucket.counts.set(category, (bucket.counts.get(category) ?? 0) + 1);
-    }
-
-    return buckets.map((bucket) => ({
-      label: bucket.label,
-      total: bucket.total,
-      segments: chartCategories
-        .map((category) => ({ category, count: bucket.counts.get(category) ?? 0 }))
-        .filter((segment) => segment.count > 0),
-    }));
-  }
-
-  function eventAction(entry: TimelineEntry): string | null {
-    if (
-      entry.type === "sprint_created" ||
-      entry.type === "subsprint_created" ||
-      entry.type === "item_added" ||
-      entry.type === "artifact_added" ||
-      entry.type === "follow_up_added" ||
-      entry.type === "dependencies_added"
-    ) return "added";
-
-    if (
-      entry.type === "item_updated" ||
-      entry.type === "note_added" ||
-      entry.type === "note_updated" ||
-      entry.type === "dependencies_replaced" ||
-      entry.type === "artifact_amended"
-    ) return "edited";
-
-    if (
-      entry.type === "sprint_closed" ||
-      entry.type === "sprint_archived" ||
-      entry.type === "item_resolved" ||
-      entry.type === "artifact_deprecated" ||
-      entry.type === "spike_concluded" ||
-      entry.type === "spike_deprecated"
-    ) return "closed";
-
-    return null;
-  }
-
-  function buildCompletionSummary(entries: TimelineEntry[], openItems: number, totalItems: number, windowMs: number): CompletionSummary {
-    const normalized = entries
-      .map((entry) => ({ entry, time: parseTs(entry.ts) }))
-      .filter((row): row is { entry: TimelineEntry; time: number } => row.time !== null)
-      .sort((a, b) => a.time - b.time);
-
-    const starts = new Map<string, number>();
-    const points: CompletionPoint[] = [];
-    const ratePoints: CompletionRatePoint[] = [];
-    const rateTotal = Math.max(0, totalItems);
-    let completedItems = 0;
-    const latestTime = normalized[normalized.length - 1]?.time ?? null;
-    const cutoff = latestTime === null ? null : latestTime - windowMs;
-    const firstTime = cutoff;
-    const lastTime = normalized[normalized.length - 1]?.time ?? firstTime;
-
-    if (rateTotal > 0 && firstTime !== null) {
-      const completedBeforeWindow = normalized.filter((row) => row.entry.type === "item_resolved" && row.time < firstTime).length;
-      completedItems = Math.min(rateTotal, completedBeforeWindow);
-      ratePoints.push({ time: firstTime, percent: Math.round((completedItems / rateTotal) * 100), completed: completedItems });
-    }
-
-    for (const { entry, time } of normalized) {
-      if (entry.type === "item_added") {
-        starts.set(entry.id, time);
-        continue;
-      }
-
-      if (entry.type === "item_resolved") {
-        if (cutoff !== null && time < cutoff) continue;
-        const started = starts.get(entry.id);
-        const durationStart = cutoff === null ? started : Math.max(started ?? cutoff, cutoff);
-        const durationMs = Math.max(0, time - durationStart);
-        starts.delete(entry.id);
-        points.push({ time, durationMs, movingAverageMs: 0 });
-        if (rateTotal > 0) {
-          completedItems = Math.min(rateTotal, completedItems + 1);
-          ratePoints.push({
-            time,
-            percent: Math.round((completedItems / rateTotal) * 100),
-            completed: completedItems,
-          });
-        }
-      }
-    }
-
-    for (let i = 0; i < points.length; i++) {
-      const start = Math.max(0, i - movingAverageWindow + 1);
-      const window = points.slice(start, i + 1);
-      const sum = window.reduce((acc, point) => acc + point.durationMs, 0);
-      points[i] = { ...points[i], movingAverageMs: Math.round(sum / window.length) };
-    }
-
-    const durations = points.map((point) => point.durationMs);
-    if (!durations.length) {
-      return {
-        points: [],
-        ratePoints,
-        rateStart: firstTime,
-        rateEnd: lastTime,
-        avgMs: null,
-        medianMs: null,
-        minMs: null,
-        maxMs: null,
-        etaMs: null,
-        etaAt: null,
-        projectedAt: null,
-        openItems,
-        remainingItems: Math.max(0, openItems),
-      };
-    }
-
-    const avgMs = Math.round(durations.reduce((sum, value) => sum + value, 0) / durations.length);
-    const sorted = [...durations].sort((a, b) => a - b);
-    const medianMs = sorted.length === 0
-      ? null
-      : sorted.length % 2 === 1
-        ? sorted[Math.floor(sorted.length / 2)]
-        : (sorted[sorted.length / 2 - 1] + sorted[sorted.length / 2]) / 2;
-    const minMs = sorted.length > 0 ? sorted[0] : null;
-    const maxMs = sorted.length > 0 ? sorted[sorted.length - 1] : null;
-    const remainingItems = Math.max(0, openItems);
-    const etaMs = avgMs > 0 ? avgMs * remainingItems : null;
-    const projectedAt = etaMs && ratePoints.length ? ratePoints[ratePoints.length - 1]!.time + etaMs : null;
-    const etaAt = projectedAt ? new Date(projectedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : null;
-    const rateEnd = projectedAt && projectedAt > (lastTime ?? projectedAt) ? projectedAt : lastTime;
-
-    return {
-      points,
-      ratePoints,
-      rateStart: firstTime,
-      rateEnd,
-      avgMs,
-      medianMs,
-      minMs,
-      maxMs,
-      etaMs,
-      etaAt,
-      projectedAt,
-      openItems,
-      remainingItems,
-    };
   }
 
 
@@ -524,18 +319,6 @@
       { label: "Files edited", value: model.progress.code.files, tone: "file" },
       { label: "Commits", value: commits.size, tone: "commit" },
     ];
-  }
-
-  function eventEntity(entry: TimelineEntry): string {
-    if (entry.type.startsWith("sprint_")) return "sprint";
-    if (entry.type.startsWith("subsprint_")) return "subsprint";
-    if (entry.type.startsWith("item_")) return "item";
-    if (entry.type.startsWith("note_")) return "note";
-    if (entry.type.startsWith("artifact_")) return "artifact";
-    if (entry.type.startsWith("dependencies_") || entry.type.startsWith("dependency_")) return "dependency";
-    if (entry.type.startsWith("follow_up_")) return "follow_up";
-    if (entry.type.startsWith("spike_")) return "spike";
-    return "other";
   }
 
   function countProgressClass(tone: string): string {
