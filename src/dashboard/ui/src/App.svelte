@@ -684,7 +684,7 @@
             </div>
 
             <div class="metric-panel metric-stats">
-              <div class="metric-heading"><span>Changelog verbs</span></div>
+              <div class="metric-heading"><span>Changelog stats</span></div>
               {#if changelogVerbRows.length}
                 <table class="summary-table" aria-label="Changelog verb table">
                   <thead>
@@ -705,7 +705,7 @@
             </div>
 
             <div class="metric-panel metric-code">
-              <div class="metric-heading"><span>Code counts</span></div>
+              <div class="metric-heading"><span>Code stats</span></div>
               <table class="summary-table" aria-label="Code count table">
                 <thead>
                   <tr><th>Metric</th><th>Num</th></tr>

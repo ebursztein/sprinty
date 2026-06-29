@@ -74,7 +74,10 @@ describe("dashboard presentation", () => {
     expect(app).not.toContain("<canvas bind:this={statusChartCanvas}");
     expect(app).toContain("Completion rate over time");
     expect(app).toContain("Event activity by action");
-    expect(app).toContain("Changelog verbs");
+    expect(app).toContain("Changelog stats");
+    expect(app).toContain("Code stats");
+    expect(app).not.toContain("Changelog verbs");
+    expect(app).not.toContain("Code counts");
     expect(app).toContain('const chartCategories = ["added", "edited", "closed"]');
     expect(chartWindows).toContain('entry.type === "note_added"');
     expect(chartWindows).toContain('entry.type === "note_updated"');
