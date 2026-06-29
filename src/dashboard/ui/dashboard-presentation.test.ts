@@ -50,11 +50,11 @@ describe("dashboard presentation", () => {
   it("renders readable dashboard analytics charts and stats", () => {
     expect(app).toContain('from "chart.js"');
     expect(app).toContain("Chart.register");
+    expect(app).toContain("ArcElement");
+    expect(app).toContain("DoughnutController");
     expect(app).toContain("Filler");
+    expect(app).toContain("Legend");
     expect(app).not.toContain("PieController");
-    expect(app).not.toContain("DoughnutController");
-    expect(app).not.toContain("ArcElement");
-    expect(app).not.toContain("Legend");
     expect(app).toContain("const targetEventBuckets = 30");
     expect(app).toContain("const chartWindowMs = 4 * 60 * 60 * 1000");
     expect(app).toContain("sprintStartedAtMs = model ? parseTs(model.sprint.created_at) : null");
@@ -64,10 +64,12 @@ describe("dashboard presentation", () => {
     expect(app).toContain("const changelogVerbCategories");
     expect(app).toContain("new Chart(eventChartCanvas");
     expect(app).toContain("new Chart(completionChartCanvas");
+    expect(app).toContain("new Chart(changelogVerbChartCanvas");
     expect(app).not.toContain("new Chart(statusChartCanvas");
-    expect(app).not.toContain("new Chart(changelogVerbChartCanvas");
-    expect(app).not.toContain("changelogVerbChartCanvas");
-    expect(app).toContain('class="summary-table" aria-label="Changelog verb table"');
+    expect(app).toContain("changelogVerbChartCanvas");
+    expect(app).toContain('class="changelog-chart-shell"');
+    expect(app).toContain('aria-label="Changelog verb chart"');
+    expect(app).not.toContain('class="summary-table" aria-label="Changelog verb table"');
     expect(app).toContain('class="summary-table" aria-label="Code count table"');
     expect(app).toContain("<canvas bind:this={eventChartCanvas}");
     expect(app).toContain("<canvas bind:this={completionChartCanvas}");
@@ -94,8 +96,9 @@ describe("dashboard presentation", () => {
     expect(app).toContain("completionStatsLine(completionSummary)");
     expect(app).toContain('class="completion-summary-line"');
     expect(app).not.toContain("<small>{completionStatsLine(completionSummary)}</small>");
-    expect(app).not.toContain('type: "doughnut"');
-    expect(app).not.toContain('cutout: "62%"');
+    expect(app).toContain('type: "doughnut"');
+    expect(app).toContain('cutout: "62%"');
+    expect(app).toContain('position: "right"');
     expect(app).not.toContain("Completion pace (5-item moving avg)");
     expect(app).not.toContain("Completion stats");
     expect(app).not.toContain('class="metric-panel completion-stats"');

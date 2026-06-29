@@ -308,6 +308,14 @@ button {
     @apply grid content-start gap-4;
   }
 
+  .changelog-chart-shell {
+    @apply h-48 min-h-48;
+  }
+
+  .changelog-chart-shell canvas {
+    @apply h-full min-h-0 w-full;
+  }
+
   .summary-table {
     @apply w-full min-w-0 table-fixed text-left text-xs;
   }

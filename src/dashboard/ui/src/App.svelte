@@ -3,9 +3,12 @@
   import {
     BarController,
     BarElement,
+    ArcElement,
     CategoryScale,
     Chart,
+    DoughnutController,
     Filler,
+    Legend,
     LineController,
     LineElement,
     LinearScale,
@@ -35,8 +38,10 @@
   let themeMounted = false;
   let eventChartCanvas: HTMLCanvasElement | null = null;
   let completionChartCanvas: HTMLCanvasElement | null = null;
+  let changelogVerbChartCanvas: HTMLCanvasElement | null = null;
   let eventChart: Chart | null = null;
   let completionChart: Chart | null = null;
+  let changelogVerbChart: Chart | null = null;
   let chartSignature = "";
   let chartRenderQueued = false;
 
@@ -52,7 +57,7 @@
   const movingAverageWindow = 5;
   const chartCategories = ["added", "edited", "closed"];
   const changelogVerbCategories = ["added", "fixed", "changed", "removed", "deprecated", "security"];
-  Chart.register(BarController, BarElement, CategoryScale, Filler, LineController, LineElement, LinearScale, PointElement, Tooltip);
+  Chart.register(ArcElement, BarController, BarElement, CategoryScale, DoughnutController, Filler, Legend, LineController, LineElement, LinearScale, PointElement, Tooltip);
 
   $: model = sprint ? deriveDashboardModel(sprint) : null;
   $: if (model && !selectedSubId) selectedSubId = model.activeSubsprint?.id ?? model.sprint.subsprints[0]?.id ?? null;
@@ -98,6 +103,7 @@
   onDestroy(() => {
     eventChart?.destroy();
     completionChart?.destroy();
+    changelogVerbChart?.destroy();
   });
 
   function applyTheme(next: "light" | "dark"): void {
@@ -356,25 +362,34 @@
         rateStart: completionSummary.rateStart,
         rateEnd: completionSummary.rateEnd,
       },
+      changelogVerbRows,
     });
     if (signature === chartSignature) return;
 
     Chart.getChart(eventChartCanvas)?.destroy();
     Chart.getChart(completionChartCanvas)?.destroy();
+    if (changelogVerbChartCanvas) Chart.getChart(changelogVerbChartCanvas)?.destroy();
     eventChart?.destroy();
     completionChart?.destroy();
+    changelogVerbChart?.destroy();
 
     const nextEventChart = new Chart(eventChartCanvas, eventChartConfig(eventsByBucket));
     const nextCompletionChart = new Chart(completionChartCanvas, completionChartConfig(completionSummary));
+    const nextChangelogVerbChart = changelogVerbChartCanvas && changelogVerbRows.length
+      ? new Chart(changelogVerbChartCanvas, changelogVerbChartConfig(changelogVerbRows))
+      : null;
     eventChart = nextEventChart;
     completionChart = nextCompletionChart;
+    changelogVerbChart = nextChangelogVerbChart;
     chartSignature = signature;
 
     requestAnimationFrame(() => {
       eventChart?.resize();
       completionChart?.resize();
+      changelogVerbChart?.resize();
       eventChart?.update("none");
       completionChart?.update("none");
+      changelogVerbChart?.update("none");
     });
   }
 
@@ -460,6 +475,56 @@
               color: palette.label,
               precision: 0,
               maxTicksLimit: 4,
+            },
+          },
+        },
+      },
+    };
+  }
+
+  function changelogVerbChartConfig(rows: ChangelogVerbMetricRow[]): ChartConfiguration<"doughnut"> {
+    const palette = chartPalette();
+    return {
+      type: "doughnut",
+      data: {
+        labels: rows.map((row) => titleCase(row.label)),
+        datasets: [
+          {
+            data: rows.map((row) => row.value),
+            backgroundColor: rows.map((row) => palette[row.tone] ?? palette.other),
+            borderColor: theme === "dark" ? "#020617" : "#ffffff",
+            borderWidth: 2,
+            hoverOffset: 3,
+          },
+        ],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: false,
+        cutout: "62%",
+        plugins: {
+          legend: {
+            display: true,
+            position: "right",
+            labels: {
+              boxWidth: 10,
+              boxHeight: 10,
+              color: palette.label,
+              padding: 14,
+              usePointStyle: true,
+              generateLabels: (chart) => {
+                const labels = Chart.defaults.plugins.legend.labels.generateLabels(chart);
+                return labels.map((label) => {
+                  const value = rows[label.index ?? 0]?.value ?? 0;
+                  return { ...label, text: `${label.text} ${value}` };
+                });
+              },
+            },
+          },
+          tooltip: {
+            callbacks: {
+              label: (item) => `${item.label}: ${item.formattedValue}`,
             },
           },
         },
@@ -686,19 +751,9 @@
             <div class="metric-panel metric-stats">
               <div class="metric-heading"><span>Changelog stats</span></div>
               {#if changelogVerbRows.length}
-                <table class="summary-table" aria-label="Changelog verb table">
-                  <thead>
-                    <tr><th>Verb</th><th>Num</th></tr>
-                  </thead>
-                  <tbody>
-                    {#each changelogVerbRows as row}
-                      <tr>
-                        <td class={`summary-label summary-${row.tone}`}><SummaryIcon name={row.icon} className="summary-icon" />{titleCase(row.label)}</td>
-                        <td>{row.value}</td>
-                      </tr>
-                    {/each}
-                  </tbody>
-                </table>
+                <div class="changelog-chart-shell">
+                  <canvas bind:this={changelogVerbChartCanvas} aria-label="Changelog verb chart"></canvas>
+                </div>
               {:else}
                 <div class="empty-inline">No changelog entries yet.</div>
               {/if}
