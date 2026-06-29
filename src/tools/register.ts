@@ -234,7 +234,7 @@ function helpLine(target: string) {
   const item = itemTarget(target);
   const subsprint = subsprintTarget(target);
   const overviewCall = target === "sprint" ? "overview()" : `item_get({ id: "${item}" })`;
-  return `Help: use next({}) for the active work window; ${overviewCall} for focused detail; subsprint_get({ id: "${subsprint}" }) for a subsprint's item list; note_list({ id: "${item}" }) for item notes; search({ pattern: "${target}", context_size: 512 }) for text matches; item_add({ subsprint: "${subsprint}", ... }) or subsprint_new({ ... }) for new tracked work; item_split({ id: "${item}", ... }) if the item is too large; item_done({ id: "${item}", commit_id, gate_results, changelog }) when complete; before sprint_close, call changelog({ path? }) to generate the SemVer Markdown; read skills using-sprinty and how-to-run-a-sprint for the full command workflow.`;
+  return `Help: next({}); ${overviewCall}; subsprint_get({ id: "${subsprint}" }); note_list({ id: "${item}" }); search({ pattern: "${target}", context_size: 512 }); item_add({ subsprint: "${subsprint}", ... }) or subsprint_new({ ... }); item_split({ id: "${item}", ... }) if too large; item_done({ id: "${item}", commit_id, gate_results, changelog }); before sprint_close run changelog({ path? }).`;
 }
 
 function withHelp(value: unknown, target: string): unknown {
