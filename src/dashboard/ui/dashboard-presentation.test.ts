@@ -98,7 +98,9 @@ describe("dashboard presentation", () => {
     expect(app).not.toContain("<small>{completionStatsLine(completionSummary)}</small>");
     expect(app).toContain('type: "doughnut"');
     expect(app).toContain('cutout: "62%"');
-    expect(app).toContain('position: "right"');
+    expect(app).toContain('position: "bottom"');
+    expect(app).toContain("`${titleCase(row.label)} ${row.value}`");
+    expect(app).not.toContain("generateLabels");
     expect(app).not.toContain("Completion pace (5-item moving avg)");
     expect(app).not.toContain("Completion stats");
     expect(app).not.toContain('class="metric-panel completion-stats"');

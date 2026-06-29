@@ -487,7 +487,7 @@
     return {
       type: "doughnut",
       data: {
-        labels: rows.map((row) => titleCase(row.label)),
+        labels: rows.map((row) => `${titleCase(row.label)} ${row.value}`),
         datasets: [
           {
             data: rows.map((row) => row.value),
@@ -506,20 +506,13 @@
         plugins: {
           legend: {
             display: true,
-            position: "right",
+            position: "bottom",
             labels: {
               boxWidth: 10,
               boxHeight: 10,
               color: palette.label,
-              padding: 14,
+              padding: 12,
               usePointStyle: true,
-              generateLabels: (chart) => {
-                const labels = Chart.defaults.plugins.legend.labels.generateLabels(chart);
-                return labels.map((label) => {
-                  const value = rows[label.index ?? 0]?.value ?? 0;
-                  return { ...label, text: `${label.text} ${value}` };
-                });
-              },
             },
           },
           tooltip: {
