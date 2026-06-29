@@ -17,6 +17,7 @@
   import { marked } from "marked";
   import { buildCompletionSummary, buildEventBuckets, parseTs, recentTimelineWindow, type CompletionRatePoint, type CompletionSummary, type EventBucket } from "../chart-windows";
   import { deriveDashboardModel, filterLedgerRows, ledgerVerbIcon, statusDotClass, statusPillClass, type DashboardModel, type LedgerEntity, type LedgerRow, type LedgerVerb, type TreeSubsprint } from "../model";
+  import SummaryIcon from "./SummaryIcon.svelte";
   import type { ArtifactView, ItemView, SprintView } from "../../../domain/projection";
 
   let sprint: SprintView | null = null;
@@ -40,8 +41,9 @@
   let chartRenderQueued = false;
 
   type ProgressMetricRow = { label: string; count: number; done: number; total: number; tone: string };
-  type ChangelogVerbMetricRow = { label: string; value: number; tone: string };
-  type CodeMetricRow = { label: string; value: number; tone: string };
+  type SummaryIconName = "check" | "command" | "edit" | "file" | "plus";
+  type ChangelogVerbMetricRow = { label: string; value: number; tone: string; icon: SummaryIconName };
+  type CodeMetricRow = { label: string; value: number; tone: string; icon: SummaryIconName };
 
   const pageSize = 8;
   const themeKey = "sprinty-dashboard-theme";
@@ -302,7 +304,7 @@
     for (const category of changelogVerbCategories) counts.set(category, 0);
     for (const entry of sprint.changelog) counts.set(entry.verb, (counts.get(entry.verb) ?? 0) + 1);
     return changelogVerbCategories
-      .map((category) => ({ label: category, value: counts.get(category) ?? 0, tone: category }))
+      .map((category) => ({ label: category, value: counts.get(category) ?? 0, tone: category, icon: summaryIconForTone(category) }))
       .filter((row) => row.value > 0);
   }
 
@@ -314,11 +316,19 @@
         .filter((commit): commit is string => Boolean(commit)),
     );
     return [
-      { label: "Added", value: model.progress.code.additions, tone: "added" },
-      { label: "Changed", value: model.progress.code.churn, tone: "changed" },
-      { label: "Files edited", value: model.progress.code.files, tone: "file" },
-      { label: "Commits", value: commits.size, tone: "commit" },
+      { label: "Added", value: model.progress.code.additions, tone: "added", icon: "plus" },
+      { label: "Changed", value: model.progress.code.churn, tone: "changed", icon: "edit" },
+      { label: "Files edited", value: model.progress.code.files, tone: "file", icon: "file" },
+      { label: "Commits", value: commits.size, tone: "commit", icon: "command" },
     ];
+  }
+
+  function summaryIconForTone(tone: string): SummaryIconName {
+    if (tone === "added") return "plus";
+    if (tone === "fixed") return "check";
+    if (tone === "changed") return "edit";
+    if (tone === "removed" || tone === "deprecated" || tone === "security") return "edit";
+    return "file";
   }
 
   function countProgressClass(tone: string): string {
@@ -683,7 +693,7 @@
                   <tbody>
                     {#each changelogVerbRows as row}
                       <tr>
-                        <td><span class={`summary-dot summary-${row.tone}`}></span>{titleCase(row.label)}</td>
+                        <td class={`summary-label summary-${row.tone}`}><SummaryIcon name={row.icon} className="summary-icon" />{titleCase(row.label)}</td>
                         <td>{row.value}</td>
                       </tr>
                     {/each}
@@ -703,7 +713,7 @@
                 <tbody>
                   {#each codeMetricRows as row}
                     <tr>
-                      <td><span class={`summary-dot summary-${row.tone}`}></span>{row.label}</td>
+                      <td class={`summary-label summary-${row.tone}`}><SummaryIcon name={row.icon} className="summary-icon" />{row.label}</td>
                       <td>{row.value}</td>
                     </tr>
                   {/each}

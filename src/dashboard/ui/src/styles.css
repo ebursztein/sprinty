@@ -330,37 +330,41 @@ button {
     @apply flex min-w-0 items-center gap-2 truncate text-zinc-500 dark:text-zinc-400;
   }
 
-  .summary-dot {
-    @apply h-2 w-2 shrink-0 rounded-full bg-zinc-500;
+  .summary-label {
+    @apply font-medium;
+  }
+
+  .summary-icon {
+    @apply h-4 w-4 shrink-0;
   }
 
   .summary-added {
-    @apply bg-blue-500;
+    @apply text-blue-500;
   }
 
   .summary-fixed,
   .summary-file {
-    @apply bg-emerald-500;
+    @apply text-emerald-500;
   }
 
   .summary-changed {
-    @apply bg-amber-500;
+    @apply text-amber-500;
   }
 
   .summary-removed {
-    @apply bg-red-500;
+    @apply text-red-500;
   }
 
   .summary-deprecated {
-    @apply bg-zinc-500;
+    @apply text-zinc-500;
   }
 
   .summary-security {
-    @apply bg-violet-500;
+    @apply text-violet-500;
   }
 
   .summary-commit {
-    @apply bg-cyan-500;
+    @apply text-cyan-500;
   }
 
   .charts-band {

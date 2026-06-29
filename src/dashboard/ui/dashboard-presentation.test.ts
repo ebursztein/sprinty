@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 const app = readFileSync(new URL("./src/App.svelte", import.meta.url), "utf8");
 const styles = readFileSync(new URL("./src/styles.css", import.meta.url), "utf8");
 const chartWindows = readFileSync(new URL("./chart-windows.ts", import.meta.url), "utf8");
+const summaryIcon = readFileSync(new URL("./src/SummaryIcon.svelte", import.meta.url), "utf8");
 
 function cssBlock(selector: string): string {
   const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -114,6 +115,20 @@ describe("dashboard presentation", () => {
     expect(app).toContain('{ label: "Files edited"');
     expect(app).toContain("buildChangelogVerbRows");
     expect(app).toContain("buildCodeMetricRows");
+    expect(app).toContain("import SummaryIcon from \"./SummaryIcon.svelte\"");
+    expect(app).toContain('<SummaryIcon name={row.icon} className="summary-icon" />');
+    expect(app).toContain('icon: "plus"');
+    expect(app).toContain('if (tone === "fixed") return "check"');
+    expect(app).toContain('icon: "edit"');
+    expect(app).toContain('icon: "file"');
+    expect(app).toContain('icon: "command"');
+    expect(app).not.toContain("summary-dot");
+    expect(summaryIcon).toContain('data-summary-icon={name}');
+    expect(summaryIcon).toContain('name === "plus"');
+    expect(summaryIcon).toContain('name === "check"');
+    expect(summaryIcon).toContain('name === "edit"');
+    expect(summaryIcon).toContain('name === "file"');
+    expect(summaryIcon).toContain('name === "command"');
     expect(app).toContain("countProgressClass(row.tone)");
     expect(app).not.toContain("statToneClass(row.tone)");
     expect(app).toContain("progress-success");
@@ -140,6 +155,10 @@ describe("dashboard presentation", () => {
     expect(cssBlock(".metrics-grid")).toContain("lg:grid-cols-4");
     expect(cssBlock(".metric-progress")).toContain("lg:col-span-2");
     expect(cssBlock(".summary-table")).toContain("table-fixed");
+    expect(cssBlock(".summary-icon")).toContain("h-4");
+    expect(cssBlock(".summary-added")).toContain("text-blue-500");
+    expect(cssBlock(".summary-fixed,\n  .summary-file")).toContain("text-emerald-500");
+    expect(cssBlock(".summary-changed")).toContain("text-amber-500");
     expect(cssBlock(".metric-code")).toContain("content-start");
     expect(cssBlock(".metric-panel")).toContain("min-w-0");
     expect(cssBlock(".progress-bar-row")).toContain("grid-cols");
