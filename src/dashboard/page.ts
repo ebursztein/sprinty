@@ -42,7 +42,10 @@ h2{margin:0 0 .75rem;font-size:.82rem;text-transform:uppercase;color:var(--muted
       <div class="metrics">
         <div class="metric"><b id="metric-subsprints">0</b><span>subsprints</span></div>
         <div class="metric"><b id="metric-items">0</b><span>items</span></div>
+        <div class="metric"><b id="metric-completion">0%</b><span>complete</span></div>
+        <div class="metric"><b id="metric-finished">0</b><span>finished</span></div>
         <div class="metric"><b id="metric-open">0</b><span>open</span></div>
+        <div class="metric"><b id="metric-eta">--</b><span>ETA</span></div>
         <div class="metric"><b id="metric-gates">0</b><span>gate results</span></div>
         <div class="metric"><b id="metric-coverage">--</b><span>line coverage</span></div>
       </div>
@@ -81,11 +84,33 @@ function fmt(ts){
   const d=new Date(ts);
   return Number.isNaN(d.valueOf()) ? ts : d.toLocaleString();
 }
+function fmtDuration(ms){
+  if(ms == null || !Number.isFinite(ms))return "--";
+  const totalMinutes=Math.round(ms/60000);
+  const hours=Math.floor(totalMinutes/60);
+  const minutes=totalMinutes%60;
+  if(hours===0)return String(minutes)+"m";
+  if(minutes===0)return String(hours)+"h";
+  return String(hours)+"h "+String(minutes)+"m";
+}
 function summarize(s){
   const subs=s.subsprints||[];
   const items=subs.flatMap(function(ss){return ss.items||[]});
   const gateResults=items.reduce(function(n,i){return n+(i.gate_results||[]).length},0);
-  return {subs:subs,items:items,open:items.filter(function(i){return i.status==="open"}),gateResults:gateResults};
+  const completed=items.filter(function(i){return i.status==="completed"});
+  const fallbackCompletion={
+    total_items:items.length,
+    finished_items:completed.length,
+    percent_complete:items.length===0 ? 0 : Math.round((completed.length/items.length)*100),
+    eta_ms:null,
+  };
+  return {
+    subs:subs,
+    items:items,
+    open:items.filter(function(i){return i.status==="open"}),
+    gateResults:gateResults,
+    completion:s.completion||fallbackCompletion,
+  };
 }
 function renderGateResults(item, target){
   const gates=document.createElement("div");
@@ -178,7 +203,10 @@ function render(s){
   status.textContent=s.status||"active";
   byId("metric-subsprints").textContent=String(summary.subs.length);
   byId("metric-items").textContent=String(summary.items.length);
+  byId("metric-completion").textContent=String(summary.completion.percent_complete)+"%";
+  byId("metric-finished").textContent=String(summary.completion.finished_items);
   byId("metric-open").textContent=String(summary.open.length);
+  byId("metric-eta").textContent=fmtDuration(summary.completion.eta_ms);
   byId("metric-gates").textContent=String(summary.gateResults);
   byId("metric-coverage").textContent=s.coverage&&s.coverage.lines ? String(s.coverage.lines.percent)+"%" : "--";
   const active=byId("active-items");

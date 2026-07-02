@@ -64,6 +64,18 @@ export interface ChangelogLine {
   line: string;
 }
 
+export interface CompletionMetrics {
+  total_items: number;
+  finished_items: number;
+  percent_complete: number;
+  intervals_ms: number[];
+  fastest_ms: number | null;
+  median_ms: number | null;
+  slowest_ms: number | null;
+  eta_ms: number | null;
+  eta_at: string | null;
+}
+
 export interface SubsprintView {
   id: string;
   description: string;
@@ -102,6 +114,7 @@ export interface SprintView {
   change_map: ChangeMap;
   coverage: CoverageSummary | null;
   coverage_state: CoverageState;
+  completion: CompletionMetrics;
 }
 
 export interface TimelineEntry {
@@ -128,7 +141,8 @@ export function project(events: LedgerEvent[]): SprintView | null {
           goal: e.goal, worktree: e.worktree, branch: e.branch, dir: e.dir, data_dir: e.data_dir,
           context_notes: e.context_notes ?? [], created_at: e.ts, closed_at: null, status: "active",
           subsprints: [], timeline, graph: buildDependencyGraph([], []), artifacts: [], follow_ups: [],
-          changelog: [], change_map: emptyChangeMap(), coverage: null, coverage_state: { status: "not_configured" },
+          changelog: [], change_map: emptyChangeMap(), coverage: null,
+          coverage_state: { status: "not_configured" }, completion: emptyCompletionMetrics(),
         };
         timeline.push({ seq: e.seq, ts: e.ts, type: e.type, id: "sprint", text: e.goal });
         break;
@@ -342,6 +356,7 @@ export function project(events: LedgerEvent[]): SprintView | null {
     sprint.changelog = sprint.subsprints
       .flatMap((sub) => sub.changelog.map((entry) => ({ ...entry, subsprint: sub.id })));
     sprint.change_map = aggregateChangeMaps(sprint.subsprints.flatMap((sub) => sub.items.map((item) => item.change_map)));
+    sprint.completion = deriveCompletionMetrics(sprint.subsprints.flatMap((sub) => sub.items));
   }
   return sprint;
 }
@@ -359,4 +374,52 @@ function titleFromDescription(description: string): string {
   const firstSentence = firstLine.match(/^(.+?[.!?])(?:\s|$)/)?.[1] ?? firstLine;
   const title = firstSentence.trim();
   return title.length > 80 ? `${title.slice(0, 77).trimEnd()}...` : title || "Untitled item";
+}
+
+function emptyCompletionMetrics(): CompletionMetrics {
+  return {
+    total_items: 0,
+    finished_items: 0,
+    percent_complete: 0,
+    intervals_ms: [],
+    fastest_ms: null,
+    median_ms: null,
+    slowest_ms: null,
+    eta_ms: null,
+    eta_at: null,
+  };
+}
+
+function deriveCompletionMetrics(items: ItemView[]): CompletionMetrics {
+  const completedAt = items
+    .filter((item) => item.status === "completed" && item.resolved_at)
+    .map((item) => item.resolved_at!)
+    .sort();
+  const intervals = completedAt.slice(1).map((ts, index) => new Date(ts).getTime() - new Date(completedAt[index]!).getTime());
+  const validIntervals = intervals.filter((ms) => Number.isFinite(ms) && ms >= 0);
+  const finished = completedAt.length;
+  const total = items.length;
+  const cadence = validIntervals.length > 0 ? [...validIntervals].sort((a, b) => a - b) : [];
+  const median = cadence.length > 0 ? medianOf(cadence) : null;
+  const remaining = Math.max(0, total - finished);
+  const etaMs = median == null || completedAt.length === 0 ? null : median * remaining;
+
+  return {
+    total_items: total,
+    finished_items: finished,
+    percent_complete: total === 0 ? 0 : Math.round((finished / total) * 100),
+    intervals_ms: validIntervals,
+    fastest_ms: cadence[0] ?? null,
+    median_ms: median,
+    slowest_ms: cadence[cadence.length - 1] ?? null,
+    eta_ms: etaMs,
+    eta_at: etaMs == null ? null : new Date(new Date(completedAt[completedAt.length - 1]!).getTime() + etaMs).toISOString(),
+  };
+}
+
+function medianOf(sortedValues: number[]): number {
+  const midpoint = Math.floor(sortedValues.length / 2);
+  return sortedValues.length % 2 === 0
+    ? (sortedValues[midpoint - 1]! + sortedValues[midpoint]!) / 2
+    : sortedValues[midpoint]!;
 }

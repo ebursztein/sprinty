@@ -26,6 +26,8 @@ describe("dashboard", () => {
     expect(state.goal).toBe("g");
     const html = await (await fetch(`${dash.url}/`)).text();
     expect(html).toContain("<!doctype html>");
+    expect(html).toContain('id="metric-completion"');
+    expect(html).toContain('id="metric-eta"');
   });
 
   it("serves the compiled dashboard shell and static assets", async () => {
