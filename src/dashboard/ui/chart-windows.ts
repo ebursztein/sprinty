@@ -140,8 +140,11 @@ export function buildCompletionSummary(
   const starts = new Map<string, number>();
   const points: CompletionPoint[] = [];
   const ratePoints: CompletionRatePoint[] = [];
+  const cadenceDurations: number[] = [];
   const rateTotal = Math.max(0, totalItems);
+  const remainingItems = Math.max(0, openItems);
   let completedItems = 0;
+  let lastResolvedAt: number | null = null;
 
   if (rateTotal > 0) {
     completedItems = Math.min(rateTotal, normalized.filter((row) => row.entry.type === "item_resolved" && row.time < windowStart).length);
@@ -157,12 +160,14 @@ export function buildCompletionSummary(
     if (entry.type !== "item_resolved") continue;
     if (time < windowStart) {
       starts.delete(entry.id);
+      lastResolvedAt = time;
       continue;
     }
 
-    const started = starts.get(entry.id);
-    const durationStart = Math.max(started ?? windowStart, windowStart);
-    const durationMs = Math.max(0, time - durationStart);
+    const previousResolvedAt = lastResolvedAt;
+    const durationMs = previousResolvedAt === null ? 0 : Math.max(0, time - previousResolvedAt);
+    if (previousResolvedAt !== null) cadenceDurations.push(durationMs);
+    lastResolvedAt = time;
     starts.delete(entry.id);
     points.push({ time, durationMs, movingAverageMs: 0 });
 
@@ -172,7 +177,7 @@ export function buildCompletionSummary(
     }
   }
 
-  if (rateTotal > 0) {
+  if (rateTotal > 0 && remainingItems > 0) {
     const last = ratePoints[ratePoints.length - 1];
     if (last && last.time < options.nowMs) {
       ratePoints.push({ time: options.nowMs, percent: percent(completedItems, rateTotal), completed: completedItems });
@@ -186,13 +191,13 @@ export function buildCompletionSummary(
     points[i] = { ...points[i]!, movingAverageMs: Math.round(sum / window.length) };
   }
 
-  const durations = points.map((point) => point.durationMs);
-  const stats = durationStats(durations);
-  const remainingItems = Math.max(0, openItems);
+  const stats = durationStats(cadenceDurations);
   const etaMs = stats.avgMs && stats.avgMs > 0 ? stats.avgMs * remainingItems : null;
   const projectedAt = etaMs && remainingItems > 0 ? options.nowMs + etaMs : null;
   const etaAt = projectedAt ? options.formatEta(projectedAt) : null;
-  const rateEnd = projectedAt && projectedAt > options.nowMs ? projectedAt : options.nowMs;
+  const lastRatePoint = ratePoints[ratePoints.length - 1];
+  const actualRateEnd = rateTotal > 0 && remainingItems === 0 && lastRatePoint ? lastRatePoint.time : options.nowMs;
+  const rateEnd = projectedAt && projectedAt > actualRateEnd ? projectedAt : actualRateEnd;
 
   return {
     points,

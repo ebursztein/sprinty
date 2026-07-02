@@ -60,9 +60,55 @@ describe("dashboard fixed chart windows", () => {
       [now - hour, 2],
       [now, 2],
     ]);
-    expect(summary.avgMs).toBe(hour);
-    expect(summary.projectedAt).toBe(now + hour);
-    expect(summary.rateEnd).toBe(now + hour);
+    expect(summary.avgMs).toBe(5 * hour);
+    expect(summary.projectedAt).toBe(now + 5 * hour);
+    expect(summary.rateEnd).toBe(now + 5 * hour);
+  });
+
+  it("stops completion rate at the last item resolution when nothing remains", () => {
+    const summary = buildCompletionSummary([
+      event("item_added", 3, "S01-001"),
+      event("item_resolved", 2, "S01-001"),
+      event("item_added", 1.5, "S01-002"),
+      event("item_resolved", 1, "S01-002"),
+    ], 0, 2, {
+      nowMs: now,
+      windowMs,
+      movingAverageWindow: 5,
+      formatEta: (ts) => new Date(ts).toISOString(),
+    });
+
+    expect(summary.ratePoints.map((point) => [point.time, point.completed])).toEqual([
+      [now - windowMs, 0],
+      [now - 2 * hour, 1],
+      [now - hour, 2],
+    ]);
+    expect(summary.projectedAt).toBeNull();
+    expect(summary.rateEnd).toBe(now - hour);
+  });
+
+  it("derives ETA stats from intervals between completions", () => {
+    const summary = buildCompletionSummary([
+      event("item_added", 8, "S01-001"),
+      event("item_added", 8, "S01-002"),
+      event("item_added", 8, "S01-003"),
+      event("item_added", 8, "S01-004"),
+      event("item_resolved", 6, "S01-001"),
+      event("item_resolved", 5, "S01-002"),
+      event("item_resolved", 2, "S01-003"),
+    ], 1, 4, {
+      nowMs: now,
+      windowMs: 10 * hour,
+      movingAverageWindow: 5,
+      formatEta: (ts) => new Date(ts).toISOString(),
+    });
+
+    expect(summary.minMs).toBe(hour);
+    expect(summary.medianMs).toBe(2 * hour);
+    expect(summary.maxMs).toBe(3 * hour);
+    expect(summary.avgMs).toBe(2 * hour);
+    expect(summary.etaMs).toBe(2 * hour);
+    expect(summary.projectedAt).toBe(now + 2 * hour);
   });
 
   it("does not render chart windows before the sprint started", () => {
