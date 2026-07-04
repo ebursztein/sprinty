@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { lstatSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 const files = [
@@ -23,7 +23,8 @@ describe("client guidance", () => {
     expect(gemini).toContain("recent activity");
 
     const codex = readFileSync("clients/codex/README.md", "utf8");
-    expect(codex).toContain("top-level `skills/` directory");
+    expect(codex).toContain("plugin bundle contains its own `skills/` directory");
+    expect(codex).toContain("codex plugin marketplace add ebursztein/sprinty");
 
     const plugin = JSON.parse(readFileSync("plugins/sprinty/.codex-plugin/plugin.json", "utf8")) as {
       description?: string;
@@ -49,6 +50,7 @@ describe("client guidance", () => {
   it("builds generated dist before npm packaging", () => {
     const pkg = JSON.parse(readFileSync("package.json", "utf8")) as { scripts?: Record<string, string>; files?: string[] };
     expect(pkg.files).toContain("dist");
+    expect(pkg.files).toEqual(expect.arrayContaining(["clients", "plugins", ".agents", ".claude-plugin", "docs/sprinty-dashboard.png"]));
     expect(pkg.scripts?.prepack).toBe("npm run build");
   });
 
@@ -57,9 +59,12 @@ describe("client guidance", () => {
       const text = readFileSync(file, "utf8");
       expect(text, file).toContain("git_dir");
       expect(text, file).toContain("data_dir");
+      expect(text, file).toContain("MCP");
+    }
+    for (const file of ["clients/codex/README.md", "plugins/sprinty/README.md"]) {
+      const text = readFileSync(file, "utf8");
       expect(text, file).toContain("SPRINTY_GIT_DIR");
       expect(text, file).toContain("SPRINTY_DATA_DIR");
-      expect(text, file).toContain("MCP");
     }
   });
 
@@ -87,5 +92,24 @@ describe("client guidance", () => {
       const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as { version: string };
       expect(manifest.version, manifestPath).toBe(pkg.version);
     }
+  });
+
+  it("packages Claude and Codex plugin skills as real directories", () => {
+    for (const path of ["clients/claude/skills", "plugins/sprinty/skills"]) {
+      expect(lstatSync(path).isSymbolicLink(), path).toBe(false);
+    }
+    const claudeMarketplace = JSON.parse(readFileSync(".claude-plugin/marketplace.json", "utf8")) as {
+      name: string;
+      plugins: Array<{ name: string; source: string }>;
+    };
+    expect(claudeMarketplace.name).toBe("sprinty");
+    expect(claudeMarketplace.plugins[0]).toMatchObject({ name: "sprinty", source: "./clients/claude" });
+
+    const codexMarketplace = JSON.parse(readFileSync(".agents/plugins/marketplace.json", "utf8")) as {
+      name: string;
+      plugins: Array<{ name: string }>;
+    };
+    expect(codexMarketplace.name).toBe("sprinty");
+    expect(codexMarketplace.plugins[0]?.name).toBe("sprinty");
   });
 });

@@ -1,7 +1,7 @@
 {
-  "name": "sprinty-local",
+  "name": "sprinty",
   "interface": {
-    "displayName": "Sprinty Local"
+    "displayName": "Sprinty"
   },
   "plugins": [
     {

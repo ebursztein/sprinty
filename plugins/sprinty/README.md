@@ -1,17 +1,22 @@
 # Sprinty Codex CLI Plugin
 
-This is the Codex CLI plugin bundle for Sprinty. `skills` is a symlink to the repository's
-canonical `skills/` directory, so skill content is not duplicated while the manifest still satisfies
-Codex CLI's `./skills/` path rule.
+This is the Codex CLI plugin bundle for Sprinty.
 
-Install from a repository checkout:
+Install from the GitHub marketplace:
+
+```bash
+codex plugin marketplace add ebursztein/sprinty
+codex plugin add sprinty@sprinty
+```
+
+For local development from a checkout:
 
 ```bash
 codex plugin marketplace add .
-codex plugin add sprinty@sprinty-local
+codex plugin add sprinty@sprinty
 ```
 
-Then start a new Codex CLI thread. The plugin provides:
+Start a new Codex CLI thread after install. The plugin provides:
 
 - Sprinty MCP tools through `npx -y sprinty-mcp`
 - `skills/how-to-run-a-sprint`
@@ -19,14 +24,13 @@ Then start a new Codex CLI thread. The plugin provides:
 
 Expected agent loop:
 
-1. Call `info()` first to orient to the current sprint and repository binding.
-2. Start or continue the Sprinty sprint, then show the returned dashboard localhost URL to the human. Use `dashboard_info()` to re-read it or `dashboard_restart()` to refresh it.
-3. Track each feature as a `subsprint_new(...)` unit, then add atomic items with `add(...)`; each item needs a short title, bounded description, code locations, and gates.
-4. Record durable outputs with `artifact_add/list/amend/deprecate`.
-5. Record follow-up bugs with `follow_up(...)` and at least one bug id.
-6. Use `spike(...)` for investigations; spikes are still subsprints with normal child items, but they close only through `spike_conclude(...)` or `spike_deprecate(...)`.
-7. Resolve each item with `done(...)`, passing gate evidence, a Git commit, and a SemVer changelog verb plus line.
-8. Run `changelog(...)` to generate Sprinty's SemVer Markdown changelog, then run `sprint_close(...)`.
+1. Start or resume with explicit `git_dir` and `data_dir`.
+2. Show the dashboard URL returned by `sprint_new()` or `sprint_resume()`.
+3. Track each feature as a `subsprint_new(...)` unit.
+4. Add atomic work with `item_add(...)`.
+5. Record durable outputs with `artifact_add/list/get/update`.
+6. Resolve each item with `item_done(...)`, passing gate evidence, a Git commit, and a SemVer changelog verb plus line.
+7. Run `changelog(...)`, then `sprint_close(...)`.
 
 For MCP-only setup without plugin skills:
 

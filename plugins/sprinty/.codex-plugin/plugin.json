@@ -1,7 +1,7 @@
 {
   "name": "sprinty",
   "version": "0.1.14",
-  "description": "Disciplined sprint workflow for Codex CLI: dashboard-at-start, feature subsprints, artifacts, follow-ups, spikes, dependency graphs, coverage gates, changelogs, and change maps.",
+  "description": "Disciplined sprint workflow for Codex CLI: dashboard-at-start, feature subsprints, artifacts, dependency graphs, coverage gates, changelogs, and change maps.",
   "author": {
     "name": "Elie Bursztein",
     "url": "https://github.com/ebursztein"
@@ -15,16 +15,16 @@
   "interface": {
     "displayName": "Sprinty",
     "shortDescription": "Run dashboard-backed, ledgered development sprints from Codex CLI.",
-    "longDescription": "Sprinty gives Codex CLI a sprint workflow with server-minted IDs, feature subsprints, normal item gates, dashboard-at-start guidance, sprint artifacts, bug-id follow-ups, spike subsprints with conclusions, dependency graphs with cycle detection, Git-backed change maps, Markdown changelogs, and coverage-required close gates.",
+    "longDescription": "Sprinty gives Codex CLI a sprint workflow with server-minted IDs, feature subsprints, item gates, dashboard-at-start guidance, sprint artifacts, dependency graphs with cycle detection, Git-backed change maps, Markdown changelogs, and coverage-required close gates.",
     "developerName": "Elie Bursztein",
     "category": "Developer Tools",
     "capabilities": ["Interactive", "Read", "Write"],
     "websiteURL": "https://github.com/ebursztein/sprinty",
     "defaultPrompt": [
       "Use Sprinty to run this implementation as a disciplined sprint.",
-      "Call Sprinty info first, then start or continue the sprint with explicit git_dir and data_dir before calling dashboard() and sharing the local URL.",
-      "Track each feature as a subsprint, use artifact_add/list/amend/deprecate for durable outputs, record follow_up entries with bug ids, and use spike/spike_conclude for investigations.",
-      "Resolve every item with passing gates and a commit, then close with coverage."
+      "Start or continue the sprint with explicit git_dir and data_dir, then share the dashboard URL returned by sprint_new or sprint_resume.",
+      "Track each feature as a subsprint, create atomic items with item_add, attach durable outputs with artifact_add/list/get/update, and use item_split when work is too large.",
+      "Resolve every item with item_done, passing gates, a real commit, and a changelog entry; then run changelog and close with coverage."
     ],
     "brandColor": "#2563EB",
     "screenshots": []

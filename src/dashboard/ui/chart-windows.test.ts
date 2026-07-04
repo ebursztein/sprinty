@@ -60,9 +60,9 @@ describe("dashboard fixed chart windows", () => {
       [now - hour, 2],
       [now, 2],
     ]);
-    expect(summary.avgMs).toBe(5 * hour);
-    expect(summary.projectedAt).toBe(now + 5 * hour);
-    expect(summary.rateEnd).toBe(now + 5 * hour);
+    expect(summary.avgMs).toBe(hour);
+    expect(summary.projectedAt).toBe(now + hour);
+    expect(summary.rateEnd).toBe(now + hour);
   });
 
   it("stops completion rate at the last item resolution when nothing remains", () => {
@@ -87,7 +87,7 @@ describe("dashboard fixed chart windows", () => {
     expect(summary.rateEnd).toBe(now - hour);
   });
 
-  it("derives ETA stats from intervals between completions", () => {
+  it("derives ETA stats from completed item lifetimes", () => {
     const summary = buildCompletionSummary([
       event("item_added", 8, "S01-001"),
       event("item_added", 8, "S01-002"),
@@ -103,12 +103,30 @@ describe("dashboard fixed chart windows", () => {
       formatEta: (ts) => new Date(ts).toISOString(),
     });
 
-    expect(summary.minMs).toBe(hour);
-    expect(summary.medianMs).toBe(2 * hour);
-    expect(summary.maxMs).toBe(3 * hour);
-    expect(summary.avgMs).toBe(2 * hour);
-    expect(summary.etaMs).toBe(2 * hour);
-    expect(summary.projectedAt).toBe(now + 2 * hour);
+    expect(summary.minMs).toBe(2 * hour);
+    expect(summary.medianMs).toBe(3 * hour);
+    expect(summary.maxMs).toBe(6 * hour);
+    expect(summary.avgMs).toBe(Math.round((11 * hour) / 3));
+    expect(summary.etaMs).toBe(3 * hour);
+    expect(summary.projectedAt).toBe(now + 3 * hour);
+  });
+
+  it("projects ETA from completed item lifetimes instead of idle gaps between resolutions", () => {
+    const summary = buildCompletionSummary([
+      event("item_added", 11.5, "S01-001"),
+      event("item_resolved", 11, "S01-001"),
+      event("item_added", 0.5, "S01-002"),
+      event("item_resolved", 0, "S01-002"),
+    ], 2, 4, {
+      nowMs: now,
+      windowMs: 12 * hour,
+      movingAverageWindow: 5,
+      formatEta: (ts) => new Date(ts).toISOString(),
+    });
+
+    expect(summary.medianMs).toBe(0.5 * hour);
+    expect(summary.etaMs).toBe(hour);
+    expect(summary.projectedAt).toBe(now + hour);
   });
 
   it("does not render chart windows before the sprint started", () => {

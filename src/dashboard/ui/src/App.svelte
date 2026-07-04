@@ -606,14 +606,15 @@
 
   function buildProjectedRateSteps(summary: CompletionSummary): CompletionRatePoint[] {
     const last = summary.ratePoints[summary.ratePoints.length - 1];
-    if (!last || !summary.avgMs || summary.avgMs <= 0 || summary.remainingItems <= 0) return [];
+    const perItemEtaMs = summary.etaMs && summary.remainingItems > 0 ? summary.etaMs / summary.remainingItems : null;
+    if (!last || !perItemEtaMs || perItemEtaMs <= 0 || summary.remainingItems <= 0) return [];
 
     const total = Math.max(1, last.completed + summary.remainingItems);
     const steps: CompletionRatePoint[] = [last];
     for (let index = 1; index <= summary.remainingItems; index++) {
       const completed = Math.min(total, last.completed + index);
       steps.push({
-        time: last.time + summary.avgMs * index,
+        time: last.time + perItemEtaMs * index,
         percent: Math.round((completed / total) * 100),
         completed,
       });

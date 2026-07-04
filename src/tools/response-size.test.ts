@@ -9,13 +9,35 @@ import { SprintStore } from "../store/store.js";
 import { buildToolHandlers, type ToolHandlers } from "./register.js";
 
 const root = dirname(dirname(dirname(fileURLToPath(import.meta.url))));
-const fixtureDir = join(root, "tests/data/capsem-sprinty-baseline");
+const baselineFixtureDir = join(root, "tests/data/capsem-sprinty-baseline");
+const activeEtaFixtureDir = join(root, "tests/data/capsem-active-eta-regression");
 const gitDir = root;
 const item = "S03-008";
 const noteWritableItem = "S06-019";
 const subsprint = "S03";
 const headCommit = execFileSync("git", ["rev-parse", "HEAD"], { cwd: root }).toString().trim();
 const timingMultiplier = process.env.CI ? 2 : 1;
+
+const readGateFixtures = [
+  {
+    name: "capsem release baseline",
+    fixtureDir: baselineFixtureDir,
+    item,
+    openItem: item,
+    writableItem: noteWritableItem,
+    subsprint,
+    searchPattern: "Finish|Provider|S03-008|AGY searchable|AGY artifact",
+  },
+  {
+    name: "capsem active ETA regression",
+    fixtureDir: activeEtaFixtureDir,
+    item: "S01-002",
+    openItem: "S01-001",
+    writableItem: "S01-001",
+    subsprint: "S02",
+    searchPattern: "Fast fix|S01-002|benchmark|response",
+  },
+];
 
 const publicTools = [
   "artifact_add", "artifact_get", "artifact_list", "artifact_update",
@@ -27,10 +49,10 @@ const publicTools = [
   "subsprint_get", "subsprint_list", "subsprint_new",
 ].sort();
 
-function cloneFixture(): { root: string; dataDir: string } {
+function cloneFixture(sourceDir = baselineFixtureDir): { root: string; dataDir: string } {
   const tempRoot = mkdtempSync(join(tmpdir(), "sprinty-response-size-"));
   const dataDir = join(tempRoot, "data");
-  cpSync(fixtureDir, dataDir, { recursive: true });
+  cpSync(sourceDir, dataDir, { recursive: true });
   return { root: tempRoot, dataDir };
 }
 
@@ -73,8 +95,8 @@ function writeCoverage(dir: string): string {
   return path;
 }
 
-async function withFixture<T>(run: (tools: ToolHandlers, dataDir: string) => Promise<T>): Promise<T> {
-  const fixture = cloneFixture();
+async function withFixture<T>(run: (tools: ToolHandlers, dataDir: string) => Promise<T>, sourceDir = baselineFixtureDir): Promise<T> {
+  const fixture = cloneFixture(sourceDir);
   try {
     return await run(makeTools(fixture.dataDir), fixture.dataDir);
   } finally {
@@ -161,37 +183,37 @@ describe("public Sprinty tool responses", () => {
       seed: "fixture" | "empty";
       maxChars: number;
       maxMs: number;
-      args: (ctx: { tools: ToolHandlers; dataDir: string; rootDir: string }) => Promise<Record<string, unknown>> | Record<string, unknown>;
+      args: (ctx: { tools: ToolHandlers; dataDir: string; rootDir: string; fixture?: typeof readGateFixtures[number] }) => Promise<Record<string, unknown>> | Record<string, unknown>;
     };
 
     const cases: ToolCase[] = [
-      { tool: "artifact_add", seed: "fixture", maxChars: 900, maxMs: 100, args: () => ({ title: "Response stats", path: "reports/response-stats.json", related_items: [item] }) },
-      { tool: "artifact_get", seed: "fixture", maxChars: 1_000, maxMs: 25, args: async ({ tools }) => ({ id: ((await tools.artifact_add!.handler({ title: "Response stats", path: "reports/response-stats.json", related_items: [item] })) as { artifact: string }).artifact }) },
-      { tool: "artifact_list", seed: "fixture", maxChars: 1_200, maxMs: 25, args: async ({ tools }) => { await tools.artifact_add!.handler({ title: "Response stats", path: "reports/response-stats.json", related_items: [item] }); return {}; } },
-      { tool: "artifact_update", seed: "fixture", maxChars: 900, maxMs: 100, args: async ({ tools }) => ({ id: ((await tools.artifact_add!.handler({ title: "Response stats", path: "reports/response-stats.json", related_items: [item] })) as { artifact: string }).artifact, title: "Response stats v2" }) },
+      { tool: "artifact_add", seed: "fixture", maxChars: 900, maxMs: 100, args: ({ fixture }) => ({ title: "Response stats", path: "reports/response-stats.json", related_items: [fixture!.item] }) },
+      { tool: "artifact_get", seed: "fixture", maxChars: 1_000, maxMs: 25, args: async ({ tools, fixture }) => ({ id: ((await tools.artifact_add!.handler({ title: "Response stats", path: "reports/response-stats.json", related_items: [fixture!.item] })) as { artifact: string }).artifact }) },
+      { tool: "artifact_list", seed: "fixture", maxChars: 1_200, maxMs: 25, args: async ({ tools, fixture }) => { await tools.artifact_add!.handler({ title: "Response stats", path: "reports/response-stats.json", related_items: [fixture!.item] }); return {}; } },
+      { tool: "artifact_update", seed: "fixture", maxChars: 900, maxMs: 100, args: async ({ tools, fixture }) => ({ id: ((await tools.artifact_add!.handler({ title: "Response stats", path: "reports/response-stats.json", related_items: [fixture!.item] })) as { artifact: string }).artifact, title: "Response stats v2" }) },
       { tool: "changelog", seed: "fixture", maxChars: 900, maxMs: 75, args: () => ({}) },
       { tool: "dashboard_info", seed: "fixture", maxChars: 900, maxMs: 25, args: () => ({}) },
       { tool: "dashboard_restart", seed: "fixture", maxChars: 900, maxMs: 25, args: () => ({}) },
-      { tool: "item_add", seed: "fixture", maxChars: 900, maxMs: 100, args: () => ({ subsprint, title: "Response stats item", description: "Measure one representative response size.", code_locations: ["src/tools/register.ts"], gates: [{ kind: "command", spec: "true" }] }) },
-      { tool: "item_deprecate", seed: "fixture", maxChars: 900, maxMs: 100, args: () => ({ id: item, reason: "Response stats baseline." }) },
+      { tool: "item_add", seed: "fixture", maxChars: 900, maxMs: 100, args: ({ fixture }) => ({ subsprint: fixture!.subsprint, title: "Response stats item", description: "Measure one representative response size.", code_locations: ["src/tools/register.ts"], gates: [{ kind: "command", spec: "true" }] }) },
+      { tool: "item_deprecate", seed: "fixture", maxChars: 900, maxMs: 100, args: ({ fixture }) => ({ id: fixture!.openItem, reason: "Response stats baseline." }) },
       { tool: "item_done", seed: "empty", maxChars: 1_000, maxMs: 300, args: async ({ tools, dataDir }) => { await seedMiniSprint(tools, dataDir); return { id: "S01-001", commit_id: headCommit, gate_results: [{ kind: "command", spec: "true", passed: true, evidence: "ok" }], changelog: { verb: "added", line: "Added response stats item." } }; } },
-      { tool: "item_get", seed: "fixture", maxChars: 8_000, maxMs: 75, args: () => ({ id: item }) },
+      { tool: "item_get", seed: "fixture", maxChars: 8_000, maxMs: 75, args: ({ fixture }) => ({ id: fixture!.item }) },
       { tool: "item_split", seed: "empty", maxChars: 900, maxMs: 100, args: async ({ tools, dataDir }) => { await seedMiniSprint(tools, dataDir); return { id: "S01-001", description: "Split response stats work", goals: ["Measure split response"], gates: [{ kind: "command", spec: "true" }] }; } },
-      { tool: "item_update", seed: "fixture", maxChars: 900, maxMs: 100, args: () => ({ id: item, note: "Response stats update." }) },
+      { tool: "item_update", seed: "fixture", maxChars: 900, maxMs: 100, args: ({ fixture }) => ({ id: fixture!.openItem, note: "Response stats update." }) },
       { tool: "next", seed: "fixture", maxChars: 5_000, maxMs: 25, args: () => ({}) },
-      { tool: "note_add", seed: "fixture", maxChars: 900, maxMs: 100, args: () => ({ id: noteWritableItem, text: "Response stats note." }) },
-      { tool: "note_get", seed: "fixture", maxChars: 900, maxMs: 25, args: async ({ tools }) => ({ id: ((await tools.note_add!.handler({ id: noteWritableItem, text: "Response stats note." })) as { note: string }).note }) },
-      { tool: "note_list", seed: "fixture", maxChars: 2_000, maxMs: 25, args: () => ({ id: item }) },
-      { tool: "note_update", seed: "fixture", maxChars: 900, maxMs: 100, args: async ({ tools }) => ({ id: ((await tools.note_add!.handler({ id: noteWritableItem, text: "Response stats note." })) as { note: string }).note, text: "Updated response stats note." }) },
+      { tool: "note_add", seed: "fixture", maxChars: 900, maxMs: 100, args: ({ fixture }) => ({ id: fixture!.writableItem, text: "Response stats note." }) },
+      { tool: "note_get", seed: "fixture", maxChars: 900, maxMs: 25, args: async ({ tools, fixture }) => ({ id: ((await tools.note_add!.handler({ id: fixture!.writableItem, text: "Response stats note." })) as { note: string }).note }) },
+      { tool: "note_list", seed: "fixture", maxChars: 2_000, maxMs: 25, args: ({ fixture }) => ({ id: fixture!.item }) },
+      { tool: "note_update", seed: "fixture", maxChars: 900, maxMs: 100, args: async ({ tools, fixture }) => ({ id: ((await tools.note_add!.handler({ id: fixture!.writableItem, text: "Response stats note." })) as { note: string }).note, text: "Updated response stats note." }) },
       { tool: "overview", seed: "fixture", maxChars: 8_000, maxMs: 25, args: () => ({}) },
-      { tool: "search", seed: "fixture", maxChars: 6_000, maxMs: 25, args: () => ({ pattern: "Finish|Provider|S03-008|AGY searchable|AGY artifact", context_size: 512 }) },
+      { tool: "search", seed: "fixture", maxChars: 6_000, maxMs: 25, args: ({ fixture }) => ({ pattern: fixture!.searchPattern, context_size: 512 }) },
       { tool: "sprint_archive", seed: "fixture", maxChars: 900, maxMs: 100, args: () => ({ reason: "Response stats archive." }) },
       { tool: "sprint_close", seed: "empty", maxChars: 1_000, maxMs: 500, args: async ({ tools, dataDir, rootDir }) => { await seedMiniSprint(tools, dataDir); await tools.item_done!.handler({ id: "S01-001", commit_id: headCommit, gate_results: [{ kind: "command", spec: "true", passed: true, evidence: "ok" }], changelog: { verb: "added", line: "Added response stats item." } }); return { coverage: { path: writeCoverage(rootDir), format: "lcov" } }; } },
       { tool: "sprint_detach", seed: "fixture", maxChars: 900, maxMs: 25, args: () => ({}) },
       { tool: "sprint_list", seed: "fixture", maxChars: 2_000, maxMs: 25, args: ({ dataDir }) => ({ data_dir: dataDir }) },
       { tool: "sprint_new", seed: "empty", maxChars: 2_500, maxMs: 300, args: ({ dataDir }) => ({ goal: "Response stats sprint", git_dir: gitDir, data_dir: dataDir }) },
       { tool: "sprint_resume", seed: "fixture", maxChars: 1_000, maxMs: 25, args: ({ dataDir }) => ({ git_dir: gitDir, data_dir: dataDir }) },
-      { tool: "subsprint_get", seed: "fixture", maxChars: 7_500, maxMs: 25, args: () => ({ id: subsprint }) },
+      { tool: "subsprint_get", seed: "fixture", maxChars: 7_500, maxMs: 25, args: ({ fixture }) => ({ id: fixture!.subsprint }) },
       { tool: "subsprint_list", seed: "fixture", maxChars: 6_000, maxMs: 25, args: () => ({}) },
       { tool: "subsprint_new", seed: "fixture", maxChars: 900, maxMs: 100, args: () => ({ description: "Response stats subsprint", goals: ["Measure response sizes"], gates: [{ kind: "command", spec: "true" }] }) },
     ];
@@ -199,53 +221,59 @@ describe("public Sprinty tool responses", () => {
     expect(cases.map((entry) => entry.tool).sort()).toEqual(publicTools);
 
     for (const entry of cases) {
-      const tempRoot = mkdtempSync(join(tmpdir(), "sprinty-tool-gate-"));
-      try {
-        const { tools, dataDir } = entry.seed === "fixture"
-          ? (() => {
-              const dataDir = join(tempRoot, "data");
-              cpSync(fixtureDir, dataDir, { recursive: true });
-              return { tools: makeTools(dataDir), dataDir };
-            })()
-          : makeEmptyTools(tempRoot);
-        const args = await entry.args({ tools, dataDir, rootDir: tempRoot });
-        const start = performance.now();
-        const result = await tools[entry.tool]!.handler(args);
-        const elapsed = performance.now() - start;
+      const fixtureCases = entry.seed === "fixture" ? readGateFixtures : [undefined];
+      for (const fixture of fixtureCases) {
+        const tempRoot = mkdtempSync(join(tmpdir(), "sprinty-tool-gate-"));
+        const label = fixture ? `${fixture.name} ${entry.tool}` : entry.tool;
+        try {
+          const { tools, dataDir } = entry.seed === "fixture"
+            ? (() => {
+                const dataDir = join(tempRoot, "data");
+                cpSync(fixture!.fixtureDir, dataDir, { recursive: true });
+                return { tools: makeTools(dataDir), dataDir };
+              })()
+            : makeEmptyTools(tempRoot);
+          const args = await entry.args({ tools, dataDir, rootDir: tempRoot, fixture });
+          const start = performance.now();
+          const result = await tools[entry.tool]!.handler(args);
+          const elapsed = performance.now() - start;
 
-        expect(chars(result), `${entry.tool} response too large`).toBeLessThanOrEqual(entry.maxChars);
-        expectWithinTimeBudget(entry.tool, elapsed, entry.maxMs);
-        expect(result, `${entry.tool} missing help`).toHaveProperty("help");
-      } finally {
-        rmSync(tempRoot, { recursive: true, force: true });
+          expect(chars(result), `${label} response too large`).toBeLessThanOrEqual(entry.maxChars);
+          expectWithinTimeBudget(label, elapsed, entry.maxMs);
+          expect(result, `${label} missing help`).toHaveProperty("help");
+        } finally {
+          rmSync(tempRoot, { recursive: true, force: true });
+        }
       }
     }
   });
 
   it("keeps representative read responses compact, pruned, timestamp-free, and fast", async () => {
-    const cases: Array<[string, Record<string, unknown>, number, number]> = [
-      ["overview", {}, 8_000, 25],
-      ["next", {}, 5_000, 25],
-      ["subsprint_list", {}, 6_000, 25],
-      ["subsprint_get", { id: subsprint }, 7_500, 25],
-      ["item_get", { id: item }, 8_000, 50],
-      ["note_list", { id: item }, 2_000, 25],
-      ["search", { pattern: "Finish|Provider|S03-008|AGY searchable|AGY artifact", context_size: 512 }, 6_000, 25],
-      ["sprint_list", { data_dir: "$dataDir" }, 2_000, 25],
-    ];
-    for (const [tool, rawArgs, maxChars, maxMs] of cases) {
-      await withFixture(async (tools, dataDir) => {
-        const args = JSON.parse(JSON.stringify(rawArgs).replaceAll("$dataDir", dataDir));
-        await tools[tool]!.handler(args);
-        const start = performance.now();
-        const result = await tools[tool]!.handler(args);
-        const elapsed = performance.now() - start;
-        expect(chars(result), `${tool} response too large`).toBeLessThanOrEqual(maxChars);
-        expectWithinTimeBudget(tool, elapsed, maxMs);
-        expect(collectTimestampKeys(result), `${tool} returned timestamp fields`).toEqual([]);
-        expect(collectEmptyFields(result), `${tool} returned empty fields`).toEqual([]);
-        expect(result, `${tool} missing help`).toHaveProperty("help");
-      });
+    for (const fixture of readGateFixtures) {
+      const cases: Array<[string, Record<string, unknown>, number, number]> = [
+        ["overview", {}, 8_000, 25],
+        ["next", {}, 5_000, 25],
+        ["subsprint_list", {}, 6_000, 25],
+        ["subsprint_get", { id: fixture.subsprint }, 7_500, 25],
+        ["item_get", { id: fixture.item }, 8_000, 50],
+        ["note_list", { id: fixture.item }, 2_000, 25],
+        ["search", { pattern: fixture.searchPattern, context_size: 512 }, 6_000, 25],
+        ["sprint_list", { data_dir: "$dataDir" }, 2_000, 25],
+      ];
+      for (const [tool, rawArgs, maxChars, maxMs] of cases) {
+        await withFixture(async (tools, dataDir) => {
+          const args = JSON.parse(JSON.stringify(rawArgs).replaceAll("$dataDir", dataDir));
+          await tools[tool]!.handler(args);
+          const start = performance.now();
+          const result = await tools[tool]!.handler(args);
+          const elapsed = performance.now() - start;
+          expect(chars(result), `${fixture.name} ${tool} response too large`).toBeLessThanOrEqual(maxChars);
+          expectWithinTimeBudget(`${fixture.name} ${tool}`, elapsed, maxMs);
+          expect(collectTimestampKeys(result), `${fixture.name} ${tool} returned timestamp fields`).toEqual([]);
+          expect(collectEmptyFields(result), `${fixture.name} ${tool} returned empty fields`).toEqual([]);
+          expect(result, `${fixture.name} ${tool} missing help`).toHaveProperty("help");
+        }, fixture.fixtureDir);
+      }
     }
   });
 
@@ -281,32 +309,34 @@ describe("public Sprinty tool responses", () => {
   });
 
   it("keeps steady-state read handlers under the 2ms p95 speed gate", async () => {
-    const cases: Array<[string, Record<string, unknown>]> = [
-      ["overview", {}],
-      ["next", {}],
-      ["subsprint_list", {}],
-      ["subsprint_get", { id: subsprint }],
-      ["item_get", { id: item }],
-      ["note_list", { id: item }],
-      ["search", { pattern: "Finish|Provider|S03-008|AGY searchable|AGY artifact", context_size: 512 }],
-      ["sprint_list", { data_dir: "$dataDir" }],
-    ];
-    await withFixture(async (tools, dataDir) => {
-      for (const [tool, rawArgs] of cases) {
-        const args = JSON.parse(JSON.stringify(rawArgs).replaceAll("$dataDir", dataDir));
-        await tools[tool]!.handler(args);
-        const batches = [
-          await measureP95(async () => { await tools[tool]!.handler(args); }),
-          await measureP95(async () => { await tools[tool]!.handler(args); }),
-          await measureP95(async () => { await tools[tool]!.handler(args); }),
-        ];
-        const best = batches.reduce((fastest, batch) => batch.p95 < fastest.p95 ? batch : fastest);
-        const detail = batches.map((batch, index) =>
-          `batch${index + 1}: p95=${batch.p95.toFixed(3)}ms avg=${batch.avg.toFixed(3)}ms max=${batch.max.toFixed(3)}ms`
-        ).join("; ");
-        expect(best.p95, `${tool} speed gate needs one clean 50-sample batch under 2ms p95; ${detail}`).toBeLessThan(2);
-      }
-    });
+    for (const fixture of readGateFixtures) {
+      const cases: Array<[string, Record<string, unknown>]> = [
+        ["overview", {}],
+        ["next", {}],
+        ["subsprint_list", {}],
+        ["subsprint_get", { id: fixture.subsprint }],
+        ["item_get", { id: fixture.item }],
+        ["note_list", { id: fixture.item }],
+        ["search", { pattern: fixture.searchPattern, context_size: 512 }],
+        ["sprint_list", { data_dir: "$dataDir" }],
+      ];
+      await withFixture(async (tools, dataDir) => {
+        for (const [tool, rawArgs] of cases) {
+          const args = JSON.parse(JSON.stringify(rawArgs).replaceAll("$dataDir", dataDir));
+          await tools[tool]!.handler(args);
+          const batches = [
+            await measureP95(async () => { await tools[tool]!.handler(args); }),
+            await measureP95(async () => { await tools[tool]!.handler(args); }),
+            await measureP95(async () => { await tools[tool]!.handler(args); }),
+          ];
+          const best = batches.reduce((fastest, batch) => batch.p95 < fastest.p95 ? batch : fastest);
+          const detail = batches.map((batch, index) =>
+            `batch${index + 1}: p95=${batch.p95.toFixed(3)}ms avg=${batch.avg.toFixed(3)}ms max=${batch.max.toFixed(3)}ms`
+          ).join("; ");
+          expect(best.p95, `${fixture.name} ${tool} speed gate needs one clean 50-sample batch under 2ms p95; ${detail}`).toBeLessThan(2);
+        }
+      }, fixture.fixtureDir);
+    }
   });
 
   it("keeps mutating acknowledgements compact and non-duplicative", async () => {

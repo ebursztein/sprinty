@@ -140,7 +140,7 @@ export function buildCompletionSummary(
   const starts = new Map<string, number>();
   const points: CompletionPoint[] = [];
   const ratePoints: CompletionRatePoint[] = [];
-  const cadenceDurations: number[] = [];
+  const completedItemDurations: number[] = [];
   const rateTotal = Math.max(0, totalItems);
   const remainingItems = Math.max(0, openItems);
   let completedItems = 0;
@@ -158,6 +158,10 @@ export function buildCompletionSummary(
     }
 
     if (entry.type !== "item_resolved") continue;
+    const itemStartedAt = starts.get(entry.id);
+    const itemDurationMs = itemStartedAt === undefined ? null : Math.max(0, time - itemStartedAt);
+    if (itemDurationMs !== null) completedItemDurations.push(itemDurationMs);
+
     if (time < windowStart) {
       starts.delete(entry.id);
       lastResolvedAt = time;
@@ -165,8 +169,7 @@ export function buildCompletionSummary(
     }
 
     const previousResolvedAt = lastResolvedAt;
-    const durationMs = previousResolvedAt === null ? 0 : Math.max(0, time - previousResolvedAt);
-    if (previousResolvedAt !== null) cadenceDurations.push(durationMs);
+    const durationMs = itemDurationMs ?? (previousResolvedAt === null ? 0 : Math.max(0, time - previousResolvedAt));
     lastResolvedAt = time;
     starts.delete(entry.id);
     points.push({ time, durationMs, movingAverageMs: 0 });
@@ -191,8 +194,8 @@ export function buildCompletionSummary(
     points[i] = { ...points[i]!, movingAverageMs: Math.round(sum / window.length) };
   }
 
-  const stats = durationStats(cadenceDurations);
-  const etaMs = stats.avgMs && stats.avgMs > 0 ? stats.avgMs * remainingItems : null;
+  const stats = durationStats(completedItemDurations);
+  const etaMs = stats.medianMs && stats.medianMs > 0 ? stats.medianMs * remainingItems : null;
   const projectedAt = etaMs && remainingItems > 0 ? options.nowMs + etaMs : null;
   const etaAt = projectedAt ? options.formatEta(projectedAt) : null;
   const lastRatePoint = ratePoints[ratePoints.length - 1];

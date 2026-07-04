@@ -18,20 +18,15 @@ function def<Sc extends z.ZodObject<z.ZodRawShape>>(
   schema: Sc,
   description: string,
   run: (input: z.infer<Sc>) => unknown | Promise<unknown>,
-  options: PruneOptions = {},
 ): ToolDef {
   return {
     description,
     schema,
     handler: async (raw) => {
       const input = schema.parse(raw);
-      return pruneEmptyResponseFields(stripResponseNoise(ensureHelp(await run(input), helpTarget(input as Record<string, unknown>))), options) ?? {};
+      return pruneEmptyResponseFields(stripResponseNoise(ensureHelp(await run(input), helpTarget(input as Record<string, unknown>)))) ?? {};
     },
   };
-}
-
-interface PruneOptions {
-  keepItemEmptyDependencies?: boolean;
 }
 
 export type ToolHandlers = Record<string, ToolDef>;
@@ -122,8 +117,7 @@ export function buildToolHandlers(
         return ack("item_add", result.view, { item: result.id });
       }),
     item_get: def(S.ItemGetInput, "Read one item with full untruncated detail.",
-      async (i) => itemGet((await getStore()).read(), i.id),
-      { keepItemEmptyDependencies: true }),
+      async (i) => itemGet((await getStore()).read(), i.id)),
     item_update: def(S.ItemUpdateInput, "Update item metadata: note, title, description, high_priority, and/or replacement dependency ids.",
       async (i) => {
         const store = await getStore();
@@ -529,9 +523,9 @@ function stripResponseNoise(value: unknown): unknown {
   );
 }
 
-function pruneEmptyResponseFields(value: unknown, options: PruneOptions = {}): unknown {
+function pruneEmptyResponseFields(value: unknown): unknown {
   if (Array.isArray(value)) {
-    const entries = value.map((entry) => pruneEmptyResponseFields(entry, options)).filter((entry) => entry !== undefined);
+    const entries = value.map((entry) => pruneEmptyResponseFields(entry)).filter((entry) => entry !== undefined);
     return entries.length > 0 ? entries : undefined;
   }
   if (!value || typeof value !== "object") {
@@ -541,16 +535,11 @@ function pruneEmptyResponseFields(value: unknown, options: PruneOptions = {}): u
   const source = value as Record<string, unknown>;
   const entries = Object.entries(source)
     .map(([key, child]) => {
-      const pruned = pruneEmptyResponseFields(child, options);
-      if (options.keepItemEmptyDependencies && pruned === undefined && key === "dependencies" && isItemId(source.id) && Array.isArray(child)) return [key, []] as const;
+      const pruned = pruneEmptyResponseFields(child);
       return [key, pruned] as const;
     })
     .filter(([, child]) => child !== undefined);
   return entries.length > 0 ? Object.fromEntries(entries) : undefined;
-}
-
-function isItemId(value: unknown): boolean {
-  return typeof value === "string" && /^S\d{2}-\d{3}$/.test(value);
 }
 
 interface SprintListResult {

@@ -291,8 +291,8 @@ describe("tool handlers", () => {
     const replaced = await tools.item_get!.handler({ id: "S01-002" }) as { dependencies: string[] };
     expect(replaced.dependencies).toEqual(["S01-003"]);
     await tools.item_update!.handler({ id: "S01-002", dependencies: [] });
-    const removed = await tools.item_get!.handler({ id: "S01-002" }) as { dependencies: string[] };
-    expect(removed.dependencies).toEqual([]);
+    const removed = await tools.item_get!.handler({ id: "S01-002" }) as { dependencies?: string[] };
+    expect(removed).not.toHaveProperty("dependencies");
   });
 
   it("passes high_priority through item_add and item_update", async () => {
