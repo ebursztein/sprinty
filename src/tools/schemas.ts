@@ -15,17 +15,19 @@ export const CoverageNotApplicableInput = z.object({
 export const SprintNewInput = z.object({
   goal: z.string().min(1),
   git_dir: z.string().min(1),
-  data_dir: z.string().min(1),
+  data_dir: z.string().min(1).optional(),
   context_notes: z.array(z.string().min(1)).default([]),
 });
 export const SprintResumeInput = z.object({
   git_dir: z.string().min(1),
-  data_dir: z.string().min(1),
-});
-export const SprintDetachInput = z.object({});
-export const SprintListInput = z.object({
   data_dir: z.string().min(1).optional(),
 });
+export const InfoInput = z.object({
+  git_dir: z.string().min(1).optional(),
+  data_dir: z.string().min(1).optional(),
+  workspace_dirs: z.array(z.string().min(1)).optional(),
+});
+export const SprintDetachInput = z.object({});
 export const SprintCloseInput = z.object({ coverage: z.union([CoverageInput, CoverageNotApplicableInput]).optional() });
 export const SprintArchiveInput = z.object({ reason: z.string().min(1) });
 export const ChangelogInput = z.object({

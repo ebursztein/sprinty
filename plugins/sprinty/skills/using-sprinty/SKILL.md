@@ -11,10 +11,10 @@ Prefer compact commands first. Lists are compact and say which `_get()` tool ret
 
 | Tool | Input | Use |
 |---|---|---|
-| `sprint_list` | `{ data_dir? }` | Inspect ledgers without creating or binding. Returns sprint title plus open/closed/blocked item counts. |
-| `sprint_resume` | `{ git_dir, data_dir }` | Rebind this MCP process to an existing sprint and return the dashboard URL. Never call `sprint_new` as a resume trick. |
+| `info` | `{ git_dir?, data_dir?, workspace_dirs?[] }` | First-call orientation before binding. Returns startup workflow, resume/create help, dashboard state, and sprint rows with title, created time, and open/closed/blocked item counts. |
+| `sprint_resume` | `{ git_dir, data_dir? }` | Rebind this MCP process to an existing sprint and return the dashboard URL. `data_dir` defaults to `<git_dir>/.sprinty`. Never call `sprint_new` as a resume trick. |
 | `sprint_detach` | `{}` | Clear this process binding before resuming a different sprint. |
-| `sprint_new` | `{ goal, git_dir, data_dir, context_notes?[] }` | Start one sprint with explicit paths and return the dashboard URL. |
+| `sprint_new` | `{ goal, git_dir, data_dir?, context_notes?[] }` | Start one sprint with explicit `git_dir`; `data_dir` defaults to `<git_dir>/.sprinty`. Returns the dashboard URL. |
 | `overview` | `{}` | Compact sprint title/details/artifacts/subsprints/items. Use this to orient. |
 | `next` | `{ past?=1, future_per_subsprint?=1, include_high_priority?=true }` | Compact active work window. Returns all available high-priority items first, then normal available items per subsprint. No full graph. |
 | `search` | `{ pattern, context_size?=512 }` | Regex search. Returns `{ id, type, text, tool_call }`; use `tool_call` for full detail. |

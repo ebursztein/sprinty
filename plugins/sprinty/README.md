@@ -40,8 +40,10 @@ codex mcp add sprinty -- npx -y sprinty-mcp
 
 Sprinty does not infer state from the Codex MCP launch cwd. Start every sprint with explicit
 `git_dir` and `data_dir`; `git_dir` is where commits, gates, coverage, and change maps run, while
-`data_dir` stores the `current` pointer and JSONL ledgers. After a Codex/MCP restart, call
-`sprint_list(data_dir)` and then `sprint_resume(git_dir, data_dir)` to reattach without creating a
-new sprint. Use `sprint_detach()` before switching one MCP process to another sprint. For read-only
-tools before `sprint_new`, you may pre-bind with both `SPRINTY_GIT_DIR` and `SPRINTY_DATA_DIR` or
-both `--git-dir` and `--data-dir`.
+`data_dir` stores the `current` pointer and JSONL ledgers. When `data_dir` is omitted and `git_dir`
+is provided, Sprinty uses `<git_dir>/.sprinty`. Call `info({ git_dir })` first for startup
+orientation and compact sprint rows, or `info({ workspace_dirs: [...] })` to inspect multiple data
+dirs. Then call `sprint_resume(git_dir, data_dir?)` to reattach without creating a new sprint. Use
+`sprint_detach()` before switching one MCP process to another sprint. For read-only tools before
+`sprint_new`, you may pre-bind with both `SPRINTY_GIT_DIR` and `SPRINTY_DATA_DIR` or both
+`--git-dir` and `--data-dir`.

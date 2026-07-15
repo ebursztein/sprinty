@@ -5,8 +5,8 @@ When a task is non-trivial, run a disciplined sprint with the sprinty MCP.
 See `skills/how-to-run-a-sprint` and `skills/using-sprinty`. The loop:
 
 ```
-sprint_list(data_dir?) -> sprint_resume(git_dir, data_dir) | sprint_detach()
-sprint_new(goal, git_dir, data_dir, context_notes?)
+info(git_dir? | data_dir? | workspace_dirs?) -> sprint_resume(git_dir, data_dir?) | sprint_detach()
+sprint_new(goal, git_dir, data_dir?, context_notes?)
   -> dashboard URL in response | dashboard_info() | dashboard_restart()
   -> subsprint_new(description, goals[], gates[], dependencies?)
   -> next(past?, future_per_subsprint?, include_high_priority?)
@@ -19,10 +19,11 @@ sprint_new(goal, git_dir, data_dir, context_notes?)
 ```
 
 Rules: IDs are minted by the server (`S01`, `S01-001`) — never invent them. Start with explicit
-absolute `git_dir` and `data_dir`; `git_dir` is where commits/gates/coverage run, and `data_dir`
-stores Sprinty's `current` pointer and JSONL ledgers. After a Codex/MCP restart, use
-`sprint_list(data_dir)` and `sprint_resume(git_dir, data_dir)` to reattach without creating a new
-sprint; use `sprint_detach()` before switching one MCP process to another sprint. Every item needs a
+absolute `git_dir`; `git_dir` is where commits/gates/coverage run. `data_dir` stores Sprinty's
+`current` pointer and JSONL ledgers, and defaults to `<git_dir>/.sprinty` when omitted. After a
+Codex/MCP restart, call `info({ git_dir })` or `info({ workspace_dirs:[...] })`, then use
+`sprint_resume(git_dir, data_dir?)` to reattach without creating a new sprint; use `sprint_detach()`
+before switching one MCP process to another sprint. Every item needs a
 description, at least one code location, and at least one gate. `item_done` requires a real commit,
 passing evidence for every declared item gate, and a semver-style changelog line with a verb such as
 `added`, `fixed`, or `removed`. `item_split` and `item_deprecate` are terminal non-code exits. Each

@@ -84,6 +84,51 @@ beforeEach(() => {
 });
 
 describe("tool handlers", () => {
+  it("info returns startup orientation and sprint rows before a sprint is bound", async () => {
+    const dataDir = join(dir, ".sprinty-info");
+    new SprintStore(dir, dataDir).createSprint("info sprint");
+    const unboundTools = buildToolHandlers(
+      () => { throw new Error("not bound"); },
+      dashboardController(),
+      (binding) => new SprintStore(binding.git_dir, binding.data_dir),
+    );
+
+    const info = await unboundTools.info!.handler({ data_dir: dataDir }) as {
+      tools: string[];
+      startup: string[];
+      dashboard: DashboardInfo;
+      help: { resume: string; create: string };
+      sprints: Array<{ title: string; created: string; items: { open: number; closed: number } }>;
+    };
+    expect(info.startup.join(" ")).toContain("info");
+    expect(info.startup.join(" ")).toContain("sprint_resume");
+    expect(info.tools).toEqual(expect.arrayContaining(["info", "sprint_new", "sprint_resume", "overview", "next"]));
+    expect(info.dashboard).toEqual({ running: false });
+    expect(info.help.resume).toContain("sprint_resume");
+    expect(info.help.create).toContain("sprint_new");
+    expect(info.sprints).toEqual([
+      expect.objectContaining({
+        title: "info sprint",
+        created: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
+        items: { open: 0, closed: 0, blocked: 0 },
+      }),
+    ]);
+  });
+
+  it("defaults data_dir to .sprinty under an explicit git_dir", async () => {
+    const unboundTools = buildToolHandlers(
+      () => { throw new Error("not bound"); },
+      dashboardController(),
+      (binding) => new SprintStore(binding.git_dir, binding.data_dir),
+    );
+
+    const created = await unboundTools.sprint_new!.handler({ goal: "default data dir", git_dir: dir }) as { data_dir: string };
+    expect(created.data_dir).toBe(join(dir, ".sprinty"));
+    const listed = await unboundTools.info!.handler({ git_dir: dir }) as { data_dir: string; sprints: Array<{ title: string }> };
+    expect(listed.data_dir).toBe(join(dir, ".sprinty"));
+    expect(listed.sprints).toEqual([expect.objectContaining({ title: "default data dir" })]);
+  });
+
   it("sprint_new returns orientation for the canonical item workflow", async () => {
     const res = await tools.sprint_new!.handler(sprintInput("g", ["human can watch dashboard"])) as { goal: string; context_notes: string[]; orientation: { how: string }; dashboard: DashboardInfo };
     expect(res.goal).toBe("g");
@@ -119,19 +164,31 @@ describe("tool handlers", () => {
     expect(overview.title).toBe("existing sprint");
   });
 
-  it("sprint_list summarizes existing ledgers and item states", async () => {
+  it("info summarizes existing ledgers and workspace item states", async () => {
     const dataDir = join(dir, ".sprinty-existing");
     new SprintStore(dir, dataDir).createSprint("existing sprint");
+    const otherDataDir = join(dir, ".sprinty-other");
+    new SprintStore(dir, otherDataDir).createSprint("other sprint");
     const unboundTools = buildToolHandlers(
       () => { throw new Error("not bound"); },
       dashboardController(),
       (binding) => new SprintStore(binding.git_dir, binding.data_dir),
     );
 
-    const listed = await unboundTools.sprint_list!.handler({ data_dir: dataDir }) as { current: string | null; sprints: Array<{ id: string; title: string; status: string; items: { open: number; closed: number; blocked: number } }> };
+    const listed = await unboundTools.info!.handler({ data_dir: dataDir }) as { current: string | null; sprints: Array<{ id: string; title: string; status: string; created: string; items: { open: number; closed: number; blocked: number } }> };
     expect(listed.current).toBe("001");
     expect(listed.sprints).toEqual([
-      expect.objectContaining({ id: "001", title: "existing sprint", status: "active", items: { open: 0, closed: 0, blocked: 0 } }),
+      expect.objectContaining({ id: "001", title: "existing sprint", status: "active", created: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/), items: { open: 0, closed: 0, blocked: 0 } }),
+    ]);
+
+    const workspace = await unboundTools.info!.handler({ workspace_dirs: [dataDir, otherDataDir] }) as {
+      workspace_dirs: string[];
+      sprints: Array<{ data_dir: string; id: string; title: string; status: string }>;
+    };
+    expect(workspace.workspace_dirs).toEqual([dataDir, otherDataDir]);
+    expect(workspace.sprints).toEqual([
+      expect.objectContaining({ data_dir: dataDir, id: "001", title: "existing sprint", status: "active" }),
+      expect.objectContaining({ data_dir: otherDataDir, id: "001", title: "other sprint", status: "active" }),
     ]);
   });
 

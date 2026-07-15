@@ -10,10 +10,11 @@ import { resolveBinding, resolveRepoDir, SERVER_VERSION } from "./server.js";
 const publicTools = [
   "artifact_add", "artifact_get", "artifact_list", "artifact_update",
   "changelog", "dashboard_info", "dashboard_restart",
+  "info",
   "item_add", "item_deprecate", "item_done", "item_get", "item_split", "item_update",
   "next", "note_add", "note_get", "note_list", "note_update",
   "overview", "search",
-  "sprint_archive", "sprint_close", "sprint_detach", "sprint_list", "sprint_new", "sprint_resume",
+  "sprint_archive", "sprint_close", "sprint_detach", "sprint_new", "sprint_resume",
   "subsprint_get", "subsprint_list", "subsprint_new",
 ].sort();
 
@@ -99,7 +100,7 @@ describe("sprinty e2e over MCP", () => {
     expect(SERVER_VERSION).toBe(pkg.version);
   });
 
-  it("lists only the canonical subject_verb tools", async () => {
+  it("lists only the canonical public tools", async () => {
     const { tools } = await client.listTools();
     expect(tools.map((t) => t.name).sort()).toEqual(publicTools);
   });
@@ -163,7 +164,7 @@ describe("sprinty e2e over MCP", () => {
       const before = await call(unbound, "overview", {});
       expect(before.isError).toBe(true);
       expect(before.text).toContain("Sprinty is not bound");
-      const listed = await call(unbound, "sprint_list", { data_dir: dataDir });
+      const listed = await call(unbound, "info", { data_dir: dataDir });
       expect(listed.json.sprints).toEqual([
         expect.objectContaining({ id: "001", title: "bind through env", status: "active" }),
       ]);

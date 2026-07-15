@@ -42,10 +42,11 @@ const readGateFixtures = [
 const publicTools = [
   "artifact_add", "artifact_get", "artifact_list", "artifact_update",
   "changelog", "dashboard_info", "dashboard_restart",
+  "info",
   "item_add", "item_deprecate", "item_done", "item_get", "item_split", "item_update",
   "next", "note_add", "note_get", "note_list", "note_update",
   "overview", "search",
-  "sprint_archive", "sprint_close", "sprint_detach", "sprint_list", "sprint_new", "sprint_resume",
+  "sprint_archive", "sprint_close", "sprint_detach", "sprint_new", "sprint_resume",
   "subsprint_get", "subsprint_list", "subsprint_new",
 ].sort();
 
@@ -171,7 +172,7 @@ async function measureP95(run: () => Promise<void>): Promise<{ avg: number; p95:
 }
 
 describe("public Sprinty tool responses", () => {
-  it("exposes only the canonical subject_verb tool list", async () => {
+  it("exposes only the canonical public tool list", async () => {
     await withFixture(async (tools) => {
       expect(Object.keys(tools).sort()).toEqual(publicTools);
     });
@@ -194,6 +195,7 @@ describe("public Sprinty tool responses", () => {
       { tool: "changelog", seed: "fixture", maxChars: 900, maxMs: 75, args: () => ({}) },
       { tool: "dashboard_info", seed: "fixture", maxChars: 900, maxMs: 25, args: () => ({}) },
       { tool: "dashboard_restart", seed: "fixture", maxChars: 900, maxMs: 25, args: () => ({}) },
+      { tool: "info", seed: "fixture", maxChars: 2_500, maxMs: 25, args: ({ dataDir }) => ({ data_dir: dataDir }) },
       { tool: "item_add", seed: "fixture", maxChars: 900, maxMs: 100, args: ({ fixture }) => ({ subsprint: fixture!.subsprint, title: "Response stats item", description: "Measure one representative response size.", code_locations: ["src/tools/register.ts"], gates: [{ kind: "command", spec: "true" }] }) },
       { tool: "item_deprecate", seed: "fixture", maxChars: 900, maxMs: 100, args: ({ fixture }) => ({ id: fixture!.openItem, reason: "Response stats baseline." }) },
       { tool: "item_done", seed: "empty", maxChars: 1_000, maxMs: 300, args: async ({ tools, dataDir }) => { await seedMiniSprint(tools, dataDir); return { id: "S01-001", commit_id: headCommit, gate_results: [{ kind: "command", spec: "true", passed: true, evidence: "ok" }], changelog: { verb: "added", line: "Added response stats item." } }; } },
@@ -210,7 +212,6 @@ describe("public Sprinty tool responses", () => {
       { tool: "sprint_archive", seed: "fixture", maxChars: 900, maxMs: 100, args: () => ({ reason: "Response stats archive." }) },
       { tool: "sprint_close", seed: "empty", maxChars: 1_000, maxMs: 500, args: async ({ tools, dataDir, rootDir }) => { await seedMiniSprint(tools, dataDir); await tools.item_done!.handler({ id: "S01-001", commit_id: headCommit, gate_results: [{ kind: "command", spec: "true", passed: true, evidence: "ok" }], changelog: { verb: "added", line: "Added response stats item." } }); return { coverage: { path: writeCoverage(rootDir), format: "lcov" } }; } },
       { tool: "sprint_detach", seed: "fixture", maxChars: 900, maxMs: 25, args: () => ({}) },
-      { tool: "sprint_list", seed: "fixture", maxChars: 2_000, maxMs: 25, args: ({ dataDir }) => ({ data_dir: dataDir }) },
       { tool: "sprint_new", seed: "empty", maxChars: 2_500, maxMs: 300, args: ({ dataDir }) => ({ goal: "Response stats sprint", git_dir: gitDir, data_dir: dataDir }) },
       { tool: "sprint_resume", seed: "fixture", maxChars: 1_000, maxMs: 25, args: ({ dataDir }) => ({ git_dir: gitDir, data_dir: dataDir }) },
       { tool: "subsprint_get", seed: "fixture", maxChars: 7_500, maxMs: 25, args: ({ fixture }) => ({ id: fixture!.subsprint }) },
@@ -258,7 +259,7 @@ describe("public Sprinty tool responses", () => {
         ["item_get", { id: fixture.item }, 8_000, 50],
         ["note_list", { id: fixture.item }, 2_000, 25],
         ["search", { pattern: fixture.searchPattern, context_size: 512 }, 6_000, 25],
-        ["sprint_list", { data_dir: "$dataDir" }, 2_000, 25],
+        ["info", { data_dir: "$dataDir" }, 2_500, 25],
       ];
       for (const [tool, rawArgs, maxChars, maxMs] of cases) {
         await withFixture(async (tools, dataDir) => {
@@ -318,7 +319,7 @@ describe("public Sprinty tool responses", () => {
         ["item_get", { id: fixture.item }],
         ["note_list", { id: fixture.item }],
         ["search", { pattern: fixture.searchPattern, context_size: 512 }],
-        ["sprint_list", { data_dir: "$dataDir" }],
+        ["info", { data_dir: "$dataDir" }],
       ];
       await withFixture(async (tools, dataDir) => {
         for (const [tool, rawArgs] of cases) {

@@ -81,17 +81,19 @@ sprint_new({ goal, git_dir, data_dir, context_notes? })
 sprint_resume({ git_dir, data_dir })
 ```
 
-Use a worktree-local, gitignored `data_dir`, usually `<git_dir>/.sprinty`. `sprint_new` and
-`sprint_resume` return the dashboard URL. After a restart, call `sprint_list({ data_dir })`, then
-`sprint_resume({ git_dir, data_dir })`.
+Use a worktree-local, gitignored `data_dir`, usually `<git_dir>/.sprinty`. When `data_dir` is
+omitted and `git_dir` is provided, Sprinty uses `<git_dir>/.sprinty`. `sprint_new` and
+`sprint_resume` return the dashboard URL. Call `info({ git_dir })` first for startup orientation and
+compact sprint rows. Use `info({ workspace_dirs: [...] })` when you need to inspect multiple Sprinty
+data dirs together, then `sprint_resume({ git_dir, data_dir })`.
 
 ## Tools
 
 | Tool | Purpose |
 | --- | --- |
+| `info` | Startup orientation before binding, including sprint rows, resume/create help, and dashboard state. |
 | `sprint_new` | Start a sprint with explicit `git_dir` and `data_dir`; returns orientation and dashboard info. |
 | `sprint_resume` | Reattach this MCP session to an existing sprint. |
-| `sprint_list` | List ledgers in a `data_dir` without creating or resuming a sprint. |
 | `sprint_detach` | Clear this MCP process binding and stop the dashboard. |
 | `sprint_close` | Close only after all work is resolved, changelog exists, gates pass, and coverage is supplied. |
 | `sprint_archive` | Archive an active sprint with a recovery reason. |

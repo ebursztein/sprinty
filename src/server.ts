@@ -14,9 +14,10 @@ const packageJson = require("../package.json") as { version: string };
 export const SERVER_VERSION = packageJson.version;
 
 const INSTRUCTIONS = `Sprinty enforces a disciplined sprint.
-One sprint per explicit git/data binding. sprint_new requires git_dir and data_dir so Sprinty never guesses from the MCP process cwd.
-Use a worktree-scoped, uncommitted data_dir, such as <git_dir>/.sprinty when it is gitignored; avoid shared temp dirs and committed sprint state.
-The data_dir/current pointer keeps exactly one open sprint for that binding. After an MCP restart, call sprint_resume(git_dir, data_dir) to reattach to an existing sprint without creating a new one. Use sprint_list(data_dir) to inspect existing ledgers and sprint_detach() to clear the process binding.
+Call info() first for unbound startup orientation, compact sprint discovery, and the current dashboard state.
+One sprint per explicit git/data binding. sprint_new and sprint_resume require git_dir; when data_dir is omitted, Sprinty uses <git_dir>/.sprinty and never guesses from the MCP process cwd.
+Use a worktree-scoped, uncommitted data_dir, usually <git_dir>/.sprinty when it is gitignored; avoid shared temp dirs and committed sprint state.
+The data_dir/current pointer keeps exactly one open sprint for that binding. After an MCP restart, call info({ git_dir }) or info({ workspace_dirs }) to inspect existing ledgers, then sprint_resume(git_dir, data_dir?) to reattach to an existing sprint without creating a new one. Use sprint_detach() to clear the process binding.
 Call overview() after binding for compact sprint shape, or next() for the active work window.
 Build is item-driven: sprint_new(goal, git_dir, data_dir, context_notes?) -> dashboard URL for the human -> subsprint_new(..., dependencies?)
 -> item_add(title + description + code_locations + gates, dependencies?) -> item_done(commit + passing gates + changelog)

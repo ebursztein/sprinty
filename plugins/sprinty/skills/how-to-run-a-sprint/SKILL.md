@@ -9,7 +9,7 @@ A Sprinty sprint is item-driven. Do not keep parallel prose trackers when tools 
 
 ## Loop
 
-1. Bind explicitly. Use `sprint_list({ data_dir })` to inspect existing ledgers after restart, then `sprint_resume({ git_dir, data_dir })`. Start fresh only with `sprint_new({ goal, git_dir, data_dir, context_notes })`.
+1. Orient before binding. Call `info({ git_dir })` for the default `<git_dir>/.sprinty` ledger directory, `info({ data_dir })` for an explicit ledger directory, or `info({ workspace_dirs: [...] })` for a compact workspace view. Resume with `sprint_resume({ git_dir, data_dir? })`. Start fresh only with `sprint_new({ goal, git_dir, data_dir?, context_notes })`.
 2. Share the dashboard URL returned by `sprint_new({})` or `sprint_resume({})`. Use `dashboard_info({})` to re-read it, `dashboard_restart({})` to refresh it, `overview({})` for compact orientation, and `next({})` for the active work window.
 3. Create feature-sized subsprints with `subsprint_new({ description, goals, gates, dependencies })`.
 4. Create atomic work with `item_add({ subsprint, title, description, code_locations, gates, dependencies, high_priority })`. If the work is too large, make more items; do not hide scope in notes.
@@ -22,7 +22,7 @@ A Sprinty sprint is item-driven. Do not keep parallel prose trackers when tools 
 ## Rules
 
 - Never invent ids; read minted ids from tool results.
-- Use explicit `git_dir` and `data_dir`. Never rely on MCP cwd.
+- Use explicit `git_dir`; `data_dir` defaults to `<git_dir>/.sprinty` when omitted. Never rely on MCP cwd.
 - Keep responses compact. Prefer `next`, `overview`, `search`, and list/get pairs over full views. `next({})` returns all available high-priority items, then one normal available item per subsprint by default.
 - Notes must be bound to an item id. Work needs an item.
 - Gates prove items. `item_done` requires a real commit and passing evidence for every declared gate.

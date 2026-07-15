@@ -52,14 +52,16 @@ export function buildToolHandlers(
   detachStore: StoreDetacher = () => undefined,
 ): ToolHandlers {
   return {
+    info: def(S.InfoInput, "Startup orientation and compact sprint discovery before binding to one sprint.",
+      async (i) => infoPayload(i, getStore, dashboard)),
     sprint_new: def(S.SprintNewInput, "Start a sprint with explicit git_dir and a worktree-scoped, uncommitted data_dir; returns orientation.",
       async (i) => {
-        const store = await bindStore({ git_dir: i.git_dir, data_dir: i.data_dir });
+        const store = await bindStore({ git_dir: i.git_dir, data_dir: defaultDataDir(i) });
         return { ...store.createSprint(i.goal, i.context_notes), orientation: orientation(), dashboard: await dashboard.open() };
       }),
     sprint_resume: def(S.SprintResumeInput, "Resume an existing sprint by binding this MCP session to an existing git_dir and data_dir without creating a sprint.",
       async (i) => {
-        const store = await bindStore({ git_dir: i.git_dir, data_dir: i.data_dir });
+        const store = await bindStore({ git_dir: i.git_dir, data_dir: defaultDataDir(i) });
         return ack("sprint_resume", store.read(), { dashboard: await dashboard.open() });
       }),
     sprint_detach: def(S.SprintDetachInput, "Detach this MCP session from its current Sprinty binding and stop the dashboard.",
@@ -67,15 +69,6 @@ export function buildToolHandlers(
         await dashboard.close();
         await detachStore();
         return { detached: true };
-      }),
-    sprint_list: def(S.SprintListInput, "List existing sprint ledgers in a data_dir, or the current binding when already attached.",
-      async (i) => {
-        if (i.data_dir) return listSprints(i.data_dir);
-        try {
-          return listSprints((await getStore()).dataDir);
-        } catch {
-          return { current: null, sprints: [], hint: "Pass data_dir to inspect existing Sprinty ledgers while this MCP session is unbound." };
-        }
       }),
     sprint_close: def(S.SprintCloseInput, "Close the sprint after changelog({path?}) has generated the SemVer Markdown and after a programmatic re-check of all gates.",
       async (i) => {
@@ -218,6 +211,59 @@ function ack(action: string, view: SprintView, extra: Record<string, unknown> = 
     ...extra,
     help: helpLine(helpTarget(extra)),
   };
+}
+
+async function infoPayload(
+  input: z.infer<typeof S.InfoInput>,
+  getStore: StoreProvider,
+  dashboard: DashboardController,
+) {
+  return {
+    info: "Startup orientation and compact sprint discovery.",
+    startup: [
+      "Call info({ data_dir }) to inspect one Sprinty data directory without binding.",
+      "Call info({ workspace_dirs: [...] }) to inspect multiple Sprinty data directories as one workspace.",
+      "Call sprint_resume({ git_dir, data_dir }) with a listed row's data_dir to reattach without creating a new sprint.",
+      "Call sprint_new({ goal, git_dir, data_dir, context_notes }) only when no suitable active sprint exists.",
+      "After binding, call overview() for sprint shape or next() for the active work window.",
+    ],
+    tools: [
+      "info",
+      "sprint_resume",
+      "sprint_new",
+      "sprint_detach",
+      "overview",
+      "next",
+      "subsprint_new",
+      "item_add",
+      "item_done",
+      "changelog",
+      "sprint_close",
+    ],
+    help: {
+      resume: "Choose a row from sprints, then call sprint_resume({ git_dir, data_dir }) using the row's data_dir and the repository git_dir.",
+      create: "If no existing row matches the work, call sprint_new({ goal, git_dir, data_dir, context_notes }) with a worktree-local gitignored data_dir such as <git_dir>/.sprinty.",
+    },
+    dashboard: await dashboard.info(),
+    ...(await infoSprintListing(input, getStore)),
+  };
+}
+
+async function infoSprintListing(input: z.infer<typeof S.InfoInput>, getStore: StoreProvider) {
+  if (input.workspace_dirs?.length) return listWorkspaceSprints(input.workspace_dirs);
+  if (input.data_dir || input.git_dir) return listSprints(defaultDataDir(input));
+  try {
+    const store = await getStore();
+    return listSprints(store.dataDir);
+  } catch {
+    return { hint: "Pass data_dir or workspace_dirs to inspect existing Sprinty ledgers while this MCP session is unbound." };
+  }
+}
+
+function defaultDataDir(input: { git_dir?: string | undefined; data_dir?: string | undefined }): string {
+  if (input.data_dir) return input.data_dir;
+  if (input.git_dir) return join(input.git_dir, ".sprinty");
+  throw new Error("Missing data_dir. Pass data_dir, or pass git_dir to use <git_dir>/.sprinty.");
 }
 
 function helpTarget(extra: Record<string, unknown>): string {
@@ -545,7 +591,13 @@ function pruneEmptyResponseFields(value: unknown): unknown {
 interface SprintListResult {
   data_dir: string;
   current: string | null;
-  sprints: Array<{ id: string; title: string; status: string; items: { open: number; closed: number; blocked: number } }>;
+  sprints: Array<{ id: string; title: string; created: string; status: string; items: { open: number; closed: number; blocked: number } }>;
+}
+
+interface WorkspaceSprintListResult {
+  workspace_dirs: string[];
+  data_dirs: Array<{ data_dir: string; current: string | null; sprint_count: number }>;
+  sprints: Array<{ data_dir: string; id: string; title: string; created: string; status: string; items: { open: number; closed: number; blocked: number } }>;
 }
 
 const sprintListCache = new Map<string, { signature: string; result: SprintListResult }>();
@@ -574,6 +626,25 @@ function listSprints(dataDir: string): SprintListResult {
   return result;
 }
 
+function listWorkspaceSprints(dataDirs: string[]): WorkspaceSprintListResult {
+  const seen = new Set<string>();
+  const uniqueDataDirs = dataDirs.filter((dataDir) => {
+    if (seen.has(dataDir)) return false;
+    seen.add(dataDir);
+    return true;
+  });
+  const listed = uniqueDataDirs.map(listSprints);
+  return {
+    workspace_dirs: uniqueDataDirs,
+    data_dirs: listed.map((entry) => ({
+      data_dir: entry.data_dir,
+      current: entry.current,
+      sprint_count: entry.sprints.length,
+    })),
+    sprints: listed.flatMap((entry) => entry.sprints.map((sprint) => ({ data_dir: entry.data_dir, ...sprint }))),
+  };
+}
+
 function sprintListSignature(dataDir: string, current: string | null, ledgerIds: string[]): string {
   return [
     current ?? "",
@@ -584,7 +655,7 @@ function sprintListSignature(dataDir: string, current: string | null, ledgerIds:
   ].join("|");
 }
 
-function sprintListRow(id: string, view: SprintView): { id: string; title: string; status: string; items: { open: number; closed: number; blocked: number } } {
+function sprintListRow(id: string, view: SprintView): { id: string; title: string; created: string; status: string; items: { open: number; closed: number; blocked: number } } {
   const items = view.subsprints.flatMap((sub) => sub.items);
   const statusById = new Map(view.graph.nodes.map((node) => [node.id, node.status]));
   const blocked = items.filter((item) => {
@@ -595,6 +666,7 @@ function sprintListRow(id: string, view: SprintView): { id: string; title: strin
   return {
     id,
     title: truncate(view.goal, 120),
+    created: view.created_at,
     status: view.status,
     items: {
       open: items.filter((item) => item.status === "open").length,
