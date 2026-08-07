@@ -29,4 +29,12 @@ describe("SprintBook", () => {
     book.ledger("001").append({ type: "sprint_created", goal: "g", worktree: "/w", branch: "main", dir: "/r" });
     expect(existsSync(join(dir, "001.jsonl"))).toBe(true);
   });
+
+  it("returns a stable ledger per id so appends keep their cursor", () => {
+    // SprintStore re-resolves `book.ledger(currentId())` on every append. A fresh Ledger
+    // each time would drop the append cursor and rescan the whole file per write.
+    const book = new SprintBook(dir);
+    expect(book.ledger("001")).toBe(book.ledger("001"));
+    expect(book.ledger("001")).not.toBe(book.ledger("002"));
+  });
 });
