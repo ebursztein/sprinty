@@ -245,7 +245,7 @@ describe("public Sprinty tool responses", () => {
       { tool: "sprint_close", seed: "empty", maxChars: 1_000, maxMs: 900, args: async ({ tools, dataDir, rootDir }) => { await seedMiniSprint(tools, dataDir); await tools.item_done!.handler({ id: "S01-001", commit_id: headCommit, gate_results: [{ kind: "command", spec: "git rev-parse HEAD", passed: true, evidence: "ok" }], changelog: { verb: "added", line: "Added response stats item." } }); return { coverage: { path: writeCoverage(rootDir), format: "lcov" } }; } },
       { tool: "sprint_detach", seed: "fixture", maxChars: 900, maxMs: 25, args: () => ({}) },
       { tool: "sprint_new", seed: "empty", maxChars: 2_500, maxMs: 600, args: ({ dataDir }) => ({ goal: "Response stats sprint", git_dir: gitDir, data_dir: dataDir }) },
-      { tool: "sprint_resume", seed: "fixture", maxChars: 1_000, maxMs: 25, args: ({ dataDir }) => ({ git_dir: gitDir, data_dir: dataDir }) },
+      { tool: "sprint_resume", seed: "fixture", maxChars: 2_000, maxMs: 25, args: ({ dataDir }) => ({ git_dir: gitDir, data_dir: dataDir }) },
       { tool: "subsprint_get", seed: "fixture", maxChars: 7_500, maxMs: 25, args: ({ fixture }) => ({ id: fixture!.subsprint }) },
       { tool: "subsprint_list", seed: "fixture", maxChars: 6_000, maxMs: 25, args: () => ({}) },
       { tool: "subsprint_new", seed: "fixture", maxChars: 900, maxMs: 300, args: () => ({ description: "Response stats subsprint", goals: ["Measure response sizes"], gates: [{ kind: "command", spec: "git rev-parse HEAD" }] }) },
@@ -274,7 +274,7 @@ describe("public Sprinty tool responses", () => {
           recordBudget({ label, chars: chars(result), maxChars: entry.maxChars, ms: elapsed, maxMs: entry.maxMs });
           expect(chars(result), `${label} response too large`).toBeLessThanOrEqual(entry.maxChars);
           expectWithinTimeBudget(label, elapsed, entry.maxMs);
-          expect(result, `${label} missing help`).toHaveProperty("help");
+          expect(result, `${label} missing next_tools`).toHaveProperty("next_tools");
         } finally {
           rmSync(tempRoot, { recursive: true, force: true });
         }
@@ -306,7 +306,7 @@ describe("public Sprinty tool responses", () => {
           expectWithinTimeBudget(`${fixture.name} ${tool}`, elapsed, maxMs);
           expect(collectTimestampKeys(result), `${fixture.name} ${tool} returned timestamp fields`).toEqual([]);
           expect(collectEmptyFields(result), `${fixture.name} ${tool} returned empty fields`).toEqual([]);
-          expect(result, `${fixture.name} ${tool} missing help`).toHaveProperty("help");
+          expect(result, `${fixture.name} ${tool} missing next_tools`).toHaveProperty("next_tools");
         }, fixture.fixtureDir);
       }
     }
@@ -388,7 +388,7 @@ describe("public Sprinty tool responses", () => {
         const result = await tools[tool]!.handler(rawArgs);
         expect(chars(result), `${tool} response too large`).toBeLessThanOrEqual(maxChars);
         expect(JSON.stringify(result)).not.toContain('"sprint"');
-        expect(result).toHaveProperty("help");
+        expect(result).toHaveProperty("next_tools");
       });
     }
   });

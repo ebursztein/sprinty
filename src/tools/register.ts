@@ -6,6 +6,7 @@ import type { ItemView, SprintView } from "../domain/projection.js";
 import type { SearchMatch } from "../domain/search.js";
 import { SprintStore } from "../store/store.js";
 import { windowCurrent } from "./current.js";
+import { briefing, nextTools } from "./next-tools.js";
 import * as S from "./schemas.js";
 
 export interface ToolDef {
@@ -14,19 +15,40 @@ export interface ToolDef {
   handler: (raw: unknown) => Promise<unknown>;
 }
 
-function def<Sc extends z.ZodObject<z.ZodRawShape>>(
-  schema: Sc,
-  description: string,
-  run: (input: z.infer<Sc>) => unknown | Promise<unknown>,
-): ToolDef {
-  return {
-    description,
-    schema,
-    handler: async (raw) => {
-      const input = schema.parse(raw);
-      return pruneEmptyResponseFields(stripResponseNoise(ensureHelp(await run(input), helpTarget(input as Record<string, unknown>)))) ?? {};
-    },
+function makeDef(getStore: StoreProvider) {
+  // next_tools is computed from state after the call, so every response points at ids that exist.
+  return function def<Sc extends z.ZodObject<z.ZodRawShape>>(
+    schema: Sc,
+    description: string,
+    run: (input: z.infer<Sc>) => unknown | Promise<unknown>,
+  ): ToolDef {
+    return {
+      description,
+      schema,
+      handler: async (raw) => {
+        const input = schema.parse(raw);
+        const result = await run(input);
+        const focus = (input as Record<string, unknown>).id;
+        const withNext = attachNextTools(result, await readViewOrNull(getStore), typeof focus === "string" ? focus : undefined);
+        return pruneEmptyResponseFields(stripResponseNoise(withNext)) ?? {};
+      },
+    };
   };
+}
+
+async function readViewOrNull(getStore: StoreProvider): Promise<SprintView | null> {
+  try {
+    return (await getStore()).read();
+  } catch {
+    return null;
+  }
+}
+
+function attachNextTools(value: unknown, view: SprintView | null, id?: string | undefined): unknown {
+  const suggestions = nextTools(view, { id });
+  if (!value || typeof value !== "object" || Array.isArray(value)) return { value, next_tools: suggestions };
+  if ("next_tools" in value) return value;
+  return { ...(value as Record<string, unknown>), next_tools: suggestions };
 }
 
 export type ToolHandlers = Record<string, ToolDef>;
@@ -51,18 +73,26 @@ export function buildToolHandlers(
   bindStore: StoreBinder = async () => getStore(),
   detachStore: StoreDetacher = () => undefined,
 ): ToolHandlers {
+  const def = makeDef(getStore);
   return {
     info: def(S.InfoInput, "Startup orientation and compact sprint discovery before binding to one sprint.",
       async (i) => infoPayload(i, getStore, dashboard)),
     sprint_new: def(S.SprintNewInput, "Start a sprint with explicit git_dir and a worktree-scoped, uncommitted data_dir; returns orientation.",
       async (i) => {
         const store = await bindStore({ git_dir: i.git_dir, data_dir: defaultDataDir(i) });
-        return { ...store.createSprint(i.goal, i.context_notes), orientation: orientation(), dashboard: await dashboard.open() };
+        const view = store.createSprint(i.goal, i.context_notes);
+        return { ...view, orientation: orientation(), briefing: briefing(view, store.listAllNotes()), dashboard: await dashboard.open() };
       }),
     sprint_resume: def(S.SprintResumeInput, "Resume an existing sprint by binding this MCP session to an existing git_dir and data_dir without creating a sprint.",
       async (i) => {
         const store = await bindStore({ git_dir: i.git_dir, data_dir: defaultDataDir(i) });
-        return ack("sprint_resume", store.read(), { dashboard: await dashboard.open() });
+        const view = store.read();
+        // Resuming is the context-loss path: return the state instead of making the agent re-derive it.
+        return ack("sprint_resume", view, {
+          briefing: briefing(view, store.listAllNotes()),
+          skills: orientation().skills,
+          dashboard: await dashboard.open(),
+        });
       }),
     sprint_detach: def(S.SprintDetachInput, "Detach this MCP session from its current Sprinty binding and stop the dashboard.",
       async () => {
@@ -93,7 +123,7 @@ export function buildToolHandlers(
           include_high_priority: i.include_high_priority,
           ...(i.future === undefined ? {} : { future_total: i.future }),
         });
-        return withHelp(renameCurrentWindow(view), view.current?.id ?? "sprint");
+        return renameCurrentWindow(view);
       }),
     subsprint_new: def(S.SubsprintNewInput, "Create a subsprint (description, goals, gates).",
       async (i) => {
@@ -179,7 +209,6 @@ export function buildToolHandlers(
           info: "Compact search results. Use the tool_call on a row for full untruncated detail. If truncated is true, refine pattern.",
           matches,
           ...(allMatches.length > matches.length ? { truncated: true, total_matches: allMatches.length } : {}),
-          help: helpLine(i.pattern),
         };
       }),
     changelog: def(S.ChangelogInput, "Generate the SemVer Markdown changelog and return only its path.",
@@ -211,12 +240,7 @@ function orientation(): { skills: string[]; how: string } {
 function ack(action: string, view: SprintView, extra: Record<string, unknown> = {}) {
   void view;
   assertNoDuplicateIdentifierAliases(extra);
-  return {
-    ok: true,
-    action,
-    ...extra,
-    help: helpLine(helpTarget(extra)),
-  };
+  return { ok: true, action, ...extra };
 }
 
 async function infoPayload(
@@ -270,28 +294,6 @@ function defaultDataDir(input: { git_dir?: string | undefined; data_dir?: string
   if (input.data_dir) return input.data_dir;
   if (input.git_dir) return join(input.git_dir, ".sprinty");
   throw new Error("Missing data_dir. Pass data_dir, or pass git_dir to use <git_dir>/.sprinty.");
-}
-
-function helpTarget(extra: Record<string, unknown>): string {
-  return String(extra.id ?? extra.item ?? extra.subsprint ?? extra.artifact ?? extra.note ?? "sprint");
-}
-
-function helpLine(target: string) {
-  const item = itemTarget(target);
-  const subsprint = subsprintTarget(target);
-  const overviewCall = target === "sprint" ? "overview()" : `item_get({ id: "${item}" })`;
-  return `Help: next({}); ${overviewCall}; subsprint_get({ id: "${subsprint}" }); note_list({ id: "${item}" }); search({ pattern: "${target}", context_size: 512 }); item_add({ subsprint: "${subsprint}", ... }) or subsprint_new({ ... }); item_split({ id: "${item}", ... }) if too large; item_done({ id: "${item}", commit_id, gate_results, changelog }); before sprint_close run changelog({ path? }).`;
-}
-
-function withHelp(value: unknown, target: string): unknown {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return { value, help: helpLine(target) };
-  return { ...(value as Record<string, unknown>), help: helpLine(target) };
-}
-
-function ensureHelp(value: unknown, target: string): unknown {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return { value, help: helpLine(target) };
-  if ("help" in value) return value;
-  return { ...(value as Record<string, unknown>), help: helpLine(target) };
 }
 
 function assertNoDuplicateIdentifierAliases(extra: Record<string, unknown>) {
@@ -546,16 +548,6 @@ function artifactGet(view: SprintView, id: string, full = false) {
       ...(full ? { description: artifact.description } : {}),
     },
   };
-}
-
-function itemTarget(target: string): string {
-  return /^S\d{2}-\d{3}$/.test(target) ? target : "S01-001";
-}
-
-function subsprintTarget(target: string): string {
-  const itemMatch = /^(S\d{2})-\d{3}$/.exec(target);
-  if (itemMatch) return itemMatch[1]!;
-  return /^S\d{2}$/.test(target) ? target : "S01";
 }
 
 function findItem(view: SprintView, itemId: string): ItemView | undefined {
