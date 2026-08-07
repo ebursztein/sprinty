@@ -109,7 +109,7 @@ data dirs together, then `sprint_resume({ git_dir, data_dir })`.
 | `item_update` | Update item metadata, priority, notes, or dependency edges. |
 | `item_done` | Complete an item with a real commit, gate evidence, and changelog entry. |
 | `item_split` | Resolve an oversized item by creating a seeded subsprint. |
-| `item_deprecate` | Drop an item with an explicit reason. |
+| `item_deprecate` | Drop an item with an explicit reason, or pass a subsprint id to drop it and its open items. |
 | `note_add` | Attach a note to an item. |
 | `note_list` | List notes for an item. |
 | `note_get` | Read one note. |

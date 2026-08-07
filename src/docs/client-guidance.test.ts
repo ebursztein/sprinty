@@ -94,6 +94,18 @@ describe("client guidance", () => {
     }
   });
 
+  it("ships every client bundle the canonical skill text", () => {
+    // Each bundle carries its own copy so plugin installs are self-contained; nothing else
+    // stops those copies from going stale against skills/, which is what agents actually read.
+    for (const skill of ["how-to-run-a-sprint", "using-sprinty"]) {
+      const canonical = readFileSync(`skills/${skill}/SKILL.md`, "utf8");
+      for (const bundle of ["clients/claude", "clients/gemini", "plugins/sprinty"]) {
+        const copy = `${bundle}/skills/${skill}/SKILL.md`;
+        expect(readFileSync(copy, "utf8"), `${copy} is stale against skills/${skill}/SKILL.md. Run: npm run sync:skills`).toBe(canonical);
+      }
+    }
+  });
+
   it("packages Claude and Codex plugin skills as real directories", () => {
     for (const path of ["clients/claude/skills", "plugins/sprinty/skills"]) {
       expect(lstatSync(path).isSymbolicLink(), path).toBe(false);

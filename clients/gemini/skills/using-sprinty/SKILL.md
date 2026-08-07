@@ -1,6 +1,6 @@
 ---
 name: using-sprinty
-description: Use when an agent needs the exact Sprinty MCP tool contract, public tool names, compact response rules, restart recovery, or note/artifact/item semantics.
+description: Use when calling any Sprinty MCP tool and you need the exact contract - tool names, required fields, field limits, id formats, compact response rules, restart recovery, or note/artifact/item semantics. Read this before guessing at arguments or when a Sprinty tool call was rejected.
 ---
 
 # Using Sprinty
@@ -16,7 +16,7 @@ Prefer compact commands first. Lists are compact and say which `_get()` tool ret
 | `sprint_detach` | `{}` | Clear this process binding before resuming a different sprint. |
 | `sprint_new` | `{ goal, git_dir, data_dir?, context_notes?[] }` | Start one sprint with explicit `git_dir`; `data_dir` defaults to `<git_dir>/.sprinty`. Returns the dashboard URL. |
 | `overview` | `{}` | Compact sprint title/details/artifacts/subsprints/items. Use this to orient. |
-| `next` | `{ past?=1, future_per_subsprint?=1, include_high_priority?=true }` | Compact active work window. Returns all available high-priority items first, then normal available items per subsprint. No full graph. |
+| `next` | `{ past?=1, future?, future_per_subsprint?=1, include_high_priority?=true }` | Compact active work window. Returns all available high-priority items first, then normal available items per subsprint. `future` caps the total returned across all subsprints. No full graph. |
 | `search` | `{ pattern, context_size?=512 }` | Regex search. Returns `{ id, type, text, tool_call }`; use `tool_call` for full detail. |
 | `dashboard_info` | `{}` | Current localhost dashboard URL and port, or `running:false` when stopped. |
 | `dashboard_restart` | `{}` | Restart the dashboard server and return the new URL and port. |
@@ -28,12 +28,12 @@ Prefer compact commands first. Lists are compact and say which `_get()` tool ret
 | `subsprint_new` | `{ description, goals[], gates[], dependencies?[] }` | Create a feature-sized unit. |
 | `subsprint_list` | `{}` | Compact subsprint rows. Use `subsprint_get({ id })` for full detail. |
 | `subsprint_get` | `{ id }` | Full subsprint detail and compact item rows. |
-| `item_add` | `{ subsprint, title, description, code_locations[], gates[], dependencies?[], high_priority? }` | Create an atomic item. Title 3-80 chars; description 20-500 chars. Oversized inputs mean create more than one item. |
+| `item_add` | `{ subsprint, title, description, code_locations[], gates[], dependencies?[], high_priority? }` | Create an atomic item. Title 3-80 chars, single line; description 20-800 chars; at least one `code_locations` entry; 1-3 gates. Bullet lists, headings, or "phase N" in a description are rejected as plan dumps - create more items instead. |
 | `item_get` | `{ id }` | Full item detail. |
 | `item_update` | `{ id, note?, title?, description?, high_priority?, dependencies?[] }` | Mutate item metadata and/or replace dependency ids. Use `dependencies:[]` to remove all dependencies. |
 | `item_done` | `{ id, commit_id, gate_results[], changelog }` | Complete an item. Commit must resolve; every declared gate needs passing evidence, and `changelog` supplies the SemVer verb plus line. |
 | `item_split` | `{ id, description, goals[], gates[], dependencies?[] }` | Resolve an oversized item by creating a new subsprint. |
-| `item_deprecate` | `{ id, reason }` | Resolve an item as intentionally dropped. |
+| `item_deprecate` | `{ id, reason }` | Resolve an item as intentionally dropped. Also accepts a subsprint id: that deprecates the subsprint and cascades to its open items. |
 
 ## Notes And Artifacts
 
