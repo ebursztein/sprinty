@@ -17,7 +17,7 @@ function initStore(): SprintStore {
   run(["commit", "-m", "init"]);
   const store = new SprintStore(dir);
   store.createSprint("Guard note pressure");
-  store.createSubsprint({ description: "Bound notes to keep closure pressure visible.", goals: ["Keep notes short"], gates: [{ kind: "command", spec: "true" }] });
+  store.createSubsprint({ description: "Bound notes to keep closure pressure visible.", goals: ["Keep notes short"], gates: [{ kind: "command", spec: "git rev-parse HEAD" }] });
   return store;
 }
 
@@ -27,7 +27,7 @@ function addItem(store: SprintStore, title: string): string {
     title,
     description: `Implement ${title.toLowerCase()} with focused closure evidence.`,
     code_locations: ["src/store/store.ts"],
-    gates: [{ kind: "command", spec: "true" }],
+    gates: [{ kind: "command", spec: "git rev-parse HEAD" }],
   }).id;
 }
 

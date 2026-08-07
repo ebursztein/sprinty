@@ -43,7 +43,7 @@ function addInput(input: { subsprint?: string; title?: string; description?: str
     title: input.title ?? "Atomic item",
     description: input.description ?? "Implement one independently verifiable Sprinty item.",
     code_locations: input.code_locations ?? ["a.ts"],
-    gates: input.gates ?? [{ kind: "command", spec: "true" }],
+    gates: input.gates ?? [{ kind: "command", spec: "git rev-parse HEAD" }],
     ...(input.dependencies ? { dependencies: input.dependencies } : {}),
     ...(input.high_priority === undefined ? {} : { high_priority: input.high_priority }),
   };
@@ -226,14 +226,14 @@ describe("tool handlers", () => {
 
   it("drives a full happy path through canonical item handlers", async () => {
     await tools.sprint_new!.handler(sprintInput("g"));
-    const sub = await tools.subsprint_new!.handler({ description: "d", goals: ["go"], gates: [{ kind: "command", spec: "true" }] }) as { subsprint: string };
+    const sub = await tools.subsprint_new!.handler({ description: "d", goals: ["go"], gates: [{ kind: "command", spec: "git rev-parse HEAD" }] }) as { subsprint: string };
     expect(sub.subsprint).toBe("S01");
     const item = await tools.item_add!.handler(addInput()) as { item: string };
     expect(item.item).toBe("S01-001");
     await tools.item_done!.handler({
       id: "S01-001",
       commit_id: sha,
-      gate_results: [{ kind: "command", spec: "true", passed: true, evidence: "ok" }],
+      gate_results: [{ kind: "command", spec: "git rev-parse HEAD", passed: true, evidence: "ok" }],
       changelog: { verb: "added", line: "added the first tracked item" },
     });
     const closed = await tools.sprint_close!.handler({ coverage: { path: writeCoverage(dir), format: "lcov" } }) as { status: string };
@@ -243,18 +243,20 @@ describe("tool handlers", () => {
 
   it("keeps gate supersession visible through item_get", async () => {
     await tools.sprint_new!.handler(sprintInput("g"));
-    await tools.subsprint_new!.handler({ description: "d", goals: ["go"], gates: [{ kind: "command", spec: "true" }] });
-    await tools.item_add!.handler(addInput({ gates: [{ kind: "test", spec: "npm test -- --story SPRINTY-123" }] }));
+    await tools.subsprint_new!.handler({ description: "d", goals: ["go"], gates: [{ kind: "command", spec: "git rev-parse HEAD" }] });
+    // Executable gates are now run by Sprinty as declared, so supersession only applies to
+    // manual gates, where the attestation genuinely comes from a human.
+    await tools.item_add!.handler(addInput({ gates: [{ kind: "manual", spec: "reviewer signs off on SPRINTY-123" }] }));
     await tools.item_done!.handler({
       id: "S01-001",
       commit_id: sha,
       gate_results: [{
-        kind: "test",
-        spec: "npm test -- src/store/store.test.ts",
+        kind: "manual",
+        spec: "staff reviewer signed off",
         passed: true,
-        evidence: "passed",
-        supersedes: { kind: "test", spec: "npm test -- --story SPRINTY-123" },
-        supersession_reason: "Placeholder story id was replaced by the final focused test.",
+        evidence: "approved",
+        supersedes: { kind: "manual", spec: "reviewer signs off on SPRINTY-123" },
+        supersession_reason: "Placeholder story id was replaced by the named reviewer.",
       }],
       changelog: { verb: "fixed", line: "fixed gate supersession evidence" },
     });
@@ -264,12 +266,12 @@ describe("tool handlers", () => {
 
   it("rejects oversized items with a nudge to create more items", async () => {
     await tools.sprint_new!.handler(sprintInput("g"));
-    await tools.subsprint_new!.handler({ description: "d", goals: ["go"], gates: [{ kind: "command", spec: "true" }] });
+    await tools.subsprint_new!.handler({ description: "d", goals: ["go"], gates: [{ kind: "command", spec: "git rev-parse HEAD" }] });
     await expect(tools.item_add!.handler({
       subsprint: "S01",
       description: "Implement one independently verifiable Sprinty item.",
       code_locations: ["a.ts"],
-      gates: [{ kind: "command", spec: "true" }],
+      gates: [{ kind: "command", spec: "git rev-parse HEAD" }],
     })).rejects.toThrow();
     await expect(tools.item_add!.handler(addInput({ title: "Everything", description: "too broad" }))).rejects.toThrow();
     await expect(tools.item_add!.handler(addInput({ title: "A".repeat(81) }))).rejects.toThrow(/create more than one item/);
@@ -278,7 +280,7 @@ describe("tool handlers", () => {
 
   it("rejects plan-dump item and subsprint payloads at the MCP boundary", async () => {
     await tools.sprint_new!.handler(sprintInput("g"));
-    await tools.subsprint_new!.handler({ description: "d", goals: ["go"], gates: [{ kind: "command", spec: "true" }] });
+    await tools.subsprint_new!.handler({ description: "d", goals: ["go"], gates: [{ kind: "command", spec: "git rev-parse HEAD" }] });
     const dump = [
       "Phase 1 implementation plan",
       "- Build the first broad path",
@@ -288,18 +290,18 @@ describe("tool handlers", () => {
     ].join("\n");
 
     await expect(tools.item_add!.handler(addInput({ description: dump }))).rejects.toThrow(/multiple items|more items/);
-    await expect(tools.subsprint_new!.handler({ description: dump, goals: ["go"], gates: [{ kind: "command", spec: "true" }] })).rejects.toThrow(/multiple items|more items/);
+    await expect(tools.subsprint_new!.handler({ description: dump, goals: ["go"], gates: [{ kind: "command", spec: "git rev-parse HEAD" }] })).rejects.toThrow(/multiple items|more items/);
     await expect(tools.subsprint_new!.handler({
       description: "Bounded subsprint",
       goals: ["one", "two", "three", "four", "five", "six"],
-      gates: [{ kind: "command", spec: "true" }],
+      gates: [{ kind: "command", spec: "git rev-parse HEAD" }],
     })).rejects.toThrow(/at most 5|5/);
     await expect(tools.item_add!.handler(addInput({
       gates: [
-        { kind: "command", spec: "true" },
-        { kind: "command", spec: "true" },
-        { kind: "command", spec: "true" },
-        { kind: "command", spec: "true" },
+        { kind: "command", spec: "git rev-parse HEAD" },
+        { kind: "command", spec: "git rev-parse HEAD" },
+        { kind: "command", spec: "git rev-parse HEAD" },
+        { kind: "command", spec: "git rev-parse HEAD" },
       ],
     }))).rejects.toThrow(/at most 3|3/);
     await expect(tools.item_add!.handler(addInput({
@@ -309,12 +311,12 @@ describe("tool handlers", () => {
 
   it("writes changelog markdown and returns only its path", async () => {
     await tools.sprint_new!.handler(sprintInput("g"));
-    await tools.subsprint_new!.handler({ description: "d", goals: ["go"], gates: [{ kind: "command", spec: "true" }] });
+    await tools.subsprint_new!.handler({ description: "d", goals: ["go"], gates: [{ kind: "command", spec: "git rev-parse HEAD" }] });
     await tools.item_add!.handler(addInput());
     await tools.item_done!.handler({
       id: "S01-001",
       commit_id: sha,
-      gate_results: [{ kind: "command", spec: "true", passed: true, evidence: "ok" }],
+      gate_results: [{ kind: "command", spec: "git rev-parse HEAD", passed: true, evidence: "ok" }],
       changelog: { verb: "changed", line: "Changed compact changelog response." },
     });
 
@@ -337,7 +339,7 @@ describe("tool handlers", () => {
 
   it("records dependency edges through item_update and exposes them on focused reads", async () => {
     await tools.sprint_new!.handler(sprintInput("g"));
-    await tools.subsprint_new!.handler({ description: "d", goals: ["go"], gates: [{ kind: "command", spec: "true" }] });
+    await tools.subsprint_new!.handler({ description: "d", goals: ["go"], gates: [{ kind: "command", spec: "git rev-parse HEAD" }] });
     await tools.item_add!.handler(addInput({ title: "First item", description: "Implement the first dependency graph item." }));
     await tools.item_add!.handler(addInput({ title: "Second item", description: "Implement the second dependency graph item.", code_locations: ["b.ts"] }));
     await tools.item_add!.handler(addInput({ title: "Third item", description: "Implement the third dependency graph item.", code_locations: ["c.ts"] }));
@@ -354,7 +356,7 @@ describe("tool handlers", () => {
 
   it("passes high_priority through item_add and item_update", async () => {
     await tools.sprint_new!.handler(sprintInput("g"));
-    await tools.subsprint_new!.handler({ description: "d", goals: ["go"], gates: [{ kind: "command", spec: "true" }] });
+    await tools.subsprint_new!.handler({ description: "d", goals: ["go"], gates: [{ kind: "command", spec: "git rev-parse HEAD" }] });
     await tools.item_add!.handler(addInput({ high_priority: true }));
     const added = await tools.item_get!.handler({ id: "S01-001" }) as { high_priority: boolean };
     expect(added.high_priority).toBe(true);
@@ -365,7 +367,7 @@ describe("tool handlers", () => {
 
   it("records notes with note ids, supports note updates, and requires item scope", async () => {
     await tools.sprint_new!.handler(sprintInput("g"));
-    await tools.subsprint_new!.handler({ description: "d", goals: ["go"], gates: [{ kind: "command", spec: "true" }] });
+    await tools.subsprint_new!.handler({ description: "d", goals: ["go"], gates: [{ kind: "command", spec: "git rev-parse HEAD" }] });
     await tools.item_add!.handler(addInput());
     await expect(tools.note_add!.handler({ id: "S01", text: "wrong scope" })).rejects.toThrow(/specific item/);
     const note = await tools.note_add!.handler({ id: "S01-001", text: "Original note text." }) as { note: string };
@@ -380,7 +382,7 @@ describe("tool handlers", () => {
 
   it("records artifacts as compact sprint attachments and full get detail", async () => {
     await tools.sprint_new!.handler(sprintInput("g"));
-    await tools.subsprint_new!.handler({ description: "d", goals: ["go"], gates: [{ kind: "command", spec: "true" }] });
+    await tools.subsprint_new!.handler({ description: "d", goals: ["go"], gates: [{ kind: "command", spec: "git rev-parse HEAD" }] });
     await tools.item_add!.handler(addInput());
     const artifact = await tools.artifact_add!.handler({
       title: "Dashboard design",
@@ -398,7 +400,7 @@ describe("tool handlers", () => {
 
   it("next returns a compact active work window without the dependency graph", async () => {
     await tools.sprint_new!.handler(sprintInput("g"));
-    await tools.subsprint_new!.handler({ description: "d", goals: ["go"], gates: [{ kind: "command", spec: "true" }] });
+    await tools.subsprint_new!.handler({ description: "d", goals: ["go"], gates: [{ kind: "command", spec: "git rev-parse HEAD" }] });
     await tools.item_add!.handler(addInput({ title: "First item", description: "Implement the first active window item." }));
     await tools.item_add!.handler(addInput({ title: "Second item", description: "Implement the second active window item.", code_locations: ["b.ts"], dependencies: ["S01-001"] }));
     const next = await tools.next!.handler({}) as { item: { id: string }; blocked: { items: Array<{ id: string; title: string }> }; graph?: unknown };
@@ -409,7 +411,7 @@ describe("tool handlers", () => {
 
   it("search returns ids, surrounding text, and focused get tool calls", async () => {
     await tools.sprint_new!.handler(sprintInput("serializer sprint"));
-    await tools.subsprint_new!.handler({ description: "serializer work", goals: ["go"], gates: [{ kind: "command", spec: "true" }] });
+    await tools.subsprint_new!.handler({ description: "serializer work", goals: ["go"], gates: [{ kind: "command", spec: "git rev-parse HEAD" }] });
     await tools.item_add!.handler(addInput({ title: "Serializer item", description: "Implement one serializer item with evidence." }));
     const result = await tools.search!.handler({ pattern: "serializer", context_size: 512 }) as { matches: Array<{ id: string; type: string; tool_call: string; text: string }> };
     expect(result.matches).toEqual(expect.arrayContaining([

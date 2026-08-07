@@ -105,10 +105,10 @@ describe("LedgerEvent", () => {
     }).type).toBe("spike_concluded");
     expect(LedgerEvent.parse({
       ...base,
-      type: "spike_deprecated",
+      type: "subsprint_deprecated",
       subsprint_id: "S02",
       reason: "not needed",
-    }).type).toBe("spike_deprecated");
+    }).type).toBe("subsprint_deprecated");
   });
 
   it("parses sprint archive events", () => {

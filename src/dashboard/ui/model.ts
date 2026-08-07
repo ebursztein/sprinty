@@ -289,7 +289,7 @@ function ledgerMeta(entry: TimelineEntry): { entity: LedgerEntity; verb: LedgerV
     case "artifact_deprecated": return { entity: "artifact", verb: "deprecate" };
     case "follow_up_added": return { entity: "follow_up", verb: "add" };
     case "spike_concluded": return { entity: "spike", verb: "conclude" };
-    case "spike_deprecated": return { entity: "spike", verb: "deprecate" };
+    case "subsprint_deprecated": return { entity: "subsprint", verb: "deprecate" };
   }
 }
 

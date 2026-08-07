@@ -75,7 +75,7 @@ export interface SubsprintView {
   artifacts: ArtifactView[];
   follow_ups: FollowUpView[];
   spike_conclusion: string | null;
-  spike_deprecation_reason: string | null;
+  deprecation_reason: string | null;
   changelog: Array<Omit<ChangelogLine, "subsprint">>;
   change_map: ChangeMap;
   items: ItemView[];
@@ -135,7 +135,7 @@ export function project(events: LedgerEvent[]): SprintView | null {
           id: e.subsprint_id, kind: e.kind ?? "feature", description: e.description, created_at: e.ts, closed_at: null,
           goals: e.goals, gates: e.gates,
           status: "open", spawned_from_item: e.spawned_from_item, dependencies: e.dependencies ?? [],
-          notes: [], artifacts: [], follow_ups: [], spike_conclusion: null, spike_deprecation_reason: null,
+          notes: [], artifacts: [], follow_ups: [], spike_conclusion: null, deprecation_reason: null,
           changelog: [], change_map: emptyChangeMap(), items: [],
         };
         subsprints.set(sub.id, sub);
@@ -288,12 +288,12 @@ export function project(events: LedgerEvent[]): SprintView | null {
         timeline.push({ seq: e.seq, ts: e.ts, type: e.type, id: e.subsprint_id, text: e.conclusion });
         break;
       }
-      case "spike_deprecated": {
+      case "subsprint_deprecated": {
         const sub = subsprints.get(e.subsprint_id);
-        if (sub?.kind === "spike") {
+        if (sub) {
           sub.status = "deprecated";
           sub.closed_at = e.ts;
-          sub.spike_deprecation_reason = e.reason;
+          sub.deprecation_reason = e.reason;
         }
         timeline.push({ seq: e.seq, ts: e.ts, type: e.type, id: e.subsprint_id, text: e.reason });
         break;

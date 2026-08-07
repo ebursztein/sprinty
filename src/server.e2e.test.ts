@@ -72,7 +72,7 @@ function addInput(input: { subsprint?: string; title?: string; description?: str
     title: input.title ?? "Do thing",
     description: input.description ?? "Implement one small independently verifiable thing.",
     code_locations: input.code_locations ?? ["src/x.ts"],
-    gates: input.gates ?? [{ kind: "command", spec: "true" }],
+    gates: input.gates ?? [{ kind: "command", spec: "git rev-parse HEAD" }],
     ...(input.dependencies ? { dependencies: input.dependencies } : {}),
   };
 }
@@ -107,9 +107,9 @@ describe("sprinty e2e over MCP", () => {
 
   it("runs a full sprint and closes it with canonical handlers", async () => {
     await call(client, "sprint_new", sprintInput(dir, { goal: "ship it" }));
-    await call(client, "subsprint_new", { description: "core", goals: ["build core"], gates: [{ kind: "command", spec: "true" }] });
+    await call(client, "subsprint_new", { description: "core", goals: ["build core"], gates: [{ kind: "command", spec: "git rev-parse HEAD" }] });
     await call(client, "item_add", addInput());
-    await call(client, "item_done", { id: "S01-001", commit_id: sha, gate_results: [{ kind: "command", spec: "true", passed: true, evidence: "ok" }], changelog: { verb: "added", line: "Added the thing." } });
+    await call(client, "item_done", { id: "S01-001", commit_id: sha, gate_results: [{ kind: "command", spec: "git rev-parse HEAD", passed: true, evidence: "ok" }], changelog: { verb: "added", line: "Added the thing." } });
     const closed = await call(client, "sprint_close", { coverage: { path: writeCoverage(dir), format: "lcov", command: "npm run test:coverage" } });
     expect(closed.json.status).toBe("closed");
   });
@@ -127,12 +127,12 @@ describe("sprinty e2e over MCP", () => {
       expect(created.json.data_dir).toBe(dataDir);
       expect(created.json.branch).toBe("main");
       expect(created.json.dashboard.url).toMatch(/^http:\/\/127\.0\.0\.1:\d+$/);
-      await call(c, "subsprint_new", { description: "core", goals: ["build core"], gates: [{ kind: "command", spec: "true" }] });
+      await call(c, "subsprint_new", { description: "core", goals: ["build core"], gates: [{ kind: "command", spec: "git rev-parse HEAD" }] });
       await call(c, "item_add", addInput());
       const done = await call(c, "item_done", {
         id: "S01-001",
         commit_id: fresh.sha,
-        gate_results: [{ kind: "command", spec: "true", passed: true, evidence: "ok" }],
+        gate_results: [{ kind: "command", spec: "git rev-parse HEAD", passed: true, evidence: "ok" }],
         changelog: { verb: "fixed", line: "Fixed repo directory binding." },
       });
       expect(done.isError).toBe(false);
@@ -223,7 +223,7 @@ describe("sprinty e2e over MCP", () => {
     const c = await connect(fresh.dir);
     try {
       await call(c, "sprint_new", sprintInput(fresh.dir, { goal: "dependency teeth" }));
-      await call(c, "subsprint_new", { description: "graph", goals: ["track graph"], gates: [{ kind: "command", spec: "true" }] });
+      await call(c, "subsprint_new", { description: "graph", goals: ["track graph"], gates: [{ kind: "command", spec: "git rev-parse HEAD" }] });
       await call(c, "item_add", addInput({ title: "Base item", description: "Implement the base dependency graph item.", code_locations: ["a.ts"] }));
       await call(c, "item_add", addInput({ title: "Dependent item", description: "Implement the dependent dependency graph item.", code_locations: ["b.ts"], dependencies: ["S01-001"] }));
 
@@ -267,7 +267,7 @@ describe("sprinty e2e over MCP", () => {
       await call(c, "subsprint_new", {
         description: "Catalog discovery",
         goals: ["Let shoppers find books by title and author"],
-        gates: [{ kind: "command", spec: "true" }],
+        gates: [{ kind: "command", spec: "git rev-parse HEAD" }],
       });
 
       const added = await call(c, "item_add", {
@@ -276,7 +276,7 @@ describe("sprinty e2e over MCP", () => {
         description: "Shape the first catalog slice for staff-curated inventory",
         code_locations: ["src/bookshop/catalog.ts"],
         gates: [
-          { kind: "command", spec: "true" },
+          { kind: "command", spec: "git rev-parse HEAD" },
           { kind: "manual", spec: "bookshop owner accepts catalog direction" },
         ],
       });
@@ -290,7 +290,7 @@ describe("sprinty e2e over MCP", () => {
         id: "S01-001",
         description: "Bookshop catalog workflow",
         goals: ["Search books", "Track shelf availability", "Drop preorder scope"],
-        gates: [{ kind: "command", spec: "true" }],
+        gates: [{ kind: "command", spec: "git rev-parse HEAD" }],
         dependencies: ["S01"],
       });
       expect(split.json.subsprint).toBe("S02");
@@ -301,7 +301,7 @@ describe("sprinty e2e over MCP", () => {
         description: "Add searchable book listing for staff-curated inventory",
         code_locations: ["src/bookshop/catalog.ts", "src/bookshop/search.ts"],
         gates: [
-          { kind: "command", spec: "true" },
+          { kind: "command", spec: "git rev-parse HEAD" },
           { kind: "manual", spec: "bookshop owner accepts catalog workflow" },
         ],
         dependencies: ["S01-001"],
@@ -338,7 +338,7 @@ describe("sprinty e2e over MCP", () => {
         id: "S02-001",
         commit_id: fresh.sha,
         gate_results: [
-          { kind: "command", spec: "true", passed: true, evidence: "catalog tests passed" },
+          { kind: "command", spec: "git rev-parse HEAD", passed: true, evidence: "catalog tests passed" },
           { kind: "manual", spec: "bookshop owner accepts catalog workflow", passed: true, evidence: "owner reviewed search flow" },
         ],
         changelog: { verb: "added", line: "Added searchable book listing for staff-curated inventory." },

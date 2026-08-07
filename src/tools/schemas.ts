@@ -119,7 +119,9 @@ export const ItemUpdateInput = z.object({
 export const DoneInput = z.object({
   id: z.string().min(1),
   commit_id: z.string().min(7),
-  gate_results: z.array(GateResult).min(1),
+  // Sprinty executes the item's executable gates itself, so results are no longer claimed.
+  // Manual gates cannot be executed and still need agent evidence.
+  gate_results: z.array(GateResult).optional(),
   changelog: ChangelogEntry,
 });
 export const ItemDoneInput = DoneInput;

@@ -15,6 +15,9 @@ export const GateResult = z.object({
   cwd: z.string().min(1).optional(),
   passed: z.boolean(),
   evidence: z.string().min(1),
+  // Set when the gate blew the inline budget and was killed. Distinct from a plain failure:
+  // nothing was proven either way, and the fix is a faster gate rather than a code change.
+  timed_out: z.boolean().optional(),
   supersedes: Gate.optional(),
   supersession_reason: z.string().min(1).optional(),
 }).superRefine((result, ctx) => {

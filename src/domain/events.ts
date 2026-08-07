@@ -130,8 +130,8 @@ export const SpikeConcluded = z.object({
   conclusion: z.string().min(1),
 });
 
-export const SpikeDeprecated = z.object({
-  ...base, type: z.literal("spike_deprecated"),
+export const SubsprintDeprecated = z.object({
+  ...base, type: z.literal("subsprint_deprecated"),
   subsprint_id: z.string().min(1),
   reason: z.string().min(1),
 });
@@ -151,7 +151,7 @@ export const SprintArchived = z.object({
 
 export const LedgerEvent = z.discriminatedUnion("type", [
   SprintCreated, SubsprintCreated, ItemAdded, ItemUpdated, ItemResolved, NoteAdded, NoteUpdated, DependenciesAdded,
-  DependenciesReplaced, ArtifactAdded, ArtifactAmended, ArtifactDeprecated, FollowUpAdded, SpikeConcluded, SpikeDeprecated,
+  DependenciesReplaced, ArtifactAdded, ArtifactAmended, ArtifactDeprecated, FollowUpAdded, SpikeConcluded, SubsprintDeprecated,
   SprintClosed, SprintArchived,
 ]);
 export type LedgerEvent = z.infer<typeof LedgerEvent>;

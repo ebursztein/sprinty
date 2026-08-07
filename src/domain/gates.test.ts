@@ -7,7 +7,7 @@ describe("Gate", () => {
       kind: "test", spec: "src/foo.test.ts::handles empty", cwd: "packages/api",
     });
     expect(() => Gate.parse({ kind: "test", spec: "" })).toThrow();
-    expect(() => Gate.parse({ kind: "test", spec: "true", cwd: "" })).toThrow();
+    expect(() => Gate.parse({ kind: "test", spec: "git rev-parse HEAD", cwd: "" })).toThrow();
     expect(() => Gate.parse({ kind: "nope", spec: "x" })).toThrow();
   });
 });

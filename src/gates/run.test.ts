@@ -6,7 +6,7 @@ import { runGate, isExecutable } from "./run.js";
 
 describe("runGate", () => {
   it("knows which kinds are executable", () => {
-    expect(isExecutable({ kind: "command", spec: "true" })).toBe(true);
+    expect(isExecutable({ kind: "command", spec: "git rev-parse HEAD" })).toBe(true);
     expect(isExecutable({ kind: "manual", spec: "looks right" })).toBe(false);
   });
 
@@ -35,5 +35,14 @@ describe("runGate", () => {
     const r = runGate({ kind: "command", spec: "node -e \"setTimeout(() => {}, 5000)\"" }, process.cwd(), 50);
     expect(r.passed).toBe(false);
     expect(r.evidence).toContain("timed out");
+  });
+
+  it("marks a timeout distinctly from a plain failure", () => {
+    const slow = runGate({ kind: "command", spec: "node -e \"setTimeout(() => {}, 5000)\"" }, process.cwd(), 50);
+    expect(slow.timed_out).toBe(true);
+    // A gate that ran and genuinely failed is a different signal and must not be conflated.
+    const failed = runGate({ kind: "command", spec: "exit 3" }, process.cwd());
+    expect(failed.passed).toBe(false);
+    expect(failed.timed_out).toBeUndefined();
   });
 });

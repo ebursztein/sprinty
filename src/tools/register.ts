@@ -117,10 +117,16 @@ export function buildToolHandlers(
         const view = store.updateItem({ target: i.id, note: i.note, title: i.title, description: i.description, high_priority: i.high_priority, dependencies: i.dependencies });
         return ack("item_update", view, { id: i.id });
       }),
-    item_done: def(S.ItemDoneInput, "Resolve an item as completed with commit id, gate results, and a semver changelog verb (added/fixed/changed/removed/deprecated/security).",
+    item_done: def(S.ItemDoneInput, "Resolve an item as completed with a commit id and a semver changelog verb (added/fixed/changed/removed/deprecated/security). Sprinty runs the item's executable gates itself; only manual gates take agent-supplied gate_results.",
       async (i) => {
         const id = requiredId(i, "id", "item");
-        return ack("item_done", (await getStore()).done({ ...i, item: id }), { item: id, commit_id: i.commit_id, status: "completed" });
+        const { view, warning } = (await getStore()).done({ ...i, item: id });
+        return ack("item_done", view, {
+          item: id,
+          commit_id: i.commit_id,
+          status: "completed",
+          ...(warning ? { warning } : {}),
+        });
       }),
     item_split: def(S.ItemSplitInput, "Resolve an item as split, creating a seeded subsprint atomically.",
       async (i) => {
@@ -129,10 +135,10 @@ export function buildToolHandlers(
         const item = findItem(view, id);
         return ack("item_split", view, { item: id, subsprint: item?.spawned_subsprint ?? null });
       }),
-    item_deprecate: def(S.ItemDeprecateInput, "Resolve an item as deprecated with a reason.",
+    item_deprecate: def(S.ItemDeprecateInput, "Resolve an item as deprecated with a reason, or drop a whole subsprint by passing its id (its open items are deprecated too).",
       async (i) => {
         const id = requiredId(i, "id", "item");
-        return ack("item_deprecate", (await getStore()).deprecate({ item: id, reason: i.reason }), { item: id, status: "deprecated" });
+        return ack("item_deprecate", (await getStore()).deprecate({ target: id, reason: i.reason }), { id, status: "deprecated" });
       }),
     note_add: def(S.NoteInput, "Add a note to a specific item id. Notes are not substitutes for item_add(); create items for trackable work.",
       async (i) => {
