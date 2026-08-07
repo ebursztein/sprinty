@@ -371,7 +371,7 @@ describe("tool handlers", () => {
     await tools.item_add!.handler(addInput());
     await expect(tools.note_add!.handler({ id: "S01", text: "wrong scope" })).rejects.toThrow(/specific item/);
     const note = await tools.note_add!.handler({ id: "S01-001", text: "Original note text." }) as { note: string };
-    expect(note.note).toMatch(/^N\d{3}$/);
+    expect(note.note).toMatch(/^N[0-9a-f]{12}$/);
     const listed = await tools.note_list!.handler({ id: "S01-001" }) as { notes: Array<{ id: string; text: string }> };
     expect(listed.notes).toEqual([{ id: note.note, text: "Original note text." }]);
     const updated = await tools.note_update!.handler({ id: note.note, text: "Updated note text." }) as { note: { text: string } };

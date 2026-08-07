@@ -3,7 +3,7 @@ import { SprintBook } from "../ledger/book.js";
 import { existsSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { project, type SprintView } from "../domain/projection.js";
-import { mintSubsprintId, mintItemId } from "../domain/ids.js";
+import { mintSubsprintId, mintItemId, mintNoteId, legacyNoteId } from "../domain/ids.js";
 import { commitNumstat, gitContext, verifyCommit } from "../git/git.js";
 import { runGate } from "../gates/run.js";
 import { GateEvidenceError, ITEM_GATE_TIMEOUT_MS, gateKey, isExecutable, looksLikeProse, slowGateWarning, specIsNoOp, validateGateEvidence } from "../gates/policy.js";
@@ -272,8 +272,9 @@ export class SprintStore {
       throw new StoreError(`Unknown item ${input.element}. Notes must attach to a specific item id.`);
     }
     this.validateNoteAdd(s, item, input.text);
-    const event = this.append({ type: "note_added", element_id: input.element, text: input.text });
-    return { id: noteId(event.seq), view: this.requireState() };
+    const id = mintNoteId();
+    this.append({ type: "note_added", element_id: input.element, text: input.text, note_id: id });
+    return { id, view: this.requireState() };
   }
 
   addArtifact(input: { target?: string | undefined; kind: ArtifactKind; title: string; uri: string; description?: string | null | undefined; related_items?: string[] | undefined }): { id: string; view: SprintView } {
@@ -553,15 +554,11 @@ function normalizeOptionalTitle(title: string | undefined, description: string):
   return candidate.length > 80 ? `${candidate.slice(0, 77).trimEnd()}...` : candidate;
 }
 
-function noteId(seq: number): string {
-  return `N${String(seq).padStart(3, "0")}`;
-}
-
 function noteRecords(events: LedgerEvent[]): Array<{ id: string; item: string; text: string }> {
   const records = new Map<string, { id: string; item: string; text: string }>();
   for (const event of events) {
     if (event.type === "note_added") {
-      const id = noteId(event.seq);
+      const id = event.note_id ?? legacyNoteId(event.seq);
       records.set(id, { id, item: event.element_id, text: event.text });
     }
     if (event.type === "note_updated") {

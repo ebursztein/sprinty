@@ -1,3 +1,4 @@
+import { legacyNoteId } from "./ids.js";
 import type { LedgerEvent } from "./events.js";
 
 export interface SearchMatch {
@@ -75,7 +76,7 @@ function searchId(e: LedgerEvent): string {
     case "follow_up_added":
       return e.target_id;
     case "note_added":
-      return noteId(e.seq);
+      return e.note_id ?? legacyNoteId(e.seq);
     case "note_updated":
       return e.note_id;
     case "artifact_added":
@@ -83,10 +84,6 @@ function searchId(e: LedgerEvent): string {
     case "artifact_deprecated":
       return e.artifact_id;
   }
-}
-
-function noteId(seq: number): string {
-  return `N${String(seq).padStart(3, "0")}`;
 }
 
 function searchType(e: LedgerEvent): SearchMatch["type"] {
@@ -130,7 +127,7 @@ function toolCall(e: LedgerEvent): string {
     case "artifact_deprecated":
       return `artifact_get({ id: "${e.artifact_id}" })`;
     case "note_added":
-      return `note_get({ id: "${noteId(e.seq)}" })`;
+      return `note_get({ id: "${e.note_id ?? legacyNoteId(e.seq)}" })`;
     case "note_updated":
       return `note_get({ id: "${e.note_id}" })`;
     case "subsprint_created":

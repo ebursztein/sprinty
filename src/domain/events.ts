@@ -69,6 +69,8 @@ export const ItemResolved = z.object({
 export const NoteAdded = z.object({
   ...base, type: z.literal("note_added"),
   element_id: z.string(), text: z.string().min(1),
+  // Absent in ledgers written before note ids were minted; those fall back to seq.
+  note_id: z.string().min(1).optional(),
 });
 
 export const NoteUpdated = z.object({

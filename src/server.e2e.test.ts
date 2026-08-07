@@ -284,7 +284,7 @@ describe("sprinty e2e over MCP", () => {
 
       await call(c, "item_update", { id: "S01-001", note: "Needs title, author, and shelf availability." });
       const note = await call(c, "note_add", { id: "S01-001", text: "Owner wants cozy neighborhood language, not marketplace language." });
-      expect(note.json.note).toMatch(/^N\d{3}$/);
+      expect(note.json.note).toMatch(/^N[0-9a-f]{12}$/);
 
       const split = await call(c, "item_split", {
         id: "S01-001",

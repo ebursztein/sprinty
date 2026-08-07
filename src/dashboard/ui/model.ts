@@ -333,7 +333,7 @@ function targetKindFor(id: string): LedgerTargetKind {
   if (id === "sprint") return "sprint";
   if (/^S\d{2}-\d{3}$/.test(id)) return "item";
   if (/^S\d{2}$/.test(id)) return "subsprint";
-  if (/^N\d{3}$/.test(id)) return "note";
+  if (/^N([0-9a-f]{12}|\d{3})$/.test(id)) return "note";
   if (/^A\d{3}$/.test(id)) return "artifact";
   if (/^F\d{3}$/.test(id)) return "follow_up";
   return "unknown";
