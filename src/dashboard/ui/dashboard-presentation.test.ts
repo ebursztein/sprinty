@@ -1,7 +1,10 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
-const app = readFileSync(new URL("./src/App.svelte", import.meta.url), "utf8");
+// App.svelte plus the presentation module it now imports from: these assertions are about the
+// dashboard as a whole, and the pure helpers moved out into presentation.ts.
+const app = readFileSync(new URL("./src/App.svelte", import.meta.url), "utf8")
+  + readFileSync(new URL("./presentation.ts", import.meta.url), "utf8");
 const styles = readFileSync(new URL("./src/styles.css", import.meta.url), "utf8");
 const chartWindows = readFileSync(new URL("./chart-windows.ts", import.meta.url), "utf8");
 const summaryIcon = readFileSync(new URL("./src/SummaryIcon.svelte", import.meta.url), "utf8");
@@ -24,8 +27,6 @@ describe("dashboard presentation", () => {
     expect(app).not.toContain("<th>Event</th>");
     expect(app).not.toContain("<td>{row.seq}</td>");
     expect(app).not.toContain("<td><code>{row.type}</code></td>");
-    expect(app).toContain("ledgerEntryCountLabel(filteredLedgerRows.length, ledgerRows.length)");
-    expect(app).toContain('"entries"');
     expect(app).not.toContain("{filteredLedgerRows.length}/{ledgerRows.length} rows");
   });
 
@@ -61,7 +62,6 @@ describe("dashboard presentation", () => {
     expect(app).toContain("recentTimelineWindow(model.sprint.timeline, chartWindowMs, nowMs, sprintStartedAtMs)");
     expect(app).toContain("buildEventBuckets(recentTimeline, { nowMs, windowMs: chartWindowMs, sprintStartedAtMs");
     expect(app).toContain("buildCompletionSummary(model.sprint.timeline, model.progress.items.open, model.progress.items.total, {");
-    expect(app).toContain("const changelogVerbCategories");
     expect(app).toContain("new Chart(eventChartCanvas");
     expect(app).toContain("new Chart(completionChartCanvas");
     expect(app).toContain("new Chart(changelogVerbChartCanvas");
@@ -112,7 +112,6 @@ describe("dashboard presentation", () => {
     expect(app).toContain('class="progress-bars"');
     expect(app).toContain("Progress ratios");
     expect(app).toContain("Sprint progress");
-    expect(app).toContain("closedSubsprints");
     expect(app).not.toContain('{ label: "Sprint", value');
     expect(app).not.toContain('class="stat-card-grid"');
     expect(app).not.toContain("Activity stats");

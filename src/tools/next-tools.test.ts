@@ -14,6 +14,7 @@ function repo(): { dir: string; sha: string } {
   run(["init", "-b", "main"]);
   run(["config", "user.email", "t@t.dev"]);
   run(["config", "user.name", "t"]);
+  run(["config", "commit.gpgsign", "false"]);
   writeFileSync(join(dir, "a.ts"), "x");
   run(["add", "a.ts"]);
   run(["commit", "-m", "init"]);
