@@ -43,6 +43,31 @@ describe("dashboard", () => {
     expect(asset.headers.get("content-type")).toContain("text/javascript");
   });
 
+  it("refuses to serve files outside the static root via encoded traversal", async () => {
+    const previousCwd = process.cwd();
+    const temp = await mkdtemp(join(tmpdir(), "sprinty-dashboard-"));
+    try {
+      const root = join(temp, "dist", "dashboard-ui");
+      await mkdir(join(root, "assets"), { recursive: true });
+      await writeFile(join(root, "index.html"), '<!doctype html><div id="app"></div>');
+      await writeFile(join(root, "assets", "app.js"), 'console.log("legit");');
+      // A sibling that merely shares the static root's name prefix must stay unreachable.
+      await mkdir(join(temp, "dist", "dashboard-ui-secrets"), { recursive: true });
+      await writeFile(join(temp, "dist", "dashboard-ui-secrets", "creds.js"), "SECRET_TOKEN");
+      process.chdir(temp);
+
+      dash = await startDashboard(() => view);
+      expect((await fetch(`${dash.url}/assets/app.js`)).status).toBe(200);
+      // %2f survives URL path normalization and becomes a separator only after decoding.
+      const escaped = await fetch(`${dash.url}/assets/..%2f..%2fdashboard-ui-secrets/creds.js`);
+      expect(escaped.status).toBe(404);
+      expect(await escaped.text()).not.toContain("SECRET_TOKEN");
+    } finally {
+      process.chdir(previousCwd);
+      await rm(temp, { recursive: true, force: true });
+    }
+  });
+
   it("prefers the current worktree dashboard build over the packaged fallback", async () => {
     const previousCwd = process.cwd();
     const temp = await mkdtemp(join(tmpdir(), "sprinty-dashboard-"));

@@ -1,0 +1,25 @@
+{
+  "name": "sprinty",
+  "owner": {
+    "name": "Elie Bursztein",
+    "url": "https://github.com/ebursztein"
+  },
+  "description": "Sprinty plugins for Claude Code.",
+  "plugins": [
+    {
+      "name": "sprinty",
+      "source": "./clients/claude",
+      "description": "Disciplined sprint workflow with Sprinty skills and the sprinty-mcp server.",
+      "version": "0.1.16",
+      "author": {
+        "name": "Elie Bursztein",
+        "url": "https://github.com/ebursztein"
+      },
+      "homepage": "https://github.com/ebursztein/sprinty",
+      "repository": "https://github.com/ebursztein/sprinty",
+      "license": "Apache-2.0",
+      "category": "Developer Tools",
+      "tags": ["mcp", "sprint", "workflow", "dashboard"]
+    }
+  ]
+}

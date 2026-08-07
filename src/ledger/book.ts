@@ -5,6 +5,9 @@ import { Ledger } from "./ledger.js";
 export class SprintBook {
   readonly root: string;
   private readonly pointer: string;
+  // Callers re-resolve ledger(id) on every append; handing back the same instance is what
+  // lets a Ledger keep its append cursor instead of rescanning the file each time.
+  private readonly ledgers = new Map<string, Ledger>();
 
   constructor(dataDir: string) {
     this.root = dataDir;
@@ -23,7 +26,12 @@ export class SprintBook {
   }
 
   ledger(id: string): Ledger {
-    return new Ledger(join(this.root, `${id}.jsonl`));
+    let ledger = this.ledgers.get(id);
+    if (!ledger) {
+      ledger = new Ledger(join(this.root, `${id}.jsonl`));
+      this.ledgers.set(id, ledger);
+    }
+    return ledger;
   }
 
   allocateId(): string {

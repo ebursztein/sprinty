@@ -1,13 +1,10 @@
 {
   "name": "sprinty",
-  "version": "0.1.9",
-  "description": "Disciplined sprint workflow: dashboard-at-start, feature subsprints, artifacts, bug-id follow-ups, spike investigations, an immutable git-anchored ledger, and programmatic close gates.",
+  "version": "0.1.16",
+  "description": "Disciplined sprint workflow with dashboard-at-start, feature subsprints, artifacts, an immutable git-anchored ledger, and programmatic close gates.",
   "author": { "name": "Elie Bursztein" },
   "homepage": "https://github.com/ebursztein/sprinty",
   "repository": "https://github.com/ebursztein/sprinty",
   "license": "Apache-2.0",
-  "keywords": ["sprint", "discipline", "ledger", "mcp"],
-  "mcpServers": {
-    "sprinty": { "command": "npx", "args": ["-y", "sprinty-mcp"] }
-  }
+  "keywords": ["sprint", "discipline", "ledger", "mcp", "dashboard"]
 }

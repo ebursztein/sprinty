@@ -13,12 +13,17 @@ const VERB_TITLES: Record<string, string> = {
 
 export function renderChangelogMarkdown(sprint: SprintView): string {
   const lines: string[] = [`# Changelog: ${sprint.goal}`, ""];
+  const items = new Map(sprint.subsprints.flatMap((sub) => sub.items.map((item) => [item.id, item])));
   for (const verb of Object.keys(VERB_TITLES)) {
     const entries = sprint.changelog.filter((entry) => entry.verb === verb);
     if (entries.length === 0) continue;
     lines.push(`## ${VERB_TITLES[verb]}`, "");
     for (const entry of entries) {
-      lines.push(`- ${entry.line} (\`${entry.item}\`)`);
+      const item = items.get(entry.item);
+      const title = item?.title ?? entry.item;
+      lines.push(`- \`${entry.item}\` **${title}**: ${entry.line}`);
+      lines.push(`  - Subsprint: \`${entry.subsprint}\``);
+      if (item?.commit_id) lines.push(`  - Commit: \`${item.commit_id}\``);
     }
     lines.push("");
   }
@@ -41,7 +46,7 @@ export function renderChangelogMarkdown(sprint: SprintView): string {
   lines.push("## Change Map", "");
   appendChangeMap(lines, sprint.change_map);
 
-  for (const sub of sprint.subsprints.filter((s) => s.kind !== "spike")) {
+  for (const sub of sprint.subsprints) {
     lines.push("", `### Subsprint ${sub.id}: ${sub.description}`, "");
     appendChangeMap(lines, sub.change_map);
   }

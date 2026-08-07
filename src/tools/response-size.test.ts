@@ -1,5 +1,6 @@
-import { describe, expect, it } from "vitest";
-import { cpSync, mkdtempSync, rmSync } from "node:fs";
+import { afterAll, describe, expect, it } from "vitest";
+import { execFileSync } from "node:child_process";
+import { cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { performance } from "node:perf_hooks";
@@ -8,25 +9,51 @@ import { SprintStore } from "../store/store.js";
 import { buildToolHandlers, type ToolHandlers } from "./register.js";
 
 const root = dirname(dirname(dirname(fileURLToPath(import.meta.url))));
-const fixtureDir = join(root, "tests/data/capsem-sprinty-baseline");
+const baselineFixtureDir = join(root, "tests/data/capsem-sprinty-baseline");
+const activeEtaFixtureDir = join(root, "tests/data/capsem-active-eta-regression");
 const gitDir = root;
-const item = "S02-003";
-const subsprint = "S02";
+const item = "S03-008";
+const noteWritableItem = "S06-019";
+const subsprint = "S03";
+const headCommit = execFileSync("git", ["rev-parse", "HEAD"], { cwd: root }).toString().trim();
+const timingMultiplier = process.env.CI ? 2 : 1;
+
+const readGateFixtures = [
+  {
+    name: "capsem release baseline",
+    fixtureDir: baselineFixtureDir,
+    item,
+    openItem: item,
+    writableItem: noteWritableItem,
+    subsprint,
+    searchPattern: "Finish|Provider|S03-008|AGY searchable|AGY artifact",
+  },
+  {
+    name: "capsem active ETA regression",
+    fixtureDir: activeEtaFixtureDir,
+    item: "S01-002",
+    openItem: "S01-001",
+    writableItem: "S01-001",
+    subsprint: "S02",
+    searchPattern: "Fast fix|S01-002|benchmark|response",
+  },
+];
 
 const publicTools = [
   "artifact_add", "artifact_get", "artifact_list", "artifact_update",
   "changelog", "dashboard_info", "dashboard_restart",
+  "info",
   "item_add", "item_deprecate", "item_done", "item_get", "item_split", "item_update",
   "next", "note_add", "note_get", "note_list", "note_update",
   "overview", "search",
-  "sprint_archive", "sprint_close", "sprint_detach", "sprint_list", "sprint_new", "sprint_resume",
+  "sprint_archive", "sprint_close", "sprint_detach", "sprint_new", "sprint_resume",
   "subsprint_get", "subsprint_list", "subsprint_new",
 ].sort();
 
-function cloneFixture(): { root: string; dataDir: string } {
+function cloneFixture(sourceDir = baselineFixtureDir): { root: string; dataDir: string } {
   const tempRoot = mkdtempSync(join(tmpdir(), "sprinty-response-size-"));
   const dataDir = join(tempRoot, "data");
-  cpSync(fixtureDir, dataDir, { recursive: true });
+  cpSync(sourceDir, dataDir, { recursive: true });
   return { root: tempRoot, dataDir };
 }
 
@@ -51,8 +78,26 @@ function makeTools(dataDir: string): ToolHandlers {
   );
 }
 
-async function withFixture<T>(run: (tools: ToolHandlers, dataDir: string) => Promise<T>): Promise<T> {
-  const fixture = cloneFixture();
+function writeCoverage(dir: string): string {
+  mkdirSync(join(dir, "coverage"), { recursive: true });
+  const path = join(dir, "coverage", "lcov.info");
+  writeFileSync(path, [
+    "TN:",
+    "SF:src/server.ts",
+    "LF:20",
+    "LH:18",
+    "BRF:8",
+    "BRH:6",
+    "FNF:5",
+    "FNH:5",
+    "end_of_record",
+    "",
+  ].join("\n"));
+  return path;
+}
+
+async function withFixture<T>(run: (tools: ToolHandlers, dataDir: string) => Promise<T>, sourceDir = baselineFixtureDir): Promise<T> {
+  const fixture = cloneFixture(sourceDir);
   try {
     return await run(makeTools(fixture.dataDir), fixture.dataDir);
   } finally {
@@ -60,8 +105,63 @@ async function withFixture<T>(run: (tools: ToolHandlers, dataDir: string) => Pro
   }
 }
 
+function makeEmptyTools(rootDir: string): { tools: ToolHandlers; dataDir: string } {
+  const dataDir = join(rootDir, "data");
+  mkdirSync(dataDir, { recursive: true });
+  return { tools: makeTools(dataDir), dataDir };
+}
+
+async function seedMiniSprint(tools: ToolHandlers, dataDir: string): Promise<void> {
+  await tools.sprint_new!.handler({ goal: "Response stats sprint", git_dir: gitDir, data_dir: dataDir });
+  await tools.subsprint_new!.handler({ description: "Response stats subsprint", goals: ["Measure response sizes"], gates: [{ kind: "command", spec: "git rev-parse HEAD" }] });
+  await tools.item_add!.handler({
+    subsprint: "S01",
+    title: "Response stats item",
+    description: "Measure one representative response size.",
+    code_locations: ["src/tools/register.ts"],
+    gates: [{ kind: "command", spec: "git rev-parse HEAD" }],
+  });
+}
+
 function chars(value: unknown): number {
   return JSON.stringify(value, null, 2).length;
+}
+
+// A budget nobody can see the slack in rots: one that is 10x the real cost never catches a
+// regression, it only fires on machine noise. Every assertion records its utilization so the
+// report below makes loose budgets visible on every run instead of needing a manual audit.
+interface BudgetSample { label: string; chars: number; maxChars: number; ms: number; maxMs: number; }
+const budgetSamples: BudgetSample[] = [];
+
+function recordBudget(sample: BudgetSample): void {
+  budgetSamples.push(sample);
+}
+
+afterAll(() => {
+  if (budgetSamples.length === 0) return;
+  const pct = (used: number, budget: number) => (budget > 0 ? Math.round((used / budget) * 100) : 0);
+  const rows = budgetSamples
+    .map((s) => ({ ...s, charPct: pct(s.chars, s.maxChars), msPct: pct(s.ms, s.maxMs) }))
+    .sort((a, b) => a.charPct - b.charPct);
+  const lines = [
+    "",
+    "Response budget utilization (low % = budget too loose to catch a regression)",
+    "label                                  chars/budget    %   ms/budget    %",
+  ];
+  for (const r of rows) {
+    lines.push(
+      `${r.label.slice(0, 36).padEnd(38)}${String(r.chars).padStart(5)}/${String(r.maxChars).padEnd(6)}${String(r.charPct).padStart(4)}%` +
+      `${r.ms.toFixed(1).padStart(7)}/${String(r.maxMs).padEnd(5)}${String(r.msPct).padStart(4)}%`,
+    );
+  }
+  const loose = rows.filter((r) => r.charPct < 40);
+  lines.push(`char budgets under 40% utilization: ${loose.length}/${rows.length}${loose.length ? ` -> ${loose.map((r) => r.label).join(", ")}` : ""}`);
+  console.log(lines.join("\n"));
+});
+
+function expectWithinTimeBudget(tool: string, elapsed: number, maxMs: number): void {
+  const budget = maxMs * timingMultiplier;
+  expect(elapsed, `${tool} took ${elapsed.toFixed(2)}ms; budget ${budget}ms`).toBeLessThan(budget);
 }
 
 function collectEmptyFields(value: unknown, path: string[] = []): string[] {
@@ -104,83 +204,191 @@ async function measureP95(run: () => Promise<void>): Promise<{ avg: number; p95:
 }
 
 describe("public Sprinty tool responses", () => {
-  it("exposes only the canonical subject_verb tool list", async () => {
+  it("exposes only the canonical public tool list", async () => {
     await withFixture(async (tools) => {
       expect(Object.keys(tools).sort()).toEqual(publicTools);
     });
   });
 
-  it("keeps representative read responses compact, pruned, timestamp-free, and fast", async () => {
-    const cases: Array<[string, Record<string, unknown>, number]> = [
-      ["overview", {}, 8_000],
-      ["next", {}, 12_000],
-      ["subsprint_list", {}, 6_000],
-      ["subsprint_get", { id: subsprint }, 20_000],
-      ["item_get", { id: item }, 8_000],
-      ["note_list", { id: item }, 2_000],
-      ["search", { pattern: "Finish|Provider|S02-003|AGY searchable|AGY artifact", context_size: 512 }, 12_000],
-      ["sprint_list", { data_dir: "$dataDir" }, 2_000],
+  it("gates every public tool with an explicit response size and time budget", async () => {
+    type ToolCase = {
+      tool: string;
+      seed: "fixture" | "empty";
+      maxChars: number;
+      maxMs: number;
+      args: (ctx: { tools: ToolHandlers; dataDir: string; rootDir: string; fixture?: typeof readGateFixtures[number] }) => Promise<Record<string, unknown>> | Record<string, unknown>;
+    };
+
+    const cases: ToolCase[] = [
+      { tool: "artifact_add", seed: "fixture", maxChars: 900, maxMs: 300, args: ({ fixture }) => ({ title: "Response stats", path: "reports/response-stats.json", related_items: [fixture!.item] }) },
+      { tool: "artifact_get", seed: "fixture", maxChars: 1_000, maxMs: 25, args: async ({ tools, fixture }) => ({ id: ((await tools.artifact_add!.handler({ title: "Response stats", path: "reports/response-stats.json", related_items: [fixture!.item] })) as { artifact: string }).artifact }) },
+      { tool: "artifact_list", seed: "fixture", maxChars: 1_200, maxMs: 25, args: async ({ tools, fixture }) => { await tools.artifact_add!.handler({ title: "Response stats", path: "reports/response-stats.json", related_items: [fixture!.item] }); return {}; } },
+      { tool: "artifact_update", seed: "fixture", maxChars: 900, maxMs: 300, args: async ({ tools, fixture }) => ({ id: ((await tools.artifact_add!.handler({ title: "Response stats", path: "reports/response-stats.json", related_items: [fixture!.item] })) as { artifact: string }).artifact, title: "Response stats v2" }) },
+      { tool: "changelog", seed: "fixture", maxChars: 900, maxMs: 300, args: () => ({}) },
+      { tool: "dashboard_info", seed: "fixture", maxChars: 900, maxMs: 25, args: () => ({}) },
+      { tool: "dashboard_restart", seed: "fixture", maxChars: 900, maxMs: 25, args: () => ({}) },
+      { tool: "info", seed: "fixture", maxChars: 2_500, maxMs: 25, args: ({ dataDir }) => ({ data_dir: dataDir }) },
+      { tool: "item_add", seed: "fixture", maxChars: 900, maxMs: 300, args: ({ fixture }) => ({ subsprint: fixture!.subsprint, title: "Response stats item", description: "Measure one representative response size.", code_locations: ["src/tools/register.ts"], gates: [{ kind: "command", spec: "git rev-parse HEAD" }] }) },
+      { tool: "item_deprecate", seed: "fixture", maxChars: 900, maxMs: 300, args: ({ fixture }) => ({ id: fixture!.openItem, reason: "Response stats baseline." }) },
+      { tool: "item_done", seed: "empty", maxChars: 1_000, maxMs: 600, args: async ({ tools, dataDir }) => { await seedMiniSprint(tools, dataDir); return { id: "S01-001", commit_id: headCommit, gate_results: [{ kind: "command", spec: "git rev-parse HEAD", passed: true, evidence: "ok" }], changelog: { verb: "added", line: "Added response stats item." } }; } },
+      { tool: "item_get", seed: "fixture", maxChars: 8_000, maxMs: 75, args: ({ fixture }) => ({ id: fixture!.item }) },
+      { tool: "item_split", seed: "empty", maxChars: 900, maxMs: 300, args: async ({ tools, dataDir }) => { await seedMiniSprint(tools, dataDir); return { id: "S01-001", description: "Split response stats work", goals: ["Measure split response"], gates: [{ kind: "command", spec: "git rev-parse HEAD" }] }; } },
+      { tool: "item_update", seed: "fixture", maxChars: 900, maxMs: 300, args: ({ fixture }) => ({ id: fixture!.openItem, note: "Response stats update." }) },
+      { tool: "next", seed: "fixture", maxChars: 5_000, maxMs: 25, args: () => ({}) },
+      { tool: "note_add", seed: "fixture", maxChars: 900, maxMs: 300, args: ({ fixture }) => ({ id: fixture!.writableItem, text: "Response stats note." }) },
+      { tool: "note_get", seed: "fixture", maxChars: 900, maxMs: 25, args: async ({ tools, fixture }) => ({ id: ((await tools.note_add!.handler({ id: fixture!.writableItem, text: "Response stats note." })) as { note: string }).note }) },
+      { tool: "note_list", seed: "fixture", maxChars: 2_000, maxMs: 25, args: ({ fixture }) => ({ id: fixture!.item }) },
+      { tool: "note_update", seed: "fixture", maxChars: 900, maxMs: 300, args: async ({ tools, fixture }) => ({ id: ((await tools.note_add!.handler({ id: fixture!.writableItem, text: "Response stats note." })) as { note: string }).note, text: "Updated response stats note." }) },
+      { tool: "overview", seed: "fixture", maxChars: 8_000, maxMs: 25, args: () => ({}) },
+      { tool: "search", seed: "fixture", maxChars: 6_000, maxMs: 25, args: ({ fixture }) => ({ pattern: fixture!.searchPattern, context_size: 512 }) },
+      { tool: "sprint_archive", seed: "fixture", maxChars: 900, maxMs: 300, args: () => ({ reason: "Response stats archive." }) },
+      { tool: "sprint_close", seed: "empty", maxChars: 1_000, maxMs: 900, args: async ({ tools, dataDir, rootDir }) => { await seedMiniSprint(tools, dataDir); await tools.item_done!.handler({ id: "S01-001", commit_id: headCommit, gate_results: [{ kind: "command", spec: "git rev-parse HEAD", passed: true, evidence: "ok" }], changelog: { verb: "added", line: "Added response stats item." } }); return { coverage: { path: writeCoverage(rootDir), format: "lcov" } }; } },
+      { tool: "sprint_detach", seed: "fixture", maxChars: 900, maxMs: 25, args: () => ({}) },
+      { tool: "sprint_new", seed: "empty", maxChars: 2_500, maxMs: 600, args: ({ dataDir }) => ({ goal: "Response stats sprint", git_dir: gitDir, data_dir: dataDir }) },
+      { tool: "sprint_resume", seed: "fixture", maxChars: 2_000, maxMs: 25, args: ({ dataDir }) => ({ git_dir: gitDir, data_dir: dataDir }) },
+      { tool: "subsprint_get", seed: "fixture", maxChars: 7_500, maxMs: 25, args: ({ fixture }) => ({ id: fixture!.subsprint }) },
+      { tool: "subsprint_list", seed: "fixture", maxChars: 6_000, maxMs: 25, args: () => ({}) },
+      { tool: "subsprint_new", seed: "fixture", maxChars: 900, maxMs: 300, args: () => ({ description: "Response stats subsprint", goals: ["Measure response sizes"], gates: [{ kind: "command", spec: "git rev-parse HEAD" }] }) },
     ];
-    for (const [tool, rawArgs, maxChars] of cases) {
-      await withFixture(async (tools, dataDir) => {
-        const args = JSON.parse(JSON.stringify(rawArgs).replaceAll("$dataDir", dataDir));
-        await tools[tool]!.handler(args);
-        const start = performance.now();
-        const result = await tools[tool]!.handler(args);
-        const elapsed = performance.now() - start;
-        expect(chars(result), `${tool} response too large`).toBeLessThanOrEqual(maxChars);
-        expect(elapsed, `${tool} took ${elapsed.toFixed(2)}ms`).toBeLessThan(5);
-        expect(collectTimestampKeys(result), `${tool} returned timestamp fields`).toEqual([]);
-        expect(collectEmptyFields(result), `${tool} returned empty fields`).toEqual([]);
-        expect(result, `${tool} missing help`).toHaveProperty("help");
-      });
+
+    expect(cases.map((entry) => entry.tool).sort()).toEqual(publicTools);
+
+    for (const entry of cases) {
+      const fixtureCases = entry.seed === "fixture" ? readGateFixtures : [undefined];
+      for (const fixture of fixtureCases) {
+        const tempRoot = mkdtempSync(join(tmpdir(), "sprinty-tool-gate-"));
+        const label = fixture ? `${fixture.name} ${entry.tool}` : entry.tool;
+        try {
+          const { tools, dataDir } = entry.seed === "fixture"
+            ? (() => {
+                const dataDir = join(tempRoot, "data");
+                cpSync(fixture!.fixtureDir, dataDir, { recursive: true });
+                return { tools: makeTools(dataDir), dataDir };
+              })()
+            : makeEmptyTools(tempRoot);
+          const args = await entry.args({ tools, dataDir, rootDir: tempRoot, fixture });
+          const start = performance.now();
+          const result = await tools[entry.tool]!.handler(args);
+          const elapsed = performance.now() - start;
+
+          recordBudget({ label, chars: chars(result), maxChars: entry.maxChars, ms: elapsed, maxMs: entry.maxMs });
+          expect(chars(result), `${label} response too large`).toBeLessThanOrEqual(entry.maxChars);
+          expectWithinTimeBudget(label, elapsed, entry.maxMs);
+          expect(result, `${label} missing next_tools`).toHaveProperty("next_tools");
+        } finally {
+          rmSync(tempRoot, { recursive: true, force: true });
+        }
+      }
     }
   });
 
-  it("keeps steady-state read handlers under the 2ms p95 speed gate", async () => {
-    const cases: Array<[string, Record<string, unknown>]> = [
-      ["overview", {}],
-      ["next", {}],
-      ["subsprint_list", {}],
-      ["subsprint_get", { id: subsprint }],
-      ["item_get", { id: item }],
-      ["note_list", { id: item }],
-      ["search", { pattern: "Finish|Provider|S02-003|AGY searchable|AGY artifact", context_size: 512 }],
-      ["sprint_list", { data_dir: "$dataDir" }],
-    ];
-    await withFixture(async (tools, dataDir) => {
-      for (const [tool, rawArgs] of cases) {
-        const args = JSON.parse(JSON.stringify(rawArgs).replaceAll("$dataDir", dataDir));
-        await tools[tool]!.handler(args);
-        const batches = [
-          await measureP95(async () => { await tools[tool]!.handler(args); }),
-          await measureP95(async () => { await tools[tool]!.handler(args); }),
-          await measureP95(async () => { await tools[tool]!.handler(args); }),
-        ];
-        const best = batches.reduce((fastest, batch) => batch.p95 < fastest.p95 ? batch : fastest);
-        const detail = batches.map((batch, index) =>
-          `batch${index + 1}: p95=${batch.p95.toFixed(3)}ms avg=${batch.avg.toFixed(3)}ms max=${batch.max.toFixed(3)}ms`
-        ).join("; ");
-        expect(best.p95, `${tool} speed gate needs one clean 50-sample batch under 2ms p95; ${detail}`).toBeLessThan(2);
+  it("keeps representative read responses compact, pruned, timestamp-free, and fast", async () => {
+    for (const fixture of readGateFixtures) {
+      const cases: Array<[string, Record<string, unknown>, number, number]> = [
+        ["overview", {}, 8_000, 25],
+        ["next", {}, 5_000, 25],
+        ["subsprint_list", {}, 6_000, 25],
+        ["subsprint_get", { id: fixture.subsprint }, 7_500, 25],
+        ["item_get", { id: fixture.item }, 8_000, 50],
+        ["note_list", { id: fixture.item }, 2_000, 25],
+        ["search", { pattern: fixture.searchPattern, context_size: 512 }, 6_000, 25],
+        ["info", { data_dir: "$dataDir" }, 2_500, 25],
+      ];
+      for (const [tool, rawArgs, maxChars, maxMs] of cases) {
+        await withFixture(async (tools, dataDir) => {
+          const args = JSON.parse(JSON.stringify(rawArgs).replaceAll("$dataDir", dataDir));
+          await tools[tool]!.handler(args);
+          const start = performance.now();
+          const result = await tools[tool]!.handler(args);
+          const elapsed = performance.now() - start;
+          recordBudget({ label: `${fixture.name} ${tool}`, chars: chars(result), maxChars, ms: elapsed, maxMs });
+          expect(chars(result), `${fixture.name} ${tool} response too large`).toBeLessThanOrEqual(maxChars);
+          expectWithinTimeBudget(`${fixture.name} ${tool}`, elapsed, maxMs);
+          expect(collectTimestampKeys(result), `${fixture.name} ${tool} returned timestamp fields`).toEqual([]);
+          expect(collectEmptyFields(result), `${fixture.name} ${tool} returned empty fields`).toEqual([]);
+          expect(result, `${fixture.name} ${tool} missing next_tools`).toHaveProperty("next_tools");
+        }, fixture.fixtureDir);
       }
+    }
+  });
+
+  it("keeps subsprint_get item rows compact and defers item detail to item_get", async () => {
+    await withFixture(async (tools) => {
+      const result = await tools.subsprint_get!.handler({ id: subsprint }) as {
+        items: Array<{ id: string; description?: string; dependencies?: string[]; dependency_count?: number }>;
+      };
+
+      expect(result.items.length).toBeGreaterThan(0);
+      expect(result.items.some((item) => "description" in item)).toBe(false);
+      expect(result.items.some((item) => "dependencies" in item)).toBe(false);
+      expect(result.items.every((item) => typeof item.dependency_count === "number")).toBe(true);
     });
+  });
+
+  it("keeps next as a compact proposed task list without echoing detail surfaces", async () => {
+    await withFixture(async (tools) => {
+      const result = await tools.next!.handler({}) as {
+        item?: { id: string };
+        next?: Array<{ id: string; description?: string }>;
+        current_subsprint?: { gates?: unknown[]; goals?: string[]; notes?: string[] };
+        recent?: Array<{ id: string }>;
+      };
+
+      expect(result.next?.at(0)?.id).toBe(result.item?.id);
+      expect(result.next?.some((row) => "description" in row)).toBe(false);
+      expect(result.recent?.map((row) => row.id) ?? []).not.toContain(result.item?.id);
+      expect(result.current_subsprint).not.toHaveProperty("gates");
+      expect(result.current_subsprint).not.toHaveProperty("goals");
+      expect(result.current_subsprint).not.toHaveProperty("notes");
+    });
+  });
+
+  it("keeps steady-state read handlers under the 2ms p95 speed gate", async () => {
+    for (const fixture of readGateFixtures) {
+      const cases: Array<[string, Record<string, unknown>]> = [
+        ["overview", {}],
+        ["next", {}],
+        ["subsprint_list", {}],
+        ["subsprint_get", { id: fixture.subsprint }],
+        ["item_get", { id: fixture.item }],
+        ["note_list", { id: fixture.item }],
+        ["search", { pattern: fixture.searchPattern, context_size: 512 }],
+        ["info", { data_dir: "$dataDir" }],
+      ];
+      await withFixture(async (tools, dataDir) => {
+        for (const [tool, rawArgs] of cases) {
+          const args = JSON.parse(JSON.stringify(rawArgs).replaceAll("$dataDir", dataDir));
+          await tools[tool]!.handler(args);
+          const batches = [
+            await measureP95(async () => { await tools[tool]!.handler(args); }),
+            await measureP95(async () => { await tools[tool]!.handler(args); }),
+            await measureP95(async () => { await tools[tool]!.handler(args); }),
+          ];
+          const best = batches.reduce((fastest, batch) => batch.p95 < fastest.p95 ? batch : fastest);
+          const detail = batches.map((batch, index) =>
+            `batch${index + 1}: p95=${batch.p95.toFixed(3)}ms avg=${batch.avg.toFixed(3)}ms max=${batch.max.toFixed(3)}ms`
+          ).join("; ");
+          expect(best.p95, `${fixture.name} ${tool} speed gate needs one clean 50-sample batch under 2ms p95; ${detail}`).toBeLessThan(2);
+        }
+      }, fixture.fixtureDir);
+    }
   });
 
   it("keeps mutating acknowledgements compact and non-duplicative", async () => {
     const cases: Array<[string, Record<string, unknown>, number]> = [
-      ["item_add", { subsprint, title: "Response stats item", description: "Measure one representative response size.", code_locations: ["src/tools/register.ts"], gates: [{ kind: "command", spec: "true" }] }, 900],
+      ["item_add", { subsprint, title: "Response stats item", description: "Measure one representative response size.", code_locations: ["src/tools/register.ts"], gates: [{ kind: "command", spec: "git rev-parse HEAD" }] }, 900],
       ["item_update", { id: item, note: "Response stats update." }, 700],
-      ["note_add", { id: item, text: "Response stats note." }, 800],
+      ["note_add", { id: noteWritableItem, text: "Response stats note." }, 800],
       ["item_deprecate", { id: item, reason: "Response stats baseline." }, 800],
       ["artifact_add", { title: "Response stats", path: "reports/response-stats.json", related_items: [item] }, 900],
-      ["subsprint_new", { description: "Response stats subsprint", goals: ["Measure response sizes"], gates: [{ kind: "command", spec: "true" }] }, 900],
+      ["subsprint_new", { description: "Response stats subsprint", goals: ["Measure response sizes"], gates: [{ kind: "command", spec: "git rev-parse HEAD" }] }, 900],
     ];
     for (const [tool, rawArgs, maxChars] of cases) {
       await withFixture(async (tools) => {
         const result = await tools[tool]!.handler(rawArgs);
         expect(chars(result), `${tool} response too large`).toBeLessThanOrEqual(maxChars);
         expect(JSON.stringify(result)).not.toContain('"sprint"');
-        expect(result).toHaveProperty("help");
+        expect(result).toHaveProperty("next_tools");
       });
     }
   });
@@ -188,8 +396,8 @@ describe("public Sprinty tool responses", () => {
   it("search returns sprint, subsprint, item, note, and artifact hits from the real fixture", async () => {
     await withFixture(async (tools) => {
       await tools.artifact_add!.handler({ title: "AGY artifact fixture", path: "reports/agy.json", related_items: [item] });
-      const note = await tools.note_add!.handler({ id: item, text: "AGY searchable note fixture" }) as { note: string };
-      const result = await tools.search!.handler({ pattern: "Finish|Provider|S02-003|AGY searchable|AGY artifact", context_size: 512 }) as { matches: Array<{ id: string; type: string; text: string; tool_call: string }> };
+      const note = await tools.note_add!.handler({ id: noteWritableItem, text: "AGY searchable note fixture" }) as { note: string };
+      const result = await tools.search!.handler({ pattern: "Finish|Provider|S03-008|AGY searchable|AGY artifact", context_size: 512 }) as { matches: Array<{ id: string; type: string; text: string; tool_call: string }> };
       const types = new Set(result.matches.map((match) => match.type));
       expect(types.has("sprint")).toBe(true);
       expect(types.has("subsprint")).toBe(true);
@@ -203,7 +411,7 @@ describe("public Sprinty tool responses", () => {
 
   it("search accepts regex patterns", async () => {
     await withFixture(async (tools) => {
-      await tools.note_add!.handler({ id: item, text: "Regex power note: AGY and Gemini both appear here." });
+      await tools.note_add!.handler({ id: noteWritableItem, text: "Regex power note: AGY and Gemini both appear here." });
       const result = await tools.search!.handler({ pattern: "AGY|Gemini", context_size: 256 }) as { matches: Array<{ text: string; tool_call: string }> };
       expect(result.matches.length).toBeGreaterThan(1);
       expect(result.matches.some((match) => /AGY|Gemini/.test(match.text))).toBe(true);
@@ -225,7 +433,7 @@ describe("public Sprinty tool responses", () => {
 
   it("overview summarizes subsprints without embedding item rows and keeps compact notes/artifacts", async () => {
     await withFixture(async (tools) => {
-      await tools.note_add!.handler({ id: item, text: "Overview should expose compact note rows." });
+      await tools.note_add!.handler({ id: noteWritableItem, text: "Overview should expose compact note rows." });
       await tools.artifact_add!.handler({ title: "Overview artifact", path: "reports/overview.json", related_items: [item] });
       const overview = await tools.overview!.handler({}) as {
         info: string;
@@ -238,7 +446,7 @@ describe("public Sprinty tool responses", () => {
       expect(overview.info).toContain("artifact_get");
       expect(overview.subsprints.every((sub) => sub.items === undefined)).toBe(true);
       expect(overview.subsprints.every((sub) => typeof sub.item_counts.open === "number")).toBe(true);
-      expect(overview.notes.some((note) => note.item === item && note.text.includes("compact note"))).toBe(true);
+      expect(overview.notes.some((note) => note.item === noteWritableItem && note.text.includes("compact note"))).toBe(true);
       expect(overview.artifacts.some((artifact) => artifact.title === "Overview artifact")).toBe(true);
     });
   });

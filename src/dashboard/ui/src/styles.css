@@ -143,19 +143,51 @@ button {
   }
 
   .topbar {
-    @apply sticky top-0 z-20 flex flex-col gap-3 border-b border-base-300 bg-base-100 px-5 py-4 shadow-sm backdrop-blur lg:flex-row lg:items-center lg:justify-between;
+    @apply sticky top-0 z-20 grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3 border-b border-base-300 bg-base-100 px-5 py-4 shadow-sm backdrop-blur;
   }
 
-  .topbar h1 {
+  .topbar-title {
+    @apply min-w-0;
+  }
+
+  .sprint-title {
     @apply mt-1 max-w-[82rem] text-balance text-xl font-semibold leading-snug text-base-content lg:text-2xl;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
   }
 
   .eyebrow {
     @apply text-xs font-semibold uppercase text-primary;
   }
 
-  .meta-line {
-    @apply mt-2 flex max-w-full flex-wrap gap-x-3 gap-y-1 text-xs text-zinc-500 dark:text-zinc-400;
+  .sprint-metadata-fold {
+    @apply col-span-2 mt-1 w-full rounded-md border border-base-300 bg-base-100;
+  }
+
+  .sprint-metadata-fold[open] {
+    @apply bg-base-200;
+  }
+
+  .sprint-metadata-summary {
+    @apply cursor-pointer px-3 py-2 text-xs font-semibold text-zinc-700 dark:text-zinc-300;
+  }
+
+  .sprint-metadata {
+    @apply grid gap-3 border-t border-base-300 px-3 py-3 text-xs sm:grid-cols-3;
+  }
+
+  .sprint-metadata span {
+    @apply font-semibold text-zinc-600 dark:text-zinc-300;
+  }
+
+  .sprint-metadata ul {
+    @apply mt-1 list-disc space-y-1 pl-4 text-zinc-500 dark:text-zinc-400;
+  }
+
+  .sprint-metadata li {
+    @apply break-words;
   }
 
   .warning-text {
@@ -163,7 +195,7 @@ button {
   }
 
   .topbar-actions {
-    @apply flex shrink-0 flex-wrap items-center gap-2;
+    @apply ml-auto flex shrink-0 flex-wrap items-start justify-end gap-2 self-start;
   }
 
   .coverage-chip {
@@ -208,11 +240,15 @@ button {
   }
 
   .metrics-grid {
-    @apply grid gap-3 md:grid-cols-3;
+    @apply grid gap-3 lg:grid-cols-4;
   }
 
   .metric-panel {
-    @apply min-h-32 rounded-lg border border-base-300 bg-base-100 p-4 shadow-sm;
+    @apply min-h-32 min-w-0 overflow-hidden rounded-lg border border-base-300 bg-base-100 p-4 shadow-sm;
+  }
+
+  .metric-progress {
+    @apply grid content-start gap-4 lg:col-span-2;
   }
 
   .metric-heading {
@@ -228,72 +264,172 @@ button {
     @apply text-4xl font-semibold leading-none text-base-content;
   }
 
-  .code-metrics .metric-heading strong {
-    @apply text-3xl;
-  }
-
   .progress-track {
-    @apply mt-5 h-3 overflow-hidden rounded-full bg-base-300;
-  }
-
-  .progress-fill {
-    @apply h-full rounded-full bg-primary;
+    @apply mt-5 h-3 w-full;
   }
 
   .metric-foot {
-    @apply mt-4;
+    @apply text-xs font-medium text-zinc-500 dark:text-zinc-400;
   }
 
-  .metric-status {
-    @apply flex items-center gap-5;
+  .progress-bars {
+    @apply grid gap-2 border-t border-base-300 pt-3;
   }
 
-  .donut {
-    @apply relative grid h-28 w-28 shrink-0 place-items-center rounded-full;
+  .progress-bar-row {
+    @apply grid grid-cols-[7.5rem_minmax(0,1fr)_4.75rem] items-center gap-3 text-xs text-zinc-500 dark:text-zinc-400;
   }
 
-  .donut::after {
-    content: "";
-    position: absolute;
-    inset: 26px;
-    border-radius: 9999px;
-    background: var(--color-base-100);
+  .count-progress {
+    @apply h-2 w-full;
   }
 
-  .donut span {
-    @apply relative z-10 text-base font-semibold text-base-content;
+  .progress-bar-row > span {
+    @apply flex min-w-0 items-baseline gap-2;
   }
 
-  .status-legend {
-    @apply grid gap-1.5 text-sm text-zinc-500 dark:text-zinc-400;
+  .progress-bar-row b {
+    @apply min-w-0 truncate font-medium;
   }
 
-  .status-legend b {
-    @apply mr-1 font-semibold;
+  .progress-bar-row small {
+    @apply font-semibold text-base-content;
   }
 
-  .legend-done {
-    @apply text-success;
+  .progress-bar-row strong {
+    @apply text-right text-sm font-semibold text-base-content;
   }
 
-  .legend-open {
-    @apply text-warning;
+  .metric-stats {
+    @apply grid content-start gap-4;
   }
 
-  .legend-split {
+  .metric-code {
+    @apply grid content-start gap-4;
+  }
+
+  .changelog-chart-shell {
+    @apply h-48 min-h-48;
+  }
+
+  .changelog-chart-shell canvas {
+    @apply h-full min-h-0 w-full;
+  }
+
+  .summary-table {
+    @apply w-full min-w-0 table-fixed text-left text-xs;
+  }
+
+  .summary-table thead {
+    @apply bg-transparent text-[0.65rem] uppercase text-zinc-500 dark:text-zinc-400;
+  }
+
+  .summary-table th,
+  .summary-table td {
+    @apply border-b border-base-300 px-0 py-2;
+  }
+
+  .summary-table th:last-child,
+  .summary-table td:last-child {
+    @apply w-16 text-right font-semibold text-base-content;
+  }
+
+  .summary-table td:first-child {
+    @apply flex min-w-0 items-center gap-2 truncate text-zinc-500 dark:text-zinc-400;
+  }
+
+  .summary-label {
+    @apply font-medium;
+  }
+
+  .summary-icon {
+    @apply h-4 w-4 shrink-0;
+  }
+
+  .summary-added {
+    @apply text-blue-500;
+  }
+
+  .summary-fixed,
+  .summary-file {
+    @apply text-emerald-500;
+  }
+
+  .summary-changed {
+    @apply text-amber-500;
+  }
+
+  .summary-removed {
+    @apply text-red-500;
+  }
+
+  .summary-deprecated {
     @apply text-zinc-500;
   }
 
-  .legend-muted {
-    @apply text-zinc-500;
+  .summary-security {
+    @apply text-violet-500;
   }
 
-  .code-grid {
-    @apply mt-4 grid grid-cols-2 gap-x-4 gap-y-2 text-sm text-zinc-500 dark:text-zinc-400;
+  .summary-commit {
+    @apply text-cyan-500;
   }
 
-  .code-grid b {
-    @apply mr-1 text-base font-semibold text-base-content;
+  .charts-band {
+    @apply mt-4 grid gap-3 md:grid-cols-2;
+  }
+
+  .chart-panel {
+    @apply min-h-[20rem];
+  }
+
+  .chart-stack {
+    @apply mt-4 h-52;
+  }
+
+  .chart-stack canvas {
+    @apply h-full min-h-0 w-full;
+  }
+
+  .completion-chart-shell {
+    @apply mt-4 grid h-52 grid-rows-[minmax(0,1fr)_auto] gap-2;
+  }
+
+  .completion-chart-shell canvas {
+    @apply min-h-0 w-full;
+    height: 100% !important;
+  }
+
+  .completion-scale {
+    @apply flex justify-between text-xs text-zinc-500;
+  }
+
+  .completion-summary-line {
+    @apply mt-3 text-right text-xs font-medium leading-snug text-zinc-500 dark:text-zinc-400;
+  }
+
+  .chart-legend {
+    @apply mt-3 flex flex-wrap gap-2;
+  }
+
+  .legend-chip {
+    @apply inline-flex items-center gap-1 rounded-full border border-base-300 px-2 py-0.5 text-xs font-semibold text-zinc-600 dark:text-zinc-300;
+  }
+
+  .legend-chip::before {
+    @apply inline-block h-2 w-2 rounded-full content-[""];
+  }
+
+  .legend-chip.bucket-added::before {
+    @apply bg-blue-500;
+  }
+
+  .legend-chip.bucket-edited::before {
+    @apply bg-amber-500;
+  }
+
+  .legend-chip.bucket-closed::before {
+    @apply bg-emerald-500;
   }
 
   .workbench {
@@ -346,7 +482,7 @@ button {
   }
 
   .tree-row-done {
-    @apply opacity-55 grayscale;
+    @apply text-zinc-500 dark:text-zinc-400;
   }
 
   .tree-row-active:not(.tree-row-selected) {
@@ -367,7 +503,7 @@ button {
   }
 
   .tree-label {
-    @apply min-w-0 whitespace-normal break-words text-sm font-medium leading-snug text-base-content;
+    @apply min-w-0 truncate text-sm font-medium leading-snug text-base-content;
   }
 
   .tree-row-progress {
@@ -478,7 +614,7 @@ button {
   }
 
   .todo-detail {
-    @apply grid gap-4 px-5 pb-5 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,24rem)];
+    @apply grid gap-4 px-5 pb-5;
   }
 
   .detail-copy {
@@ -486,7 +622,7 @@ button {
   }
 
   .detail-grid {
-    @apply grid content-start gap-3 rounded-md border border-base-300 bg-base-200 p-4 text-xs;
+    @apply grid content-start gap-3 rounded-md border border-base-300 bg-base-200 p-4 text-xs md:grid-cols-2 xl:grid-cols-3;
   }
 
   .detail-grid div {
@@ -499,6 +635,14 @@ button {
 
   .detail-grid strong {
     @apply break-words font-mono font-medium text-base-content;
+  }
+
+  .dependency-list {
+    @apply flex flex-wrap gap-2;
+  }
+
+  .dependency-link {
+    @apply rounded border border-base-300 bg-base-100 px-2 py-1 font-mono text-xs font-semibold text-primary transition hover:border-primary hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-primary dark:hover:bg-blue-950/30;
   }
 
   .empty-panel {
@@ -726,19 +870,6 @@ button {
     min-height: 0;
   }
 
-  .metric-status {
-    align-items: flex-start;
-  }
-
-  .donut {
-    width: 6rem;
-    height: 6rem;
-  }
-
-  .donut::after {
-    inset: 22px;
-  }
-
   .code-grid {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   }
@@ -758,4 +889,54 @@ button {
   .todo-detail {
     grid-template-columns: minmax(0, 1fr);
   }
+}
+
+/* Gate runs: Sprinty executes gates itself, so the human sees what ran, not just a count. */
+.gate-rows strong {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.gate-row {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.4rem;
+  align-items: baseline;
+  font-weight: 400;
+}
+.gate-state {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 0.05rem 0.35rem;
+  border-radius: 0.25rem;
+  white-space: nowrap;
+  @apply bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300;
+}
+.gate-passed .gate-state {
+  @apply bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300;
+}
+.gate-failed .gate-state {
+  @apply bg-rose-50 text-rose-700 dark:bg-rose-950/30 dark:text-rose-300;
+}
+/* Killed on the item budget: nothing was proven, which is not the same as a failure. */
+.gate-unverified .gate-state {
+  @apply bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-300;
+}
+.gate-spec {
+  font-size: 0.75rem;
+  word-break: break-all;
+  @apply text-zinc-600 dark:text-zinc-300;
+}
+.gate-evidence {
+  grid-column: 2;
+  font-size: 0.7rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+  @apply text-zinc-500 dark:text-zinc-400;
+}
+
+/* Files the commit touched that the item never declared: scope drift, worth a human glance. */
+.scope-drift {
+  @apply text-amber-700 dark:text-amber-300;
 }

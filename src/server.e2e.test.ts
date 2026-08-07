@@ -10,10 +10,11 @@ import { resolveBinding, resolveRepoDir, SERVER_VERSION } from "./server.js";
 const publicTools = [
   "artifact_add", "artifact_get", "artifact_list", "artifact_update",
   "changelog", "dashboard_info", "dashboard_restart",
+  "info",
   "item_add", "item_deprecate", "item_done", "item_get", "item_split", "item_update",
   "next", "note_add", "note_get", "note_list", "note_update",
   "overview", "search",
-  "sprint_archive", "sprint_close", "sprint_detach", "sprint_list", "sprint_new", "sprint_resume",
+  "sprint_archive", "sprint_close", "sprint_detach", "sprint_new", "sprint_resume",
   "subsprint_get", "subsprint_list", "subsprint_new",
 ].sort();
 
@@ -71,7 +72,7 @@ function addInput(input: { subsprint?: string; title?: string; description?: str
     title: input.title ?? "Do thing",
     description: input.description ?? "Implement one small independently verifiable thing.",
     code_locations: input.code_locations ?? ["src/x.ts"],
-    gates: input.gates ?? [{ kind: "command", spec: "true" }],
+    gates: input.gates ?? [{ kind: "command", spec: "git rev-parse HEAD" }],
     ...(input.dependencies ? { dependencies: input.dependencies } : {}),
   };
 }
@@ -99,16 +100,16 @@ describe("sprinty e2e over MCP", () => {
     expect(SERVER_VERSION).toBe(pkg.version);
   });
 
-  it("lists only the canonical subject_verb tools", async () => {
+  it("lists only the canonical public tools", async () => {
     const { tools } = await client.listTools();
     expect(tools.map((t) => t.name).sort()).toEqual(publicTools);
   });
 
   it("runs a full sprint and closes it with canonical handlers", async () => {
     await call(client, "sprint_new", sprintInput(dir, { goal: "ship it" }));
-    await call(client, "subsprint_new", { description: "core", goals: ["build core"], gates: [{ kind: "command", spec: "true" }] });
+    await call(client, "subsprint_new", { description: "core", goals: ["build core"], gates: [{ kind: "command", spec: "git rev-parse HEAD" }] });
     await call(client, "item_add", addInput());
-    await call(client, "item_done", { id: "S01-001", commit_id: sha, gate_results: [{ kind: "command", spec: "true", passed: true, evidence: "ok" }], changelog: { verb: "added", line: "Added the thing." } });
+    await call(client, "item_done", { id: "S01-001", commit_id: sha, gate_results: [{ kind: "command", spec: "git rev-parse HEAD", passed: true, evidence: "ok" }], changelog: { verb: "added", line: "Added the thing." } });
     const closed = await call(client, "sprint_close", { coverage: { path: writeCoverage(dir), format: "lcov", command: "npm run test:coverage" } });
     expect(closed.json.status).toBe("closed");
   });
@@ -126,12 +127,12 @@ describe("sprinty e2e over MCP", () => {
       expect(created.json.data_dir).toBe(dataDir);
       expect(created.json.branch).toBe("main");
       expect(created.json.dashboard.url).toMatch(/^http:\/\/127\.0\.0\.1:\d+$/);
-      await call(c, "subsprint_new", { description: "core", goals: ["build core"], gates: [{ kind: "command", spec: "true" }] });
+      await call(c, "subsprint_new", { description: "core", goals: ["build core"], gates: [{ kind: "command", spec: "git rev-parse HEAD" }] });
       await call(c, "item_add", addInput());
       const done = await call(c, "item_done", {
         id: "S01-001",
         commit_id: fresh.sha,
-        gate_results: [{ kind: "command", spec: "true", passed: true, evidence: "ok" }],
+        gate_results: [{ kind: "command", spec: "git rev-parse HEAD", passed: true, evidence: "ok" }],
         changelog: { verb: "fixed", line: "Fixed repo directory binding." },
       });
       expect(done.isError).toBe(false);
@@ -163,7 +164,7 @@ describe("sprinty e2e over MCP", () => {
       const before = await call(unbound, "overview", {});
       expect(before.isError).toBe(true);
       expect(before.text).toContain("Sprinty is not bound");
-      const listed = await call(unbound, "sprint_list", { data_dir: dataDir });
+      const listed = await call(unbound, "info", { data_dir: dataDir });
       expect(listed.json.sprints).toEqual([
         expect.objectContaining({ id: "001", title: "bind through env", status: "active" }),
       ]);
@@ -222,7 +223,7 @@ describe("sprinty e2e over MCP", () => {
     const c = await connect(fresh.dir);
     try {
       await call(c, "sprint_new", sprintInput(fresh.dir, { goal: "dependency teeth" }));
-      await call(c, "subsprint_new", { description: "graph", goals: ["track graph"], gates: [{ kind: "command", spec: "true" }] });
+      await call(c, "subsprint_new", { description: "graph", goals: ["track graph"], gates: [{ kind: "command", spec: "git rev-parse HEAD" }] });
       await call(c, "item_add", addInput({ title: "Base item", description: "Implement the base dependency graph item.", code_locations: ["a.ts"] }));
       await call(c, "item_add", addInput({ title: "Dependent item", description: "Implement the dependent dependency graph item.", code_locations: ["b.ts"], dependencies: ["S01-001"] }));
 
@@ -266,7 +267,7 @@ describe("sprinty e2e over MCP", () => {
       await call(c, "subsprint_new", {
         description: "Catalog discovery",
         goals: ["Let shoppers find books by title and author"],
-        gates: [{ kind: "command", spec: "true" }],
+        gates: [{ kind: "command", spec: "git rev-parse HEAD" }],
       });
 
       const added = await call(c, "item_add", {
@@ -275,7 +276,7 @@ describe("sprinty e2e over MCP", () => {
         description: "Shape the first catalog slice for staff-curated inventory",
         code_locations: ["src/bookshop/catalog.ts"],
         gates: [
-          { kind: "command", spec: "true" },
+          { kind: "command", spec: "git rev-parse HEAD" },
           { kind: "manual", spec: "bookshop owner accepts catalog direction" },
         ],
       });
@@ -283,13 +284,13 @@ describe("sprinty e2e over MCP", () => {
 
       await call(c, "item_update", { id: "S01-001", note: "Needs title, author, and shelf availability." });
       const note = await call(c, "note_add", { id: "S01-001", text: "Owner wants cozy neighborhood language, not marketplace language." });
-      expect(note.json.note).toMatch(/^N\d{3}$/);
+      expect(note.json.note).toMatch(/^N[0-9a-f]{12}$/);
 
       const split = await call(c, "item_split", {
         id: "S01-001",
         description: "Bookshop catalog workflow",
         goals: ["Search books", "Track shelf availability", "Drop preorder scope"],
-        gates: [{ kind: "command", spec: "true" }],
+        gates: [{ kind: "command", spec: "git rev-parse HEAD" }],
         dependencies: ["S01"],
       });
       expect(split.json.subsprint).toBe("S02");
@@ -300,7 +301,7 @@ describe("sprinty e2e over MCP", () => {
         description: "Add searchable book listing for staff-curated inventory",
         code_locations: ["src/bookshop/catalog.ts", "src/bookshop/search.ts"],
         gates: [
-          { kind: "command", spec: "true" },
+          { kind: "command", spec: "git rev-parse HEAD" },
           { kind: "manual", spec: "bookshop owner accepts catalog workflow" },
         ],
         dependencies: ["S01-001"],
@@ -317,8 +318,10 @@ describe("sprinty e2e over MCP", () => {
       const next = await call(c, "next", { past: 1, future: 3 });
       expect(next.json.item.id).toBe("S02-001");
       expect(next.json.next.map((i: { id: string }) => i.id)).toEqual(["S02-001"]);
+      expect(next.json.next[0].description).toBeUndefined();
       expect(next.json.blocked.items).toEqual([{ id: "S02-002", title: "Sketch preorders" }]);
       expect(next.json.graph).toBeUndefined();
+      expect(next.json.current_subsprint.gates).toBeUndefined();
 
       await call(c, "artifact_add", {
         title: "Bookshop catalog fixture",
@@ -335,7 +338,7 @@ describe("sprinty e2e over MCP", () => {
         id: "S02-001",
         commit_id: fresh.sha,
         gate_results: [
-          { kind: "command", spec: "true", passed: true, evidence: "catalog tests passed" },
+          { kind: "command", spec: "git rev-parse HEAD", passed: true, evidence: "catalog tests passed" },
           { kind: "manual", spec: "bookshop owner accepts catalog workflow", passed: true, evidence: "owner reviewed search flow" },
         ],
         changelog: { verb: "added", line: "Added searchable book listing for staff-curated inventory." },
@@ -359,8 +362,17 @@ describe("sprinty e2e over MCP", () => {
       expect(state.timeline.map((e: { type: string }) => e.type)).toContain("note_added");
 
       const changelog = await call(c, "changelog", {});
-      expect(changelog.json.markdown).toContain("# Changelog: Build a neighborhood bookshop catalog");
-      expect(changelog.json.markdown).toContain("## Added");
+      expect(changelog.json).toEqual(expect.objectContaining({ path: join(fresh.dir, ".sprinty", "CHANGELOG.md") }));
+      expect(changelog.json.markdown).toBeUndefined();
+      expect(changelog.json.entries).toBeUndefined();
+      expect(readFileSync(changelog.json.path, "utf8")).toContain("## Added");
+      const changelogPath = join(fresh.dir, "CHANGELOG.md");
+      const fullChangelog = await call(c, "changelog", { path: changelogPath });
+      expect(fullChangelog.json.path).toBe(changelogPath);
+      expect(readFileSync(changelogPath, "utf8")).toContain("# Changelog: Build a neighborhood bookshop catalog");
+      expect(readFileSync(changelogPath, "utf8")).toContain("## Added");
+      expect(readFileSync(changelogPath, "utf8")).toContain("- `S02-001` **Search book listing**: Added searchable book listing for staff-curated inventory.");
+      expect(readFileSync(changelogPath, "utf8")).toContain(`  - Commit: \`${fresh.sha}\``);
 
       const closedMissingCoverage = await call(c, "sprint_close", {});
       expect(closedMissingCoverage.isError).toBe(true);

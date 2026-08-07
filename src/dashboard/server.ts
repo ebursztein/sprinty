@@ -1,7 +1,7 @@
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { existsSync, readFileSync } from "node:fs";
-import { dirname, join, normalize } from "node:path";
+import { dirname, join, normalize, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { PAGE } from "./page.js";
 import type { SprintView } from "../domain/projection.js";
@@ -37,7 +37,9 @@ export function startDashboard(getState: () => SprintView | null): Promise<Dashb
     if (req.url?.startsWith("/assets/")) {
       const pathname = decodeURIComponent(new URL(req.url, "http://127.0.0.1").pathname);
       const asset = normalize(join(staticRoot, pathname));
-      if (!asset.startsWith(staticRoot) || !existsSync(asset)) {
+      // Compare against the root plus a separator: a bare prefix check also admits
+      // sibling directories that merely start with the root's name.
+      if (!asset.startsWith(staticRoot + sep) || !existsSync(asset)) {
         res.writeHead(404);
         res.end("not found");
         return;

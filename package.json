@@ -1,7 +1,7 @@
 {
   "name": "sprinty-mcp",
-  "version": "0.1.9",
-  "description": "Disciplined sprint MCP with dashboard, artifacts, follow-ups, spikes, gates, and changelogs for Claude Code, Codex, and Gemini",
+  "version": "0.1.16",
+  "description": "Disciplined sprint MCP with dashboard, artifacts, gates, Git-backed change maps, and changelogs for Claude Code, Codex, and Gemini",
   "type": "module",
   "license": "Apache-2.0",
   "author": "Elie Bursztein",
@@ -21,8 +21,6 @@
     "gemini",
     "dashboard",
     "artifacts",
-    "follow-ups",
-    "spikes",
     "gates",
     "changelog",
     "ledger"
@@ -33,7 +31,11 @@
   "files": [
     "dist",
     "skills",
-    "clients"
+    "clients",
+    "plugins",
+    ".agents",
+    ".claude-plugin",
+    "docs/sprinty-dashboard.png"
   ],
   "scripts": {
     "build": "npm run build:dashboard && tsc -p tsconfig.json",
@@ -42,12 +44,15 @@
     "pretest": "npm run build",
     "test": "vitest run --exclude src/tools/response-size.test.ts && vitest run src/tools/response-size.test.ts --no-file-parallelism --maxWorkers=1",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage",
+    "_comment:test:coverage": "One sequential run, not the two-phase split of `test`: response-size.test.ts asserts wall-clock budgets that only hold without parallel load, and two separate vitest runs would each overwrite the other's coverage report.",
+    "test:coverage": "vitest run --coverage --no-file-parallelism --maxWorkers=1",
     "typecheck": "tsc -p tsconfig.json --noEmit",
+    "sync:skills": "node scripts/sync-skills.mjs",
     "start": "node dist/index.js"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",
+    "chart.js": "^4.5.1",
     "dompurify": "^3.4.10",
     "marked": "^18.0.5",
     "zod": "^3.23.0"

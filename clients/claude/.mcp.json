@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "sprinty": {
+      "command": "npx",
+      "args": ["-y", "sprinty-mcp"]
+    }
+  }
+}

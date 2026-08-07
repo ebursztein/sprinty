@@ -32,7 +32,6 @@ export const SubsprintCreated = z.object({
   gates: z.array(Gate).min(1),
   spawned_from_item: z.string().nullable(),
   dependencies: z.array(z.string().min(1)).default([]),
-  kind: z.enum(["feature", "spike"]).default("feature"),
 });
 
 export const ItemAdded = z.object({
@@ -70,6 +69,8 @@ export const ItemResolved = z.object({
 export const NoteAdded = z.object({
   ...base, type: z.literal("note_added"),
   element_id: z.string(), text: z.string().min(1),
+  // Absent in ledgers written before note ids were minted; those fall back to seq.
+  note_id: z.string().min(1).optional(),
 });
 
 export const NoteUpdated = z.object({
@@ -124,14 +125,8 @@ export const FollowUpAdded = z.object({
   bug_ids: z.array(z.string().min(1)).min(1),
 });
 
-export const SpikeConcluded = z.object({
-  ...base, type: z.literal("spike_concluded"),
-  subsprint_id: z.string().min(1),
-  conclusion: z.string().min(1),
-});
-
-export const SpikeDeprecated = z.object({
-  ...base, type: z.literal("spike_deprecated"),
+export const SubsprintDeprecated = z.object({
+  ...base, type: z.literal("subsprint_deprecated"),
   subsprint_id: z.string().min(1),
   reason: z.string().min(1),
 });
@@ -151,7 +146,7 @@ export const SprintArchived = z.object({
 
 export const LedgerEvent = z.discriminatedUnion("type", [
   SprintCreated, SubsprintCreated, ItemAdded, ItemUpdated, ItemResolved, NoteAdded, NoteUpdated, DependenciesAdded,
-  DependenciesReplaced, ArtifactAdded, ArtifactAmended, ArtifactDeprecated, FollowUpAdded, SpikeConcluded, SpikeDeprecated,
+  DependenciesReplaced, ArtifactAdded, ArtifactAmended, ArtifactDeprecated, FollowUpAdded, SubsprintDeprecated,
   SprintClosed, SprintArchived,
 ]);
 export type LedgerEvent = z.infer<typeof LedgerEvent>;

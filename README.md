@@ -1,191 +1,115 @@
 # Sprinty
 
-Disciplined sprint tracking for AI coding agents.
+[![npm version](https://img.shields.io/npm/v/sprinty-mcp.svg)](https://www.npmjs.com/package/sprinty-mcp)
 
-Sprinty is an MCP server that gives agents a structured way to plan, execute, verify, and close
-non-trivial coding work. It keeps the sprint record local, append-only, and tied to real git
-commits, so an agent cannot quietly lose track of work, invent ids, or mark items done without
-evidence.
+Sprinty is an MCP server for running disciplined coding sprints with AI agents. It gives agents
+server-minted sprint, subsprint, and item IDs; explicit dependencies; gate evidence; Git-backed
+change maps; SemVer changelogs; and a local dashboard so humans can watch the work while it happens.
 
-## Why Use Sprinty?
+![Sprinty dashboard](/docs/sprinty-dashboard.png)
 
-Without Sprinty, long agent sessions often drift:
+## Install
 
-- work gets tracked in loose prose that is hard to resume;
-- tasks are marked done without a real commit or passing gate evidence;
-- follow-up context disappears after a restart;
-- humans cannot easily see what the agent is doing right now.
-
-With Sprinty, the agent gets MCP tools for:
-
-- sprint, subsprint, and item tracking with server-minted ids;
-- dependency edges, blocked work, and cycle detection;
-- item gates that require passing evidence before completion;
-- git commit validation and per-item change maps;
-- notes and artifacts attached to the sprint record;
-- compact `overview`, `next`, and `search` reads for agent token budgets;
-- a local dashboard URL returned by `sprint_new` and `sprint_resume`;
-- strict `sprint_close` checks that refuse to close while work, coverage, or gates are missing.
-
-## Installation
-
-Sprinty is published as the npm package `sprinty-mcp`.
-
-```bash
-npx -y sprinty-mcp
-```
-
-The server is usually launched by an MCP client. Sprinty works with any MCP client that can run a
-local command.
-
-### Codex
-
-Add Sprinty to `~/.codex/config.toml`:
-
-```toml
-[mcp_servers.sprinty]
-command = "npx"
-args = ["-y", "sprinty-mcp"]
-```
+Sprinty is published to npm as `sprinty-mcp`. The npm package is the MCP server. Claude and Codex
+plugin installs are distributed from this Git repository through each client's marketplace system.
 
 ### Claude Code
+
+MCP-only install:
 
 ```bash
 claude mcp add sprinty -- npx -y sprinty-mcp
 ```
 
-The repository also includes a Claude plugin manifest in `clients/claude/`.
+Plugin install, with Sprinty skills plus the MCP server:
+
+```bash
+claude plugin marketplace add ebursztein/sprinty
+claude plugin install sprinty@sprinty
+```
+
+The Claude marketplace manifest is `.claude-plugin/marketplace.json`; the plugin bundle is
+`clients/claude/`.
+
+### Codex
+
+MCP-only install:
+
+```bash
+codex mcp add sprinty -- npx -y sprinty-mcp
+```
+
+Plugin install, with Sprinty skills plus the MCP server:
+
+```bash
+codex plugin marketplace add ebursztein/sprinty
+codex plugin add sprinty@sprinty
+```
+
+The Codex marketplace manifest is `.agents/plugins/marketplace.json`; the plugin bundle is
+`plugins/sprinty/`. Codex does not currently use an OpenAI npm plugin package for this flow.
 
 ### Gemini CLI
 
-From a repository checkout:
+Use the MCP server directly from npm:
 
 ```bash
-gemini extensions install ./clients/gemini
+npx -y sprinty-mcp
 ```
 
-The Gemini extension uses `clients/gemini/gemini-extension.json` and `clients/gemini/GEMINI.md`.
+The repository also includes a Gemini extension in `clients/gemini/` for clients that install local
+Gemini extensions.
 
-### Codex Plugin From A Checkout
+### Any MCP Client
 
-For local plugin development from this repository:
-
-```bash
-codex plugin marketplace add .
-codex plugin add sprinty@sprinty-local
-```
-
-The installable plugin bundle lives in `plugins/sprinty/`.
-
-## Quick Start
-
-Sprinty never guesses the repository from the MCP server process cwd. Start a sprint with explicit
-paths:
+Configure a stdio MCP server with:
 
 ```json
 {
-  "goal": "Ship the dashboard lifecycle change",
-  "git_dir": "/absolute/path/to/repo",
-  "data_dir": "/absolute/path/to/repo/.sprinty",
-  "context_notes": ["optional notes for the agent"]
+  "command": "npx",
+  "args": ["-y", "sprinty-mcp"]
 }
 ```
 
-- `git_dir` is where Sprinty checks commits, runs gates, reads coverage, and builds change maps.
-- `data_dir` is where Sprinty stores the `current` pointer and JSONL ledgers.
-- Use a worktree-scoped, gitignored `data_dir`, such as `<git_dir>/.sprinty`.
+## Use
 
-After a restart, inspect and resume the same sprint:
-
-```text
-sprint_list({ data_dir })
-sprint_resume({ git_dir, data_dir })
-```
-
-You can also pre-bind a read-only MCP process with both environment variables:
-
-```bash
-SPRINTY_GIT_DIR=/absolute/path/to/repo
-SPRINTY_DATA_DIR=/absolute/path/to/repo/.sprinty
-```
-
-Both `SPRINTY_GIT_DIR` and `SPRINTY_DATA_DIR` are required together.
-
-## Basic Workflow
+Sprinty never guesses the repository from the MCP server process cwd. Start or resume with explicit
+paths:
 
 ```text
 sprint_new({ goal, git_dir, data_dir, context_notes? })
-  -> returns dashboard.url
-overview({})
-subsprint_new({ description, goals, gates, dependencies? })
-item_add({ subsprint, title, description, code_locations, gates, dependencies?, high_priority? })
-next({})
-item_done({ id, commit_id, gate_results, changelog })
-changelog({})
-sprint_close({ coverage: { path, format: "lcov", command? } })
+sprint_resume({ git_dir, data_dir })
 ```
 
-Use `item_split` when an item is too large and `item_deprecate` when an item is intentionally
-dropped. Use `sprint_detach` before switching one MCP process to a different sprint.
+Use a worktree-local, gitignored `data_dir`, usually `<git_dir>/.sprinty`. When `data_dir` is
+omitted and `git_dir` is provided, Sprinty uses `<git_dir>/.sprinty`. `sprint_new` and
+`sprint_resume` return the dashboard URL. Call `info({ git_dir })` first for startup orientation and
+compact sprint rows. Use `info({ workspace_dirs: [...] })` when you need to inspect multiple Sprinty
+data dirs together, then `sprint_resume({ git_dir, data_dir })`.
 
-## Dashboard
+## Tools
 
-`sprint_new` and `sprint_resume` automatically start a read-only local dashboard and return:
-
-```json
-{
-  "dashboard": {
-    "running": true,
-    "url": "http://127.0.0.1:60767",
-    "port": 60767
-  }
-}
-```
-
-Open the URL in a browser to watch progress while the agent works. The dashboard shows sprint
-status, items, blocked work, gates, artifacts, changelog entries, change maps, and the ledger.
-
-Dashboard tools:
-
-- `dashboard_info` returns the current dashboard URL and port without restarting it.
-- `dashboard_restart` restarts the dashboard server and returns the new URL and port.
-- `sprint_close`, `sprint_archive`, and `sprint_detach` stop the dashboard.
-
-## Available Tools
-
-### Sprint Tools
-
-| Tool | What it does |
+| Tool | Purpose |
 | --- | --- |
+| `info` | Startup orientation before binding, including sprint rows, resume/create help, and dashboard state. |
 | `sprint_new` | Start a sprint with explicit `git_dir` and `data_dir`; returns orientation and dashboard info. |
-| `sprint_resume` | Reattach to an existing sprint after an MCP restart; returns dashboard info. |
-| `sprint_list` | List ledgers in a `data_dir` without creating a sprint. |
+| `sprint_resume` | Reattach this MCP session to an existing sprint. |
 | `sprint_detach` | Clear this MCP process binding and stop the dashboard. |
-| `sprint_close` | Re-run gates, require coverage evidence, and close only when all work is resolved. |
+| `sprint_close` | Close only after all work is resolved, changelog exists, gates pass, and coverage is supplied. |
 | `sprint_archive` | Archive an active sprint with a recovery reason. |
 | `overview` | Compact sprint summary for orientation. |
-| `next` | Compact active work window with available and blocked items. |
+| `next` | Compact active work window with current, next, blocked, relations, notes, and artifacts. |
 | `search` | Regex search over the immutable sprint ledger. |
-| `changelog` | Render the sprint changelog and change-map summary as Markdown. |
-
-### Work Tools
-
-| Tool | What it does |
-| --- | --- |
+| `changelog` | Generate SemVer Markdown and return the path. |
 | `subsprint_new` | Create a feature-sized unit of work. |
 | `subsprint_list` | List subsprints with compact item counts. |
 | `subsprint_get` | Read one subsprint and its item rows. |
 | `item_add` | Create one atomic, gated item. |
 | `item_get` | Read full item detail. |
-| `item_update` | Update item metadata, notes, priority, or dependency edges. |
-| `item_done` | Complete an item with a real commit, passing gate evidence, and changelog line. |
-| `item_split` | Resolve an oversized item by creating a new subsprint. |
-| `item_deprecate` | Drop an item with an explicit reason. |
-
-### Notes And Artifacts
-
-| Tool | What it does |
-| --- | --- |
+| `item_update` | Update item metadata, priority, notes, or dependency edges. |
+| `item_done` | Complete an item with a real commit, gate evidence, and changelog entry. |
+| `item_split` | Resolve an oversized item by creating a seeded subsprint. |
+| `item_deprecate` | Drop an item with an explicit reason, or pass a subsprint id to drop it and its open items. |
 | `note_add` | Attach a note to an item. |
 | `note_list` | List notes for an item. |
 | `note_get` | Read one note. |
@@ -194,40 +118,21 @@ Dashboard tools:
 | `artifact_list` | List active artifacts. |
 | `artifact_get` | Read one artifact record. |
 | `artifact_update` | Update artifact metadata. |
-
-### Dashboard Tools
-
-| Tool | What it does |
-| --- | --- |
-| `dashboard_info` | Report whether the dashboard is running and, if so, its URL and port. |
+| `dashboard_info` | Report the current dashboard URL and port. |
 | `dashboard_restart` | Restart the dashboard and return the new URL and port. |
 
-## How Sprinty Stores Data
+## Release
 
-Sprinty writes one append-only JSONL ledger per sprint under `data_dir`. The ledger is local state;
-keep it out of git unless you intentionally want to preserve it elsewhere. Sprinty projects that
-ledger into compact read models for agents and into the dashboard for humans.
+Publishing is gated by tests. The GitHub Release workflow runs `npm ci`, `npm test`, and only then
+`npm publish --access public`.
 
-Completed items record the commit id, gate results, changelog entry, and Git-backed file change map.
-`sprint_close` re-checks commits, re-runs executable gates, requires coverage evidence, and refuses
-to close while any item is still open.
-
-## More Documentation
-
-- [How to run a sprint](skills/how-to-run-a-sprint/SKILL.md)
-- [Full Sprinty tool contract](skills/using-sprinty/SKILL.md)
-- [Codex client notes](clients/codex/README.md)
-- [Gemini client notes](clients/gemini/GEMINI.md)
-
-## Development
+Local checks:
 
 ```bash
-npm install
 npm test
 npm run typecheck
-npm run build
 ```
 
 ## License
 
-Apache-2.0 © Elie Bursztein
+Apache-2.0

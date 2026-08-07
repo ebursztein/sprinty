@@ -12,7 +12,7 @@ export interface DashboardModel {
   progress: {
     items: { total: number; done: number; open: number; percent: number };
     statuses: { total: number; completed: number; open: number; split: number; deprecated: number };
-    gates: { total: number; passed: number; failed: number; pending: number };
+    gates: { total: number; passed: number; failed: number; unverified: number; pending: number };
     subsprints: Array<{ id: string; label: string; done: number; total: number; percent: number }>;
     code: { files: number; additions: number; deletions: number; net: number; churn: number; hotspots: number };
   };
@@ -32,12 +32,24 @@ export interface TreeSubsprint {
   items: TreeItem[];
 }
 
+/** A gate that was killed on the item budget proved nothing, so it is neither passed nor failed. */
+export type GateState = "passed" | "failed" | "unverified" | "pending";
+
+export interface GateRow {
+  kind: string;
+  spec: string;
+  cwd?: string;
+  state: GateState;
+  evidence: string;
+}
+
 export interface TreeItem {
   id: string;
   label: string;
   status: ItemView["status"];
   tone: TreeTone;
   gateSummary: string;
+  gateRows: GateRow[];
   dependencies: string[];
   blocked: boolean;
 }
@@ -50,7 +62,7 @@ export interface TimelineRow {
   time: string;
 }
 
-export type LedgerEntity = "artifact" | "dependency" | "follow_up" | "item" | "note" | "spike" | "sprint" | "subsprint";
+export type LedgerEntity = "artifact" | "dependency" | "follow_up" | "item" | "note" | "sprint" | "subsprint";
 export type LedgerVerb = "add" | "amend" | "archive" | "close" | "conclude" | "create" | "deprecate" | "replace" | "update";
 export type LedgerTargetKind = "artifact" | "follow_up" | "item" | "note" | "sprint" | "subsprint" | "unknown";
 
@@ -207,6 +219,7 @@ function treeSubsprint(
       status: item.status,
       tone: item.id === current?.id ? "current" : item.id === next?.id ? "next" : blockedIds.has(item.id) ? "blocked" : item.status === "open" ? "normal" : "muted",
       gateSummary: gateSummary(item),
+      gateRows: gateRows(item),
       dependencies: item.dependencies,
       blocked: blockedIds.has(item.id),
     })),
@@ -223,11 +236,33 @@ function statusProgress(items: ItemView[]): { total: number; completed: number; 
   };
 }
 
-function gateProgress(items: ItemView[]): { total: number; passed: number; failed: number; pending: number } {
+function gateProgress(items: ItemView[]): { total: number; passed: number; failed: number; unverified: number; pending: number } {
+  const results = items.flatMap((item) => item.gate_results);
   const total = items.reduce((sum, item) => sum + item.gates.length, 0);
-  const passed = items.reduce((sum, item) => sum + item.gate_results.filter((gate) => gate.passed).length, 0);
-  const failed = items.reduce((sum, item) => sum + item.gate_results.filter((gate) => !gate.passed).length, 0);
-  return { total, passed, failed, pending: Math.max(0, total - passed - failed) };
+  const passed = results.filter((gate) => gate.passed).length;
+  const unverified = results.filter((gate) => !gate.passed && gate.timed_out).length;
+  const failed = results.filter((gate) => !gate.passed && !gate.timed_out).length;
+  return { total, passed, failed, unverified, pending: Math.max(0, total - passed - failed - unverified) };
+}
+
+function gateState(result: { passed: boolean; timed_out?: boolean | undefined }): GateState {
+  if (result.passed) return "passed";
+  return result.timed_out ? "unverified" : "failed";
+}
+
+/** One row per declared gate, carrying the result Sprinty recorded when it ran the gate itself. */
+export function gateRows(item: ItemView): GateRow[] {
+  return item.gates.map((gate) => {
+    const result = item.gate_results.find((candidate) =>
+      (candidate.supersedes ?? candidate).spec === gate.spec && (candidate.supersedes ?? candidate).kind === gate.kind);
+    return {
+      kind: gate.kind,
+      ...(gate.cwd ? { cwd: gate.cwd } : {}),
+      spec: result?.spec ?? gate.spec,
+      state: result ? gateState(result) : "pending",
+      evidence: result?.evidence ?? "",
+    };
+  });
 }
 
 function codeStats(sprint: SprintView): { files: number; additions: number; deletions: number; net: number; churn: number; hotspots: number } {
@@ -241,12 +276,14 @@ function codeStats(sprint: SprintView): { files: number; additions: number; dele
   };
 }
 
-function gateSummary(item: ItemView): string {
+export function gateSummary(item: ItemView): string {
   if (item.gates.length === 0) return "no gates";
-  const passed = item.gate_results.filter((gate) => gate.passed).length;
-  const failed = item.gate_results.filter((gate) => !gate.passed).length;
-  const pending = Math.max(0, item.gates.length - passed - failed);
-  return `${passed}/${item.gates.length} pass${failed ? `, ${failed} fail` : ""}${pending ? `, ${pending} pending` : ""}`;
+  const { passed, failed, unverified } = gateProgress([item]);
+  const pending = Math.max(0, item.gates.length - passed - failed - unverified);
+  return `${passed}/${item.gates.length} pass` +
+    `${failed ? `, ${failed} fail` : ""}` +
+    `${unverified ? `, ${unverified} unverified` : ""}` +
+    `${pending ? `, ${pending} pending` : ""}`;
 }
 
 function itemTitle(item: ItemView): string {
@@ -288,8 +325,7 @@ function ledgerMeta(entry: TimelineEntry): { entity: LedgerEntity; verb: LedgerV
     case "artifact_amended": return { entity: "artifact", verb: "amend" };
     case "artifact_deprecated": return { entity: "artifact", verb: "deprecate" };
     case "follow_up_added": return { entity: "follow_up", verb: "add" };
-    case "spike_concluded": return { entity: "spike", verb: "conclude" };
-    case "spike_deprecated": return { entity: "spike", verb: "deprecate" };
+    case "subsprint_deprecated": return { entity: "subsprint", verb: "deprecate" };
   }
 }
 
@@ -297,7 +333,7 @@ function targetKindFor(id: string): LedgerTargetKind {
   if (id === "sprint") return "sprint";
   if (/^S\d{2}-\d{3}$/.test(id)) return "item";
   if (/^S\d{2}$/.test(id)) return "subsprint";
-  if (/^N\d{3}$/.test(id)) return "note";
+  if (/^N([0-9a-f]{12}|\d{3})$/.test(id)) return "note";
   if (/^A\d{3}$/.test(id)) return "artifact";
   if (/^F\d{3}$/.test(id)) return "follow_up";
   return "unknown";

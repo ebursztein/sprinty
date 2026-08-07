@@ -1,4 +1,5 @@
 import type { ArtifactView, SprintView, ItemView, SubsprintView, TimelineEntry } from "../domain/projection.js";
+import { notePressure, type NotePressureSummary } from "../domain/note-policy.js";
 
 export interface CurrentWindow {
   goal: string;
@@ -10,6 +11,7 @@ export interface CurrentWindow {
   relations: RelationRow[];
   artifacts: ArtifactView[];
   recent_artifacts: ArtifactView[];
+  items_with_notes: NotePressureSummary;
   recent_activity: RecentActivityRow[];
 }
 
@@ -42,7 +44,6 @@ export interface WorkItemRow {
 
 export interface CurrentSubsprintRow {
   id: string;
-  kind: SubsprintView["kind"];
   description: string;
   status: SubsprintView["status"];
   goals: string[];
@@ -64,6 +65,7 @@ export interface RelationRow {
 
 export interface CurrentOptions {
   include_high_priority?: boolean;
+  future_total?: number;
 }
 
 export function windowCurrent(view: SprintView, past: number, futurePerSubsprint: number, options: CurrentOptions = {}): CurrentWindow {
@@ -71,7 +73,7 @@ export function windowCurrent(view: SprintView, past: number, futurePerSubsprint
   const resolved = items.filter((i) => i.status !== "open");
   const { available, blocked } = orderOpenItems(view, items);
   const lastResolved = resolved.slice(-past);
-  const next = selectNextItems(available, futurePerSubsprint, options.include_high_priority ?? true);
+  const next = selectNextItems(available, futurePerSubsprint, options.include_high_priority ?? true, options.future_total);
   const currentItem = next[0] ?? null;
   const current = currentItem
     ? view.subsprints.find((sub) => sub.id === currentItem.subsprint_id) ?? null
@@ -86,6 +88,7 @@ export function windowCurrent(view: SprintView, past: number, futurePerSubsprint
     relations: collectRelations(view, [...lastResolved, ...next].map((item) => item.id)),
     artifacts: collectRelevantArtifacts(view, current, lastResolved, next),
     recent_artifacts: collectArtifacts(view).filter((artifact) => artifact.status === "active").slice(-Math.max(futurePerSubsprint, next.length)),
+    items_with_notes: notePressure(view),
     recent_activity: view.timeline.slice(-Math.max(5, past + next.length)).map(compactActivity),
   };
 }
@@ -122,7 +125,6 @@ function compactWorkItem(item: ItemView): WorkItemRow {
 function compactCurrentSubsprint(sub: SubsprintView): CurrentSubsprintRow {
   return {
     id: sub.id,
-    kind: sub.kind,
     description: sub.description,
     status: sub.status,
     goals: sub.goals,
@@ -158,12 +160,14 @@ function orderOpenItems(view: SprintView, items: ItemView[]): { available: ItemV
   return { available, blocked };
 }
 
-function selectNextItems(available: ItemView[], perSubsprint: number, includeHighPriority: boolean): ItemView[] {
+function selectNextItems(available: ItemView[], perSubsprint: number, includeHighPriority: boolean, totalLimit?: number): ItemView[] {
   const selected: ItemView[] = [];
   const selectedIds = new Set<string>();
+  const limitReached = () => totalLimit !== undefined && selected.length >= totalLimit;
 
   if (includeHighPriority) {
     for (const item of available) {
+      if (limitReached()) break;
       if (!item.high_priority) continue;
       selected.push(item);
       selectedIds.add(item.id);
@@ -172,6 +176,7 @@ function selectNextItems(available: ItemView[], perSubsprint: number, includeHig
 
   const counts = new Map<string, number>();
   for (const item of available) {
+    if (limitReached()) break;
     if (selectedIds.has(item.id)) continue;
     const count = counts.get(item.subsprint_id) ?? 0;
     if (count >= perSubsprint) continue;

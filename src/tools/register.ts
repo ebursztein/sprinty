@@ -1,10 +1,12 @@
 import { z } from "zod";
-import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { project } from "../domain/projection.js";
 import type { ItemView, SprintView } from "../domain/projection.js";
+import type { SearchMatch } from "../domain/search.js";
 import { SprintStore } from "../store/store.js";
 import { windowCurrent } from "./current.js";
+import { briefing, nextTools } from "./next-tools.js";
 import * as S from "./schemas.js";
 
 export interface ToolDef {
@@ -13,24 +15,40 @@ export interface ToolDef {
   handler: (raw: unknown) => Promise<unknown>;
 }
 
-function def<Sc extends z.ZodObject<z.ZodRawShape>>(
-  schema: Sc,
-  description: string,
-  run: (input: z.infer<Sc>) => unknown | Promise<unknown>,
-  options: PruneOptions = {},
-): ToolDef {
-  return {
-    description,
-    schema,
-    handler: async (raw) => {
-      const input = schema.parse(raw);
-      return pruneEmptyResponseFields(stripResponseNoise(ensureHelp(await run(input), helpTarget(input as Record<string, unknown>))), options) ?? {};
-    },
+function makeDef(getStore: StoreProvider) {
+  // next_tools is computed from state after the call, so every response points at ids that exist.
+  return function def<Sc extends z.ZodObject<z.ZodRawShape>>(
+    schema: Sc,
+    description: string,
+    run: (input: z.infer<Sc>) => unknown | Promise<unknown>,
+  ): ToolDef {
+    return {
+      description,
+      schema,
+      handler: async (raw) => {
+        const input = schema.parse(raw);
+        const result = await run(input);
+        const focus = (input as Record<string, unknown>).id;
+        const withNext = attachNextTools(result, await readViewOrNull(getStore), typeof focus === "string" ? focus : undefined);
+        return pruneEmptyResponseFields(stripResponseNoise(withNext)) ?? {};
+      },
+    };
   };
 }
 
-interface PruneOptions {
-  keepItemEmptyDependencies?: boolean;
+async function readViewOrNull(getStore: StoreProvider): Promise<SprintView | null> {
+  try {
+    return (await getStore()).read();
+  } catch {
+    return null;
+  }
+}
+
+function attachNextTools(value: unknown, view: SprintView | null, id?: string | undefined): unknown {
+  const suggestions = nextTools(view, { id });
+  if (!value || typeof value !== "object" || Array.isArray(value)) return { value, next_tools: suggestions };
+  if ("next_tools" in value) return value;
+  return { ...(value as Record<string, unknown>), next_tools: suggestions };
 }
 
 export type ToolHandlers = Record<string, ToolDef>;
@@ -55,16 +73,26 @@ export function buildToolHandlers(
   bindStore: StoreBinder = async () => getStore(),
   detachStore: StoreDetacher = () => undefined,
 ): ToolHandlers {
+  const def = makeDef(getStore);
   return {
+    info: def(S.InfoInput, "Startup orientation and compact sprint discovery before binding to one sprint.",
+      async (i) => infoPayload(i, getStore, dashboard)),
     sprint_new: def(S.SprintNewInput, "Start a sprint with explicit git_dir and a worktree-scoped, uncommitted data_dir; returns orientation.",
       async (i) => {
-        const store = await bindStore({ git_dir: i.git_dir, data_dir: i.data_dir });
-        return { ...store.createSprint(i.goal, i.context_notes), orientation: orientation(), dashboard: await dashboard.open() };
+        const store = await bindStore({ git_dir: i.git_dir, data_dir: defaultDataDir(i) });
+        const view = store.createSprint(i.goal, i.context_notes);
+        return { ...view, orientation: orientation(), briefing: briefing(view, store.listAllNotes()), dashboard: await dashboard.open() };
       }),
     sprint_resume: def(S.SprintResumeInput, "Resume an existing sprint by binding this MCP session to an existing git_dir and data_dir without creating a sprint.",
       async (i) => {
-        const store = await bindStore({ git_dir: i.git_dir, data_dir: i.data_dir });
-        return ack("sprint_resume", store.read(), { dashboard: await dashboard.open() });
+        const store = await bindStore({ git_dir: i.git_dir, data_dir: defaultDataDir(i) });
+        const view = store.read();
+        // Resuming is the context-loss path: return the state instead of making the agent re-derive it.
+        return ack("sprint_resume", view, {
+          briefing: briefing(view, store.listAllNotes()),
+          skills: orientation().skills,
+          dashboard: await dashboard.open(),
+        });
       }),
     sprint_detach: def(S.SprintDetachInput, "Detach this MCP session from its current Sprinty binding and stop the dashboard.",
       async () => {
@@ -72,16 +100,7 @@ export function buildToolHandlers(
         await detachStore();
         return { detached: true };
       }),
-    sprint_list: def(S.SprintListInput, "List existing sprint ledgers in a data_dir, or the current binding when already attached.",
-      async (i) => {
-        if (i.data_dir) return listSprints(i.data_dir);
-        try {
-          return listSprints((await getStore()).dataDir);
-        } catch {
-          return { current: null, sprints: [], hint: "Pass data_dir to inspect existing Sprinty ledgers while this MCP session is unbound." };
-        }
-      }),
-    sprint_close: def(S.SprintCloseInput, "Close the sprint after a programmatic re-check of all gates.",
+    sprint_close: def(S.SprintCloseInput, "Close the sprint after changelog({path?}) has generated the SemVer Markdown and after a programmatic re-check of all gates.",
       async (i) => {
         const view = (await getStore()).closeSprint(i);
         await dashboard.close();
@@ -100,8 +119,11 @@ export function buildToolHandlers(
       }),
     next: def(S.NextInput, "Compact work window for choosing the next item.",
       async (i) => {
-        const view = windowCurrent((await getStore()).read(), i.past, i.future ?? i.future_per_subsprint, { include_high_priority: i.include_high_priority });
-        return withHelp(renameCurrentWindow(view), view.current?.id ?? "sprint");
+        const view = windowCurrent((await getStore()).read(), i.past, i.future ?? i.future_per_subsprint, {
+          include_high_priority: i.include_high_priority,
+          ...(i.future === undefined ? {} : { future_total: i.future }),
+        });
+        return renameCurrentWindow(view);
       }),
     subsprint_new: def(S.SubsprintNewInput, "Create a subsprint (description, goals, gates).",
       async (i) => {
@@ -118,18 +140,23 @@ export function buildToolHandlers(
         return ack("item_add", result.view, { item: result.id });
       }),
     item_get: def(S.ItemGetInput, "Read one item with full untruncated detail.",
-      async (i) => itemGet((await getStore()).read(), i.id),
-      { keepItemEmptyDependencies: true }),
+      async (i) => itemGet((await getStore()).read(), i.id)),
     item_update: def(S.ItemUpdateInput, "Update item metadata: note, title, description, high_priority, and/or replacement dependency ids.",
       async (i) => {
         const store = await getStore();
         const view = store.updateItem({ target: i.id, note: i.note, title: i.title, description: i.description, high_priority: i.high_priority, dependencies: i.dependencies });
         return ack("item_update", view, { id: i.id });
       }),
-    item_done: def(S.ItemDoneInput, "Resolve an item as completed with commit id + gate results.",
+    item_done: def(S.ItemDoneInput, "Resolve an item as completed with a commit id and a semver changelog verb (added/fixed/changed/removed/deprecated/security). Sprinty runs the item's executable gates itself; only manual gates take agent-supplied gate_results.",
       async (i) => {
         const id = requiredId(i, "id", "item");
-        return ack("item_done", (await getStore()).done({ ...i, item: id }), { item: id, commit_id: i.commit_id, status: "completed" });
+        const { view, warning } = (await getStore()).done({ ...i, item: id });
+        return ack("item_done", view, {
+          item: id,
+          commit_id: i.commit_id,
+          status: "completed",
+          ...(warning ? { warning } : {}),
+        });
       }),
     item_split: def(S.ItemSplitInput, "Resolve an item as split, creating a seeded subsprint atomically.",
       async (i) => {
@@ -138,10 +165,10 @@ export function buildToolHandlers(
         const item = findItem(view, id);
         return ack("item_split", view, { item: id, subsprint: item?.spawned_subsprint ?? null });
       }),
-    item_deprecate: def(S.ItemDeprecateInput, "Resolve an item as deprecated with a reason.",
+    item_deprecate: def(S.ItemDeprecateInput, "Resolve an item as deprecated with a reason, or drop a whole subsprint by passing its id (its open items are deprecated too).",
       async (i) => {
         const id = requiredId(i, "id", "item");
-        return ack("item_deprecate", (await getStore()).deprecate({ item: id, reason: i.reason }), { item: id, status: "deprecated" });
+        return ack("item_deprecate", (await getStore()).deprecate({ target: id, reason: i.reason }), { id, status: "deprecated" });
       }),
     note_add: def(S.NoteInput, "Add a note to a specific item id. Notes are not substitutes for item_add(); create items for trackable work.",
       async (i) => {
@@ -177,16 +204,21 @@ export function buildToolHandlers(
     search: def(S.SearchInput, "Regex search over sprint text with character context around each match.",
       async (i) => {
         const allMatches = (await getStore()).search(i.pattern, i.context_size);
-        const matches = allMatches.slice(0, 20);
+        const matches = selectSearchMatches(allMatches, 10);
         return {
           info: "Compact search results. Use the tool_call on a row for full untruncated detail. If truncated is true, refine pattern.",
           matches,
           ...(allMatches.length > matches.length ? { truncated: true, total_matches: allMatches.length } : {}),
-          help: helpLine(i.pattern),
         };
       }),
-    changelog: def(S.ChangelogInput, "Render the sprint changelog as Markdown with change-map and coverage tables.",
-      async () => ({ markdown: (await getStore()).changelog() })),
+    changelog: def(S.ChangelogInput, "Generate the SemVer Markdown changelog and return only its path.",
+      async (i) => {
+        const store = await getStore();
+        const path = i.path ?? join(store.dataDir, "CHANGELOG.md");
+        mkdirSync(dirname(path), { recursive: true });
+        writeFileSync(path, store.changelog());
+        return { path };
+      }),
     dashboard_info: def(S.DashboardInfoInput, "Return the current dashboard URL and port without starting or restarting it.",
       async () => dashboard.info()),
     dashboard_restart: def(S.DashboardRestartInput, "Restart the follow-along dashboard and return its URL and port.",
@@ -201,41 +233,67 @@ function orientation(): { skills: string[]; how: string } {
       "One sprint per session. Build item-driven: subsprint_new -> item_add -> item_done/item_split/item_deprecate. " +
       "Start with explicit git_dir and a worktree-scoped, uncommitted data_dir, such as <git_dir>/.sprinty when it is gitignored, so Sprinty cannot bind to a temp MCP cwd or shared state. " +
       "Items need a short title, bounded description, code_locations, and gates; keep them atomic. Each subsprint should represent one feature. " +
-      "sprint_new and sprint_resume return a dashboard URL for the human; use dashboard_info to inspect it or dashboard_restart to refresh it. Resolve every item, then sprint_close re-runs gates.",
+      "sprint_new and sprint_resume return a dashboard URL for the human; use dashboard_info to inspect it or dashboard_restart to refresh it. Resolve every item, generate the SemVer Markdown with changelog({path?}), then sprint_close re-runs gates.",
   };
 }
 
 function ack(action: string, view: SprintView, extra: Record<string, unknown> = {}) {
   void view;
   assertNoDuplicateIdentifierAliases(extra);
+  return { ok: true, action, ...extra };
+}
+
+async function infoPayload(
+  input: z.infer<typeof S.InfoInput>,
+  getStore: StoreProvider,
+  dashboard: DashboardController,
+) {
   return {
-    ok: true,
-    action,
-    ...extra,
-    help: helpLine(helpTarget(extra)),
+    info: "Startup orientation and compact sprint discovery.",
+    startup: [
+      "Call info({ data_dir }) to inspect one Sprinty data directory without binding.",
+      "Call info({ workspace_dirs: [...] }) to inspect multiple Sprinty data directories as one workspace.",
+      "Call sprint_resume({ git_dir, data_dir }) with a listed row's data_dir to reattach without creating a new sprint.",
+      "Call sprint_new({ goal, git_dir, data_dir, context_notes }) only when no suitable active sprint exists.",
+      "After binding, call overview() for sprint shape or next() for the active work window.",
+    ],
+    tools: [
+      "info",
+      "sprint_resume",
+      "sprint_new",
+      "sprint_detach",
+      "overview",
+      "next",
+      "subsprint_new",
+      "item_add",
+      "item_done",
+      "changelog",
+      "sprint_close",
+    ],
+    help: {
+      resume: "Choose a row from sprints, then call sprint_resume({ git_dir, data_dir }) using the row's data_dir and the repository git_dir.",
+      create: "If no existing row matches the work, call sprint_new({ goal, git_dir, data_dir, context_notes }) with a worktree-local gitignored data_dir such as <git_dir>/.sprinty.",
+    },
+    dashboard: await dashboard.info(),
+    ...(await infoSprintListing(input, getStore)),
   };
 }
 
-function helpTarget(extra: Record<string, unknown>): string {
-  return String(extra.id ?? extra.item ?? extra.subsprint ?? extra.artifact ?? extra.note ?? "sprint");
+async function infoSprintListing(input: z.infer<typeof S.InfoInput>, getStore: StoreProvider) {
+  if (input.workspace_dirs?.length) return listWorkspaceSprints(input.workspace_dirs);
+  if (input.data_dir || input.git_dir) return listSprints(defaultDataDir(input));
+  try {
+    const store = await getStore();
+    return listSprints(store.dataDir);
+  } catch {
+    return { hint: "Pass data_dir or workspace_dirs to inspect existing Sprinty ledgers while this MCP session is unbound." };
+  }
 }
 
-function helpLine(target: string) {
-  const item = itemTarget(target);
-  const subsprint = subsprintTarget(target);
-  const overviewCall = target === "sprint" ? "overview()" : `item_get({ id: "${item}" })`;
-  return `Help: use next({}) for the active work window; ${overviewCall} for focused detail; subsprint_get({ id: "${subsprint}" }) for a subsprint's item list; note_list({ id: "${item}" }) for item notes; search({ pattern: "${target}", context_size: 512 }) for text matches; item_add({ subsprint: "${subsprint}", ... }) or subsprint_new({ ... }) for new tracked work; item_split({ id: "${item}", ... }) if the item is too large; item_done({ id: "${item}", commit_id, gate_results, changelog }) when complete; read skills using-sprinty and how-to-run-a-sprint for the full command workflow.`;
-}
-
-function withHelp(value: unknown, target: string): unknown {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return { value, help: helpLine(target) };
-  return { ...(value as Record<string, unknown>), help: helpLine(target) };
-}
-
-function ensureHelp(value: unknown, target: string): unknown {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return { value, help: helpLine(target) };
-  if ("help" in value) return value;
-  return { ...(value as Record<string, unknown>), help: helpLine(target) };
+function defaultDataDir(input: { git_dir?: string | undefined; data_dir?: string | undefined }): string {
+  if (input.data_dir) return input.data_dir;
+  if (input.git_dir) return join(input.git_dir, ".sprinty");
+  throw new Error("Missing data_dir. Pass data_dir, or pass git_dir to use <git_dir>/.sprinty.");
 }
 
 function assertNoDuplicateIdentifierAliases(extra: Record<string, unknown>) {
@@ -262,14 +320,14 @@ function overview(view: SprintView, store: SprintStore) {
   return {
     info: "Compact overview. Use subsprint_get({ id }) for item rows, item_get({ id }), note_get({ id }), or artifact_get({ id }) for full untruncated detail.",
     title: view.goal,
-    details: view.context_notes.map((note) => truncate(note, 240)),
+    details: view.context_notes.slice(0, 4).map((note) => truncate(note, 180)),
     notes: overviewNotes(view, store),
-    artifacts: artifactRows(view),
+    artifacts: artifactRows(view).slice(-10).reverse(),
     subsprints: view.subsprints.map((sub) => ({
       id: sub.id,
-      title: truncate(sub.description, 160),
+      title: truncate(sub.description, 120),
       status: sub.status,
-      dependencies: sub.dependencies,
+      dependency_count: sub.dependencies.length,
       item_counts: itemCounts(view, sub.items),
     })),
   };
@@ -279,26 +337,87 @@ function overviewNotes(view: SprintView, store: SprintStore) {
   const itemIds = new Set(view.subsprints.flatMap((sub) => sub.items.map((item) => item.id)));
   return store.listAllNotes()
     .filter((note) => itemIds.has(note.item))
+    .slice(-10)
+    .reverse()
     .map((note) => ({
       id: note.id,
       item: note.item,
-      text: truncate(note.text, 160),
-    }))
-    .slice(0, 20);
+      text: truncate(note.text, 120),
+    }));
 }
 
 function renameCurrentWindow(view: ReturnType<typeof windowCurrent>) {
+  const proposed = view.next.map(compactNextQueueRow);
+  const proposedIds = new Set(proposed.map((item) => item.id));
   return {
-    info: "Compact work window. Use item_get({ id }), subsprint_get({ id }), note_get({ id }), or artifact_get({ id }) for full untruncated detail.",
+    info: "Compact work window. Use item_get, subsprint_get, note_get, or artifact_get for full detail.",
     last_resolved: view.last_resolved,
-    item: view.current,
-    next: view.next,
+    item: view.current ? compactNextQueueRow(view.current) : null,
+    next: proposed,
     blocked: view.blocked_open,
-    current_subsprint: view.current_subsprint,
+    current_subsprint: view.current_subsprint ? compactNextSubsprintRow(view.current_subsprint) : null,
     relations: view.relations,
     artifacts: view.artifacts,
     recent_artifacts: view.recent_artifacts,
-    recent: view.recent_activity,
+    items_with_notes: compactNotePressure(view.items_with_notes),
+    recent: view.recent_activity.filter((entry) => !proposedIds.has(entry.id)),
+  };
+}
+
+function compactNotePressure(pressure: ReturnType<typeof windowCurrent>["items_with_notes"]) {
+  return {
+    open_count: pressure.open_count,
+    budget: pressure.open_budget,
+    ...(pressure.pressure ? { pressure: "Close or split noted items before adding notes elsewhere." } : {}),
+    ...(pressure.truncated ? { truncated: true } : {}),
+    items: pressure.items.map((item) => ({
+      id: item.id,
+      title: truncate(item.title, 56),
+      notes: item.note_count,
+      ...(item.over_item_note_budget ? { over_budget: true } : {}),
+    })),
+  };
+}
+
+function selectSearchMatches(matches: SearchMatch[], limit: number): SearchMatch[] {
+  const selected: SearchMatch[] = [];
+  const seen = new Set<string>();
+  const add = (match: SearchMatch) => {
+    const key = `${match.type}:${match.id}:${match.tool_call}:${match.text}`;
+    if (selected.length >= limit || seen.has(key)) return;
+    selected.push(match);
+    seen.add(key);
+  };
+
+  for (const type of ["sprint", "subsprint", "item", "note", "artifact", "update", "dependency", "follow_up"]) {
+    const source = type === "note" || type === "artifact" || type === "update" ? [...matches].reverse() : matches;
+    const match = source.find((candidate) => candidate.type === type);
+    if (match) add(match);
+  }
+  for (const match of matches) add(match);
+  return selected;
+}
+
+function compactNextQueueRow(item: ReturnType<typeof windowCurrent>["next"][number]) {
+  return {
+    id: item.id,
+    subsprint_id: item.subsprint_id,
+    title: item.title,
+    high_priority: item.high_priority,
+    status: item.status,
+    dependencies: item.dependencies,
+  };
+}
+
+function compactNextSubsprintRow(sub: NonNullable<ReturnType<typeof windowCurrent>["current_subsprint"]>) {
+  return {
+    id: sub.id,
+    description: truncate(sub.description, 100),
+    status: sub.status,
+    dependencies: sub.dependencies,
+    goal_count: sub.goals.length,
+    gate_count: sub.gates.length,
+    note_count: sub.notes.length,
   };
 }
 
@@ -327,7 +446,7 @@ function subsprintGet(view: SprintView, id: string) {
   const sub = view.subsprints.find((candidate) => candidate.id === id);
   if (!sub) throw new Error(`Unknown subsprint ${id}.`);
   return {
-    info: "Full subsprint detail. Use item_get({ id }) for full untruncated item detail.",
+    info: "Full subsprint detail with compact item rows. Use item_get({ id }) for full untruncated item detail.",
     id: sub.id,
     title: sub.description,
     status: sub.status,
@@ -337,9 +456,8 @@ function subsprintGet(view: SprintView, id: string) {
     items: sub.items.map((item) => ({
       id: item.id,
       title: item.title,
-      description: item.description,
       status: item.status,
-      dependencies: item.dependencies,
+      dependency_count: item.dependencies.length,
     })),
   };
 }
@@ -356,9 +474,13 @@ function itemGet(view: SprintView, id: string) {
     status: item.status,
     dependencies: item.dependencies,
     code_locations: item.code_locations,
+    ...(item.actual_code_locations.length ? { actual_code_locations: item.actual_code_locations } : {}),
+    ...(item.undeclared_code_locations.length ? { undeclared_code_locations: item.undeclared_code_locations } : {}),
     gates: item.gates,
-    updates: item.updates,
-    notes: item.notes,
+    updates: compactStrings(item.updates, 5, 160),
+    notes: compactStrings(item.notes, 5, 160),
+    note_count: item.notes.length,
+    update_count: item.updates.length,
     commit_id: item.commit_id,
     gate_results: item.gate_results,
     reason: item.reason,
@@ -367,10 +489,16 @@ function itemGet(view: SprintView, id: string) {
   };
 }
 
+function compactStrings(values: string[], maxRows: number, maxChars: number): string[] {
+  return values.slice(-maxRows).reverse().map((value) => truncate(value, maxChars));
+}
+
 function noteList(store: SprintStore, id: string) {
+  const notes = store.listNotes(id);
   return {
     info: "Compact view. Use note_get({ id }) for full untruncated detail.",
-    notes: store.listNotes(id).map((note) => ({ id: note.id, text: truncate(note.text, 160) })),
+    total_notes: notes.length,
+    notes: notes.slice(-5).reverse().map((note) => ({ id: note.id, text: truncate(note.text, 120) })),
   };
 }
 
@@ -422,16 +550,6 @@ function artifactGet(view: SprintView, id: string, full = false) {
   };
 }
 
-function itemTarget(target: string): string {
-  return /^S\d{2}-\d{3}$/.test(target) ? target : "S01-001";
-}
-
-function subsprintTarget(target: string): string {
-  const itemMatch = /^(S\d{2})-\d{3}$/.exec(target);
-  if (itemMatch) return itemMatch[1]!;
-  return /^S\d{2}$/.test(target) ? target : "S01";
-}
-
 function findItem(view: SprintView, itemId: string): ItemView | undefined {
   return view.subsprints.flatMap((sub) => sub.items).find((item) => item.id === itemId);
 }
@@ -450,9 +568,9 @@ function stripResponseNoise(value: unknown): unknown {
   );
 }
 
-function pruneEmptyResponseFields(value: unknown, options: PruneOptions = {}): unknown {
+function pruneEmptyResponseFields(value: unknown): unknown {
   if (Array.isArray(value)) {
-    const entries = value.map((entry) => pruneEmptyResponseFields(entry, options)).filter((entry) => entry !== undefined);
+    const entries = value.map((entry) => pruneEmptyResponseFields(entry)).filter((entry) => entry !== undefined);
     return entries.length > 0 ? entries : undefined;
   }
   if (!value || typeof value !== "object") {
@@ -462,22 +580,23 @@ function pruneEmptyResponseFields(value: unknown, options: PruneOptions = {}): u
   const source = value as Record<string, unknown>;
   const entries = Object.entries(source)
     .map(([key, child]) => {
-      const pruned = pruneEmptyResponseFields(child, options);
-      if (options.keepItemEmptyDependencies && pruned === undefined && key === "dependencies" && isItemId(source.id) && Array.isArray(child)) return [key, []] as const;
+      const pruned = pruneEmptyResponseFields(child);
       return [key, pruned] as const;
     })
     .filter(([, child]) => child !== undefined);
   return entries.length > 0 ? Object.fromEntries(entries) : undefined;
 }
 
-function isItemId(value: unknown): boolean {
-  return typeof value === "string" && /^S\d{2}-\d{3}$/.test(value);
-}
-
 interface SprintListResult {
   data_dir: string;
   current: string | null;
-  sprints: Array<{ id: string; title: string; status: string; items: { open: number; closed: number; blocked: number } }>;
+  sprints: Array<{ id: string; title: string; created: string; status: string; items: { open: number; closed: number; blocked: number } }>;
+}
+
+interface WorkspaceSprintListResult {
+  workspace_dirs: string[];
+  data_dirs: Array<{ data_dir: string; current: string | null; sprint_count: number }>;
+  sprints: Array<{ data_dir: string; id: string; title: string; created: string; status: string; items: { open: number; closed: number; blocked: number } }>;
 }
 
 const sprintListCache = new Map<string, { signature: string; result: SprintListResult }>();
@@ -506,6 +625,25 @@ function listSprints(dataDir: string): SprintListResult {
   return result;
 }
 
+function listWorkspaceSprints(dataDirs: string[]): WorkspaceSprintListResult {
+  const seen = new Set<string>();
+  const uniqueDataDirs = dataDirs.filter((dataDir) => {
+    if (seen.has(dataDir)) return false;
+    seen.add(dataDir);
+    return true;
+  });
+  const listed = uniqueDataDirs.map(listSprints);
+  return {
+    workspace_dirs: uniqueDataDirs,
+    data_dirs: listed.map((entry) => ({
+      data_dir: entry.data_dir,
+      current: entry.current,
+      sprint_count: entry.sprints.length,
+    })),
+    sprints: listed.flatMap((entry) => entry.sprints.map((sprint) => ({ data_dir: entry.data_dir, ...sprint }))),
+  };
+}
+
 function sprintListSignature(dataDir: string, current: string | null, ledgerIds: string[]): string {
   return [
     current ?? "",
@@ -516,7 +654,7 @@ function sprintListSignature(dataDir: string, current: string | null, ledgerIds:
   ].join("|");
 }
 
-function sprintListRow(id: string, view: SprintView): { id: string; title: string; status: string; items: { open: number; closed: number; blocked: number } } {
+function sprintListRow(id: string, view: SprintView): { id: string; title: string; created: string; status: string; items: { open: number; closed: number; blocked: number } } {
   const items = view.subsprints.flatMap((sub) => sub.items);
   const statusById = new Map(view.graph.nodes.map((node) => [node.id, node.status]));
   const blocked = items.filter((item) => {
@@ -527,6 +665,7 @@ function sprintListRow(id: string, view: SprintView): { id: string; title: strin
   return {
     id,
     title: truncate(view.goal, 120),
+    created: view.created_at,
     status: view.status,
     items: {
       open: items.filter((item) => item.status === "open").length,
