@@ -160,7 +160,7 @@ describe("deriveDashboardModel", () => {
     expect(model.nextItem?.id).toBe("S02-002");
     expect(model.progress.items).toEqual({ total: 3, done: 1, open: 2, percent: 33 });
     expect(model.progress.statuses).toEqual({ total: 3, completed: 1, open: 2, split: 0, deprecated: 0 });
-    expect(model.progress.gates).toEqual({ total: 4, passed: 2, failed: 0, pending: 2 });
+    expect(model.progress.gates).toEqual({ total: 4, passed: 2, failed: 0, unverified: 0, pending: 2 });
     expect(model.progress.code).toEqual({ files: 0, additions: 0, deletions: 0, net: 0, churn: 0, hotspots: 0 });
     expect(model.artifacts.active).toEqual([]);
     expect(model.tree[0]!.tone).toBe("done");
@@ -265,5 +265,54 @@ describe("deriveDashboardModel", () => {
     const model = deriveDashboardModel(sprint);
 
     expect(model.tree[1]!.items[0]!.label).toBe("Choose and codify Svelte Tailwind dashboard component primitives for agents.");
+  });
+});
+
+describe("gate reporting surfaces what Sprinty actually ran", () => {
+  function itemWithResults(results: SprintView["subsprints"][number]["items"][number]["gate_results"]) {
+    const view = sprintView();
+    view.subsprints[0]!.items = [];
+    const item = view.subsprints[1]!.items[0]!;
+    view.subsprints[1]!.items = [item];
+    item.gates = [{ kind: "test", spec: "npm test" }, { kind: "test", spec: "just bench" }];
+    item.gate_results = results;
+    return deriveDashboardModel(view);
+  }
+
+  it("counts a timed-out gate as unverified, not as a failure", () => {
+    const model = itemWithResults([
+      { kind: "test", spec: "npm test", passed: true, evidence: "ok" },
+      { kind: "test", spec: "just bench", passed: false, evidence: "Gate timed out after 5000ms.", timed_out: true },
+    ]);
+    expect(model.progress.gates).toMatchObject({ passed: 1, failed: 0, unverified: 1 });
+  });
+
+  it("still counts a gate that ran and genuinely failed", () => {
+    const model = itemWithResults([
+      { kind: "test", spec: "npm test", passed: false, evidence: "1 failing" },
+      { kind: "test", spec: "just bench", passed: true, evidence: "ok" },
+    ]);
+    expect(model.progress.gates).toMatchObject({ passed: 1, failed: 1, unverified: 0 });
+  });
+
+  it("names the unverified state in the per-item summary so it is actionable", () => {
+    const model = itemWithResults([
+      { kind: "test", spec: "npm test", passed: true, evidence: "ok" },
+      { kind: "test", spec: "just bench", passed: false, evidence: "Gate timed out after 5000ms.", timed_out: true },
+    ]);
+    const row = model.tree.flatMap((sub) => sub.items).find((item) => item.gateSummary.includes("unverified"));
+    expect(row?.gateSummary).toContain("1 unverified");
+  });
+
+  it("exposes each gate result so the dashboard can show spec and evidence, not just a count", () => {
+    const model = itemWithResults([
+      { kind: "test", spec: "npm test", passed: true, evidence: "42 passing" },
+      { kind: "test", spec: "just bench", passed: false, evidence: "Gate timed out after 5000ms.", timed_out: true },
+    ]);
+    const rows = model.tree.flatMap((sub) => sub.items).flatMap((item) => item.gateRows);
+    expect(rows).toEqual(expect.arrayContaining([
+      expect.objectContaining({ spec: "npm test", state: "passed", evidence: "42 passing" }),
+      expect.objectContaining({ spec: "just bench", state: "unverified" }),
+    ]));
   });
 });

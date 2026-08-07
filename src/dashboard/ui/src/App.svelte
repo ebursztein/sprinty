@@ -19,7 +19,7 @@
   import DOMPurify from "dompurify";
   import { marked } from "marked";
   import { buildCompletionSummary, buildEventBuckets, parseTs, recentTimelineWindow, type CompletionRatePoint, type CompletionSummary, type EventBucket } from "../chart-windows";
-  import { deriveDashboardModel, filterLedgerRows, ledgerVerbIcon, statusDotClass, statusPillClass, type DashboardModel, type LedgerEntity, type LedgerRow, type LedgerVerb, type TreeSubsprint } from "../model";
+  import { deriveDashboardModel, filterLedgerRows, gateRows, gateSummary, ledgerVerbIcon, statusDotClass, statusPillClass, type DashboardModel, type GateRow, type LedgerEntity, type LedgerRow, type LedgerVerb, type TreeSubsprint } from "../model";
   import SummaryIcon from "./SummaryIcon.svelte";
   import type { ArtifactView, ItemView, SprintView } from "../../../domain/projection";
 
@@ -241,11 +241,8 @@
     return classes.join(" ");
   }
 
-  function gateSummary(item: ItemView): string {
-    const passed = item.gate_results.filter((gate) => gate.passed).length;
-    const failed = item.gate_results.filter((gate) => !gate.passed).length;
-    const pending = Math.max(0, item.gates.length - passed - failed);
-    return `${passed}/${item.gates.length} passed${failed ? `, ${failed} failed` : ""}${pending ? `, ${pending} pending` : ""}`;
+  function gateStateLabel(state: GateRow["state"]): string {
+    return state === "unverified" ? "too slow" : state;
   }
 
   function targetLabel(artifact: ArtifactView): string {
@@ -878,6 +875,20 @@
                       <div class="detail-grid">
                         <div><span>Files</span><strong>{item.code_locations.join(", ")}</strong></div>
                         <div><span>Gates</span><strong>{gateSummary(item)}</strong></div>
+                        {#if item.gates.length}
+                          <div class="gate-rows">
+                            <span>Gate runs</span>
+                            <strong>
+                              {#each gateRows(item) as gate}
+                                <span class="gate-row gate-{gate.state}">
+                                  <span class="gate-state">{gateStateLabel(gate.state)}</span>
+                                  <code class="gate-spec">{gate.kind}: {gate.spec}{gate.cwd ? ` (in ${gate.cwd})` : ""}</code>
+                                  {#if gate.evidence}<span class="gate-evidence">{gate.evidence.slice(0, 300)}</span>{/if}
+                                </span>
+                              {/each}
+                            </strong>
+                          </div>
+                        {/if}
                         {#if item.dependencies.length}
                           <div>
                             <span>Depends on</span>

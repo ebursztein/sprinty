@@ -890,3 +890,48 @@ button {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* Gate runs: Sprinty executes gates itself, so the human sees what ran, not just a count. */
+.gate-rows strong {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.gate-row {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.4rem;
+  align-items: baseline;
+  font-weight: 400;
+}
+.gate-state {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 0.05rem 0.35rem;
+  border-radius: 0.25rem;
+  white-space: nowrap;
+  @apply bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300;
+}
+.gate-passed .gate-state {
+  @apply bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300;
+}
+.gate-failed .gate-state {
+  @apply bg-rose-50 text-rose-700 dark:bg-rose-950/30 dark:text-rose-300;
+}
+/* Killed on the item budget: nothing was proven, which is not the same as a failure. */
+.gate-unverified .gate-state {
+  @apply bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-300;
+}
+.gate-spec {
+  font-size: 0.75rem;
+  word-break: break-all;
+  @apply text-zinc-600 dark:text-zinc-300;
+}
+.gate-evidence {
+  grid-column: 2;
+  font-size: 0.7rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+  @apply text-zinc-500 dark:text-zinc-400;
+}
