@@ -16,7 +16,7 @@ const commitId = process.env.SPRINTY_STATS_COMMIT ?? execFileSync("git", ["rev-p
 const item = "S03-008";
 const subsprint = "S03";
 const openSubsprint = "S03";
-const miniGate = { kind: "command", spec: "true" };
+const miniGate = { kind: "command", spec: "git rev-parse HEAD" };
 const seedMiniSprint = [
   ["sprint_new", { goal: "Response stats sprint", git_dir: gitDir, data_dir: "$dataDir" }],
   ["subsprint_new", { description: "Response stats subsprint", goals: ["Measure response sizes"], gates: [miniGate] }],
@@ -37,7 +37,7 @@ const samples = [
   ["next", { mode: "copy", args: { past: 1, future: 3 } }],
   ["subsprint_list", { mode: "copy", args: {} }],
   ["subsprint_get", { mode: "copy", args: { id: subsprint } }],
-  ["subsprint_new", { mode: "copy", args: { description: "Response stats subsprint", goals: ["Measure response sizes"], gates: [{ kind: "command", spec: "true" }] } }],
+  ["subsprint_new", { mode: "copy", args: { description: "Response stats subsprint", goals: ["Measure response sizes"], gates: [{ kind: "command", spec: "git rev-parse HEAD" }] } }],
   ["item_get", { mode: "copy", args: { id: item } }],
   ["item_add", { mode: "copy", args: { subsprint: openSubsprint, title: "Response stats item", description: "Measure one representative response size for item_add.", code_locations: ["scripts/response-stats.mjs"], gates: [miniGate] } }],
   ["item_update", { mode: "copy", args: { id: item, note: "Response stats update attached to the current Capsem item." } }],
