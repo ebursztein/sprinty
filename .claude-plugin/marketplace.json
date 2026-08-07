@@ -10,7 +10,7 @@
       "name": "sprinty",
       "source": "./clients/claude",
       "description": "Disciplined sprint workflow with Sprinty skills and the sprinty-mcp server.",
-      "version": "0.1.16",
+      "version": "0.1.17",
       "author": {
         "name": "Elie Bursztein",
         "url": "https://github.com/ebursztein"

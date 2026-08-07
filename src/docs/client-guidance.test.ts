@@ -106,6 +106,31 @@ describe("client guidance", () => {
     }
   });
 
+  it("ships a conformant Agent Plugins package at the repo root", () => {
+    // Cursor, VS Code, Kiro, Copilot and Codex load this portable format; Claude Code does not,
+    // which is why clients/claude stays. skills/ is already where the standard wants it, so the
+    // root package adds two manifests rather than a fourth copy of the skills.
+    const plugin = JSON.parse(readFileSync("plugin.json", "utf8")) as Record<string, unknown>;
+    const mcp = JSON.parse(readFileSync("mcp.json", "utf8")) as {
+      $schema: string;
+      mcpServers: Record<string, { type: string; command: string; args: string[] }>;
+    };
+    const pkg = JSON.parse(readFileSync("package.json", "utf8")) as { version: string };
+
+    expect(plugin.$schema).toBe("https://agent-plugins.org/schemas/1.0.0/plugin.schema.json");
+    expect(plugin.name).toMatch(/^(?!.*(?:--|\.\.))[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?$/);
+    expect(plugin.version).toBe(pkg.version);
+
+    expect(mcp.$schema).toBe("https://agent-plugins.org/schemas/1.0.0/mcp.schema.json");
+    expect(Object.keys(mcp)).toEqual(["$schema", "mcpServers"]);
+    const server = mcp.mcpServers.sprinty!;
+    expect(server.type).toBe("stdio");
+    // The spec requires one executable token here, not a shell command line.
+    expect(server.command).not.toMatch(/[\s&|;]/);
+
+    expect(lstatSync("skills").isDirectory()).toBe(true);
+  });
+
   it("packages Claude and Codex plugin skills as real directories", () => {
     for (const path of ["clients/claude/skills", "plugins/sprinty/skills"]) {
       expect(lstatSync(path).isSymbolicLink(), path).toBe(false);
