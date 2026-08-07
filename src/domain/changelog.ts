@@ -46,7 +46,7 @@ export function renderChangelogMarkdown(sprint: SprintView): string {
   lines.push("## Change Map", "");
   appendChangeMap(lines, sprint.change_map);
 
-  for (const sub of sprint.subsprints.filter((s) => s.kind !== "spike")) {
+  for (const sub of sprint.subsprints) {
     lines.push("", `### Subsprint ${sub.id}: ${sub.description}`, "");
     appendChangeMap(lines, sub.change_map);
   }

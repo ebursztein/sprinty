@@ -44,7 +44,6 @@ export interface WorkItemRow {
 
 export interface CurrentSubsprintRow {
   id: string;
-  kind: SubsprintView["kind"];
   description: string;
   status: SubsprintView["status"];
   goals: string[];
@@ -126,7 +125,6 @@ function compactWorkItem(item: ItemView): WorkItemRow {
 function compactCurrentSubsprint(sub: SubsprintView): CurrentSubsprintRow {
   return {
     id: sub.id,
-    kind: sub.kind,
     description: sub.description,
     status: sub.status,
     goals: sub.goals,

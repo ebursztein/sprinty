@@ -88,7 +88,7 @@ describe("LedgerEvent", () => {
     expect(deprecated.type).toBe("artifact_deprecated");
   });
 
-  it("parses follow-up and spike events", () => {
+  it("parses follow-up events", () => {
     expect(LedgerEvent.parse({
       ...base,
       type: "follow_up_added",
@@ -97,12 +97,6 @@ describe("LedgerEvent", () => {
       description: "Fix flaky dashboard load",
       bug_ids: ["BUG-123"],
     }).type).toBe("follow_up_added");
-    expect(LedgerEvent.parse({
-      ...base,
-      type: "spike_concluded",
-      subsprint_id: "S02",
-      conclusion: "Use the existing subsprint projection with a spike flag.",
-    }).type).toBe("spike_concluded");
     expect(LedgerEvent.parse({
       ...base,
       type: "subsprint_deprecated",

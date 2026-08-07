@@ -122,17 +122,7 @@ export class SprintStore {
     const id = mintSubsprintId(s.subsprints.length);
     const dependencies = input.dependencies ?? [];
     this.validateDependencyAddition(s, id, dependencies, { allowNewTarget: true, newTarget: { id, kind: "subsprint", label: input.description, status: "open" } });
-    this.append({ type: "subsprint_created", subsprint_id: id, description: input.description, goals: input.goals, gates: input.gates, spawned_from_item: null, dependencies, kind: "feature" });
-    return { id, view: this.requireState() };
-  }
-
-  createSpike(input: { description: string; goals: string[]; gates: Gate[]; dependencies?: string[] }): { id: string; view: SprintView } {
-    const s = this.requireActiveState();
-    this.validateGates(input.gates);
-    const id = mintSubsprintId(s.subsprints.length);
-    const dependencies = input.dependencies ?? [];
-    this.validateDependencyAddition(s, id, dependencies, { allowNewTarget: true, newTarget: { id, kind: "subsprint", label: input.description, status: "open" } });
-    this.append({ type: "subsprint_created", subsprint_id: id, description: input.description, goals: input.goals, gates: input.gates, spawned_from_item: null, dependencies, kind: "spike" });
+    this.append({ type: "subsprint_created", subsprint_id: id, description: input.description, goals: input.goals, gates: input.gates, spawned_from_item: null, dependencies });
     return { id, view: this.requireState() };
   }
 
@@ -230,7 +220,7 @@ export class SprintStore {
     const dependencies = input.dependencies ?? [];
     this.validateDependencyAddition(s, newId, dependencies, { allowNewTarget: true, newTarget: { id: newId, kind: "subsprint", label: input.description, status: "open" } });
     this.append({ type: "item_resolved", item_id: input.item, disposition: "split", commit_id: null, gate_results: [], spawned_subsprint: newId, reason: null, changelog: null, change_map: emptyChangeMap() });
-    this.append({ type: "subsprint_created", subsprint_id: newId, description: input.description, goals: input.goals, gates: input.gates, spawned_from_item: input.item, dependencies, kind: "feature" });
+    this.append({ type: "subsprint_created", subsprint_id: newId, description: input.description, goals: input.goals, gates: input.gates, spawned_from_item: input.item, dependencies });
     return this.requireState();
   }
 
@@ -246,10 +236,9 @@ export class SprintStore {
   }
 
   private deprecateSubsprint(sub: SprintView["subsprints"][number], reason: string): SprintView {
-    const label = sub.kind === "spike" ? "Spike" : "Subsprint";
-    if (sub.status === "deprecated") throw new StoreError(`${label} ${sub.id} is already deprecated.`);
-    if (sub.status === "closed") throw new StoreError(sub.kind === "spike" ? `Spike ${sub.id} is already concluded.` : `Subsprint ${sub.id} is already closed.`);
-    if (!reason.trim()) throw new StoreError(`${label} deprecation requires a reason.`);
+    if (sub.status === "deprecated") throw new StoreError(`Subsprint ${sub.id} is already deprecated.`);
+    if (sub.status === "closed") throw new StoreError(`Subsprint ${sub.id} is already closed.`);
+    if (!reason.trim()) throw new StoreError("Subsprint deprecation requires a reason.");
     for (const item of sub.items.filter((child) => child.status === "open")) {
       this.append({
         type: "item_resolved",
@@ -258,7 +247,7 @@ export class SprintStore {
         commit_id: null,
         gate_results: [],
         spawned_subsprint: null,
-        reason: `${label} ${sub.id} deprecated: ${reason}`,
+        reason: `Subsprint ${sub.id} deprecated: ${reason}`,
         changelog: null,
         change_map: emptyChangeMap(),
       });
@@ -354,27 +343,6 @@ export class SprintStore {
     return { id, view: this.requireState() };
   }
 
-  concludeSpike(input: { subsprint: string; conclusion: string }): SprintView {
-    const s = this.requireActiveState();
-    const sub = s.subsprints.find((x) => x.id === input.subsprint);
-    if (!sub) throw new StoreError(`Unknown subsprint ${input.subsprint}.`);
-    if (sub.kind !== "spike") throw new StoreError(`Subsprint ${input.subsprint} is not a spike.`);
-    if (sub.status === "deprecated") throw new StoreError(`Spike ${input.subsprint} is deprecated.`);
-    if (sub.status === "closed") throw new StoreError(`Spike ${input.subsprint} is already concluded.`);
-    if (sub.items.some((item) => item.status === "open")) throw new StoreError(`Spike ${input.subsprint} still has open items.`);
-    if (!input.conclusion.trim()) throw new StoreError("Spike conclusion is required.");
-    this.append({ type: "spike_concluded", subsprint_id: input.subsprint, conclusion: input.conclusion });
-    return this.requireState();
-  }
-
-  deprecateSpike(input: { subsprint: string; reason: string }): SprintView {
-    const s = this.requireActiveState();
-    const sub = s.subsprints.find((x) => x.id === input.subsprint);
-    if (!sub) throw new StoreError(`Unknown subsprint ${input.subsprint}.`);
-    if (sub.kind !== "spike") throw new StoreError(`Subsprint ${input.subsprint} is not a spike.`);
-    return this.deprecateSubsprint(sub, input.reason);
-  }
-
   search(pattern: string, contextSize: number): SearchMatch[] {
     return searchLedger(this.currentEvents(), pattern, contextSize);
   }
@@ -426,10 +394,8 @@ export class SprintStore {
       }
     }
     for (const sub of s.subsprints) {
-      if (sub.kind === "spike" && sub.status === "open") blockers.push(`Spike ${sub.id} is unresolved and requires a conclusion; use spike_conclude or deprecate it with spike_deprecate.`);
-      if (sub.kind === "spike" && sub.status === "closed" && !sub.spike_conclusion) blockers.push(`Spike ${sub.id} closed without a conclusion.`);
       // A subsprint that never got items stays open forever; its items cannot report it as a blocker.
-      if (sub.kind !== "spike" && sub.status === "open" && sub.items.length === 0) {
+      if (sub.status === "open" && sub.items.length === 0) {
         blockers.push(`Subsprint ${sub.id} has no items and is unresolved. Add items with item_add(), or drop it with item_deprecate({ id: "${sub.id}", reason }).`);
       }
     }

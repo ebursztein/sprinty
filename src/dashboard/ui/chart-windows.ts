@@ -111,7 +111,6 @@ export function eventAction(entry: TimelineEntry): string | null {
     entry.type === "sprint_archived" ||
     entry.type === "item_resolved" ||
     entry.type === "artifact_deprecated" ||
-    entry.type === "spike_concluded" ||
     entry.type === "subsprint_deprecated"
   ) return "closed";
 

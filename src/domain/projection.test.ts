@@ -149,30 +149,6 @@ describe("project", () => {
     expect(s.subsprints[0]!.items[0]!.follow_ups[0]!.bug_ids).toEqual(["BUG-7"]);
   });
 
-  it("projects spike subsprints and keeps them out of the changelog", () => {
-    const itemOnlyEvents: LedgerEvent[] = [
-      ev({ type: "sprint_created", goal: "g", worktree: "/w", branch: "main", dir: "/r" }, 0),
-      ev({ type: "subsprint_created", subsprint_id: "S01", description: "Spike idea", goals: ["learn"], gates: [{ kind: "build", spec: "git rev-parse HEAD" }], spawned_from_item: null, kind: "spike" } as never, 1),
-      ev({ type: "item_added", item_id: "S01-001", subsprint_id: "S01", description: "try it", code_locations: ["a.ts"], gates: [{ kind: "command", spec: "git rev-parse HEAD" }] }, 2),
-      ev({ type: "item_resolved", item_id: "S01-001", disposition: "completed", commit_id: "deadbeef", gate_results: [{ kind: "command", spec: "git rev-parse HEAD", passed: true, evidence: "ok" }], spawned_subsprint: null, reason: null, changelog: { verb: "added", line: "Added spike-only finding." } } as never, 3),
-    ];
-    const itemOnly = project(itemOnlyEvents)!;
-    expect(itemOnly.subsprints[0]!.kind).toBe("spike");
-    expect(itemOnly.subsprints[0]!.status).toBe("open");
-    expect(itemOnly.subsprints[0]!.items[0]!.status).toBe("completed");
-    expect(itemOnly.subsprints[0]!.changelog).toEqual([]);
-    expect(itemOnly.changelog).toEqual([]);
-
-    const events: LedgerEvent[] = [
-      ...itemOnlyEvents,
-      ev({ type: "spike_concluded", subsprint_id: "S01", conclusion: "Use a kind flag." }, 4),
-    ];
-    const s = project(events)!;
-    expect(s.subsprints[0]!.kind).toBe("spike");
-    expect(s.subsprints[0]!.status).toBe("closed");
-    expect(s.subsprints[0]!.spike_conclusion).toBe("Use a kind flag.");
-    expect(s.changelog).toEqual([]);
-  });
 
   it("reports closed status once a sprint_closed event is present", () => {
     const events: LedgerEvent[] = [

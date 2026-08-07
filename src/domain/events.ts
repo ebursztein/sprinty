@@ -32,7 +32,6 @@ export const SubsprintCreated = z.object({
   gates: z.array(Gate).min(1),
   spawned_from_item: z.string().nullable(),
   dependencies: z.array(z.string().min(1)).default([]),
-  kind: z.enum(["feature", "spike"]).default("feature"),
 });
 
 export const ItemAdded = z.object({
@@ -124,12 +123,6 @@ export const FollowUpAdded = z.object({
   bug_ids: z.array(z.string().min(1)).min(1),
 });
 
-export const SpikeConcluded = z.object({
-  ...base, type: z.literal("spike_concluded"),
-  subsprint_id: z.string().min(1),
-  conclusion: z.string().min(1),
-});
-
 export const SubsprintDeprecated = z.object({
   ...base, type: z.literal("subsprint_deprecated"),
   subsprint_id: z.string().min(1),
@@ -151,7 +144,7 @@ export const SprintArchived = z.object({
 
 export const LedgerEvent = z.discriminatedUnion("type", [
   SprintCreated, SubsprintCreated, ItemAdded, ItemUpdated, ItemResolved, NoteAdded, NoteUpdated, DependenciesAdded,
-  DependenciesReplaced, ArtifactAdded, ArtifactAmended, ArtifactDeprecated, FollowUpAdded, SpikeConcluded, SubsprintDeprecated,
+  DependenciesReplaced, ArtifactAdded, ArtifactAmended, ArtifactDeprecated, FollowUpAdded, SubsprintDeprecated,
   SprintClosed, SprintArchived,
 ]);
 export type LedgerEvent = z.infer<typeof LedgerEvent>;

@@ -62,7 +62,7 @@ export interface TimelineRow {
   time: string;
 }
 
-export type LedgerEntity = "artifact" | "dependency" | "follow_up" | "item" | "note" | "spike" | "sprint" | "subsprint";
+export type LedgerEntity = "artifact" | "dependency" | "follow_up" | "item" | "note" | "sprint" | "subsprint";
 export type LedgerVerb = "add" | "amend" | "archive" | "close" | "conclude" | "create" | "deprecate" | "replace" | "update";
 export type LedgerTargetKind = "artifact" | "follow_up" | "item" | "note" | "sprint" | "subsprint" | "unknown";
 
@@ -325,7 +325,6 @@ function ledgerMeta(entry: TimelineEntry): { entity: LedgerEntity; verb: LedgerV
     case "artifact_amended": return { entity: "artifact", verb: "amend" };
     case "artifact_deprecated": return { entity: "artifact", verb: "deprecate" };
     case "follow_up_added": return { entity: "follow_up", verb: "add" };
-    case "spike_concluded": return { entity: "spike", verb: "conclude" };
     case "subsprint_deprecated": return { entity: "subsprint", verb: "deprecate" };
   }
 }

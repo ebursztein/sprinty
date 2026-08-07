@@ -341,7 +341,6 @@
       : tone === "follow_up" ? "progress-info"
       : tone === "note" ? "progress-warning"
       : tone === "other" ? "progress-neutral"
-      : tone === "spike" ? "progress-error"
       : tone === "subsprint" ? "progress-info"
       : tone === "item" ? "progress-success"
       : tone === "sprint" ? "progress-neutral"
@@ -416,7 +415,6 @@
       artifact: "#8b5cf6",
       dependency: "#ec4899",
       follow_up: "#06b6d4",
-      spike: "#f97316",
       other: "#52525b",
       axis: theme === "dark" ? "#475569" : "#cbd5e1",
       grid: theme === "dark" ? "rgba(71, 85, 105, 0.42)" : "rgba(148, 163, 184, 0.38)",
@@ -836,7 +834,7 @@
                 <div class="eyebrow">{selectedSub?.id ?? "No subsprint"}</div>
                 <h2>{selectedSub?.description ?? "No subsprint selected"}</h2>
                 {#if selectedSub}
-                  <p>{selectedSub.kind}{selectedSub.spike_conclusion ? `: ${selectedSub.spike_conclusion}` : ""}</p>
+                  <p>{selectedSub.status}</p>
                 {/if}
               </div>
               <div class="core-actions">

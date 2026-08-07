@@ -62,7 +62,6 @@ export interface ChangelogLine {
 
 export interface SubsprintView {
   id: string;
-  kind: "feature" | "spike";
   description: string;
   created_at: string;
   closed_at: string | null;
@@ -74,7 +73,6 @@ export interface SubsprintView {
   notes: string[];
   artifacts: ArtifactView[];
   follow_ups: FollowUpView[];
-  spike_conclusion: string | null;
   deprecation_reason: string | null;
   changelog: Array<Omit<ChangelogLine, "subsprint">>;
   change_map: ChangeMap;
@@ -132,10 +130,10 @@ export function project(events: LedgerEvent[]): SprintView | null {
         break;
       case "subsprint_created": {
         const sub: SubsprintView = {
-          id: e.subsprint_id, kind: e.kind ?? "feature", description: e.description, created_at: e.ts, closed_at: null,
+          id: e.subsprint_id, description: e.description, created_at: e.ts, closed_at: null,
           goals: e.goals, gates: e.gates,
           status: "open", spawned_from_item: e.spawned_from_item, dependencies: e.dependencies ?? [],
-          notes: [], artifacts: [], follow_ups: [], spike_conclusion: null, deprecation_reason: null,
+          notes: [], artifacts: [], follow_ups: [], deprecation_reason: null,
           changelog: [], change_map: emptyChangeMap(), items: [],
         };
         subsprints.set(sub.id, sub);
@@ -278,16 +276,6 @@ export function project(events: LedgerEvent[]): SprintView | null {
         timeline.push({ seq: e.seq, ts: e.ts, type: e.type, id: e.follow_up_id, text: `${e.bug_ids.join(", ")}: ${e.description}` });
         break;
       }
-      case "spike_concluded": {
-        const sub = subsprints.get(e.subsprint_id);
-        if (sub?.kind === "spike") {
-          sub.spike_conclusion = e.conclusion;
-          sub.status = "closed";
-          sub.closed_at = e.ts;
-        }
-        timeline.push({ seq: e.seq, ts: e.ts, type: e.type, id: e.subsprint_id, text: e.conclusion });
-        break;
-      }
       case "subsprint_deprecated": {
         const sub = subsprints.get(e.subsprint_id);
         if (sub) {
@@ -320,9 +308,7 @@ export function project(events: LedgerEvent[]): SprintView | null {
 
   for (const sub of subsprints.values()) {
     if (sub.status !== "deprecated") {
-      const itemsClosed = sub.items.length > 0 && sub.items.every((i) => i.status !== "open");
-      if (sub.kind === "spike") sub.status = sub.spike_conclusion ? "closed" : "open";
-      else sub.status = itemsClosed ? "closed" : "open";
+      sub.status = sub.items.length > 0 && sub.items.every((i) => i.status !== "open") ? "closed" : "open";
     }
     if (sub.status === "closed" && !sub.closed_at) {
       sub.closed_at = sub.items.reduce<string | null>((latest, item) => {
@@ -330,7 +316,7 @@ export function project(events: LedgerEvent[]): SprintView | null {
         return latest && latest > item.resolved_at ? latest : item.resolved_at;
       }, null);
     }
-    sub.changelog = sub.kind === "spike" ? [] : sub.items
+    sub.changelog = sub.items
       .filter((item) => item.changelog)
       .map((item) => ({ item: item.id, verb: item.changelog!.verb, line: item.changelog!.line }));
     sub.change_map = aggregateChangeMaps(sub.items.map((item) => item.change_map));
@@ -346,7 +332,6 @@ export function project(events: LedgerEvent[]): SprintView | null {
     ];
     sprint.graph = buildDependencyGraph(nodes, edges);
     sprint.changelog = sprint.subsprints
-      .filter((sub) => sub.kind !== "spike")
       .flatMap((sub) => sub.changelog.map((entry) => ({ ...entry, subsprint: sub.id })));
     sprint.change_map = aggregateChangeMaps(sprint.subsprints.flatMap((sub) => sub.items.map((item) => item.change_map)));
   }

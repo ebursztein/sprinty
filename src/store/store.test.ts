@@ -103,8 +103,8 @@ describe("SprintStore lifecycle", () => {
     store.done({ item: "S01-001", commit_id: sha, gate_results: [{ kind: "command", spec: "git rev-parse HEAD", passed: true, evidence: "ok" }], changelog: { verb: "fixed", line: "Fixed closed work." } });
     expect(() => store.addItem({ subsprint: "S01", description: "reopen", code_locations: ["b.ts"], gates: [{ kind: "command", spec: "git rev-parse HEAD" }] })).toThrow(/closed subsprint/);
 
-    store.createSpike({ description: "try parser", goals: ["learn"], gates: [{ kind: "command", spec: "git rev-parse HEAD" }] });
-    store.deprecateSpike({ subsprint: "S02", reason: "not worth it" });
+    store.createSubsprint({ description: "dropped later", goals: ["learn"], gates: [{ kind: "command", spec: "git rev-parse HEAD" }] });
+    store.deprecate({ target: "S02", reason: "not worth it" });
     expect(() => store.addItem({ subsprint: "S02", description: "late experiment", code_locations: ["c.ts"], gates: [{ kind: "command", spec: "git rev-parse HEAD" }] })).toThrow(/deprecated subsprint/);
   });
 
@@ -337,45 +337,7 @@ describe("SprintStore lifecycle", () => {
     expect(store.listArtifacts({ include_deprecated: true }).artifacts[0]).toMatchObject({ deprecation_reason: "superseded" });
   });
 
-  it("creates spike subsprints with normal items and a required conclusion", () => {
-    store.createSprint("g");
-    const spike = store.createSpike({ description: "try parser", goals: ["learn"], gates: [{ kind: "command", spec: "git rev-parse HEAD" }] });
-    expect(spike.id).toBe("S01");
-    expect(spike.view.subsprints[0]!.kind).toBe("spike");
-    store.addItem({ subsprint: "S01", description: "run experiment", code_locations: ["a.ts"], gates: [{ kind: "command", spec: "git rev-parse HEAD" }] });
-    const { view: afterItem } = store.done({ item: "S01-001", commit_id: sha, gate_results: [{ kind: "command", spec: "git rev-parse HEAD", passed: true, evidence: "ok" }], changelog: { verb: "added", line: "Added spike-only finding." } });
-    expect(afterItem.subsprints[0]!).toMatchObject({ kind: "spike", status: "open", changelog: [] });
-    expect(afterItem.subsprints[0]!.items[0]!.status).toBe("completed");
-    try { store.closeSprint({ coverage: { path: writeCoverage(dir), format: "lcov" } }); throw new Error("should have thrown"); }
-    catch (e) {
-      expect(e).toBeInstanceOf(StoreError);
-      expect((e as StoreError).blockers.join(" ")).toContain("spike_conclude");
-    }
-    const concluded = store.concludeSpike({ subsprint: "S01", conclusion: "Use the parser behind a small adapter." });
-    expect(concluded.subsprints[0]!.spike_conclusion).toBe("Use the parser behind a small adapter.");
-    expect(() => store.concludeSpike({ subsprint: "S01", conclusion: "Actually use something else." })).toThrow(/already concluded/);
-    expect(() => store.deprecateSpike({ subsprint: "S01", reason: "changed our mind" })).toThrow(/already concluded/);
-    const closed = store.closeSprint({ coverage: { path: writeCoverage(dir), format: "lcov" } });
-    expect(closed.status).toBe("closed");
-    expect(store.changelog()).not.toContain("Added spike-only finding.");
-  });
 
-  it("deprecates spike subsprints with a reason", () => {
-    store.createSprint("g");
-    store.createSpike({ description: "try parser", goals: ["learn"], gates: [{ kind: "command", spec: "git rev-parse HEAD" }] });
-    store.addItem({ subsprint: "S01", description: "run experiment", code_locations: ["a.ts"], gates: [{ kind: "command", spec: "git rev-parse HEAD" }] });
-    const view = store.deprecateSpike({ subsprint: "S01", reason: "not worth it" });
-    expect(view.subsprints[0]!.status).toBe("deprecated");
-    expect(view.subsprints[0]!.deprecation_reason).toBe("not worth it");
-    expect(view.subsprints[0]!.items[0]).toMatchObject({
-      status: "deprecated",
-      reason: "Spike S01 deprecated: not worth it",
-    });
-    expect(() => store.deprecateSpike({ subsprint: "S01", reason: "still not worth it" })).toThrow(/already deprecated/);
-    expect(() => store.concludeSpike({ subsprint: "S01", conclusion: "Use it anyway." })).toThrow(/deprecated/);
-    const closed = store.closeSprint({ coverage: { not_applicable: "spike was deprecated before code changed" } });
-    expect(closed.status).toBe("closed");
-  });
 });
 
 describe("sprint_close teeth", () => {

@@ -410,7 +410,6 @@ function compactNextQueueRow(item: ReturnType<typeof windowCurrent>["next"][numb
 function compactNextSubsprintRow(sub: NonNullable<ReturnType<typeof windowCurrent>["current_subsprint"]>) {
   return {
     id: sub.id,
-    kind: sub.kind,
     description: truncate(sub.description, 100),
     status: sub.status,
     dependencies: sub.dependencies,

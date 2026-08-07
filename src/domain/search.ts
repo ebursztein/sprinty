@@ -22,7 +22,6 @@ export function renderEvent(e: LedgerEvent): string {
     case "artifact_amended": return `[${e.artifact_id}] artifact amended${e.title ? ` title: ${e.title}` : ""}${e.uri ? ` uri: ${e.uri}` : ""}`;
     case "artifact_deprecated": return `[${e.artifact_id}] artifact deprecated: ${e.reason}`;
     case "follow_up_added": return `[${e.target_id}] follow-up ${e.follow_up_id}: ${e.bug_ids.join(", ")} ${e.description}`;
-    case "spike_concluded": return `[${e.subsprint_id}] spike concluded: ${e.conclusion}`;
     case "subsprint_deprecated": return `[${e.subsprint_id}] subsprint deprecated: ${e.reason}`;
     case "sprint_closed": return `[sprint] closed`;
     case "sprint_archived": return `[sprint] archived: ${e.reason}`;
@@ -65,7 +64,6 @@ function searchId(e: LedgerEvent): string {
     case "sprint_archived":
       return "sprint";
     case "subsprint_created":
-    case "spike_concluded":
     case "subsprint_deprecated":
       return e.subsprint_id;
     case "item_added":
@@ -98,7 +96,6 @@ function searchType(e: LedgerEvent): SearchMatch["type"] {
     case "sprint_archived":
       return "sprint";
     case "subsprint_created":
-    case "spike_concluded":
     case "subsprint_deprecated":
       return "subsprint";
     case "item_added":
@@ -137,7 +134,6 @@ function toolCall(e: LedgerEvent): string {
     case "note_updated":
       return `note_get({ id: "${e.note_id}" })`;
     case "subsprint_created":
-    case "spike_concluded":
     case "subsprint_deprecated":
       return `subsprint_get({ id: "${e.subsprint_id}" })`;
     default:

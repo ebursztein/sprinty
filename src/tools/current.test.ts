@@ -19,7 +19,6 @@ function view(): SprintView {
       id: "S01", kind: "feature", description: "d", created_at: "2026-06-14T00:00:00.000Z", closed_at: null, goals: ["go"], gates: [], status: "open", spawned_from_item: null, notes: ["n"], dependencies: [],
       artifacts: [{ id: "A002", target_id: "S01", kind: "report", title: "Report", uri: "docs/report.md", description: null, created_at: "2026-06-14T00:00:00.000Z", updated_at: null, deprecated_at: null, deprecation_reason: null, status: "active" }],
       follow_ups: [],
-      spike_conclusion: null,
       deprecation_reason: null,
       changelog: [],
       change_map: { by_file: [], by_directory: [], by_language: [], hotspots: [] },

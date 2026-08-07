@@ -69,7 +69,6 @@ function view(items: ItemView[]): SprintView {
       notes: [],
       artifacts: [],
       follow_ups: [],
-      spike_conclusion: null,
       deprecation_reason: null,
       changelog: [],
       change_map: { by_file: [], by_directory: [], by_language: [], hotspots: [] },
