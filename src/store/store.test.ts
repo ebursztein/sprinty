@@ -592,3 +592,44 @@ describe("subsprint deprecation", () => {
     expect(() => store.deprecate({ target: "S99", reason: "nope" })).toThrow(/Unknown/);
   });
 });
+
+describe("code locations: declared intent vs what the commit actually touched", () => {
+  function commitTouching(files: string[]): string {
+    for (const file of files) writeFileSync(join(dir, file), `${file} content\n`);
+    execFileSync("git", ["add", ...files], { cwd: dir });
+    execFileSync("git", ["commit", "-m", `touch ${files.join(",")}`], { cwd: dir });
+    return execFileSync("git", ["rev-parse", "HEAD"], { cwd: dir }).toString().trim();
+  }
+
+  it("records the files the commit really changed, not only the declared ones", () => {
+    store.createSprint("g");
+    store.createSubsprint({ description: "d", goals: ["go"], gates: [{ kind: "command", spec: "git rev-parse HEAD" }] });
+    store.addItem({ subsprint: "S01", description: "said one file, touched three", code_locations: ["a.ts"], gates: [{ kind: "command", spec: "git rev-parse HEAD" }] });
+    const commit = commitTouching(["a.ts", "b.ts", "c.ts"]);
+
+    const { view } = store.done({ item: "S01-001", commit_id: commit, changelog: { verb: "added", line: "Added." } });
+    const item = view.subsprints[0]!.items[0]!;
+    expect(item.code_locations).toEqual(["a.ts"]);
+    expect(item.actual_code_locations.sort()).toEqual(["a.ts", "b.ts", "c.ts"]);
+  });
+
+  it("reports scope drift so a human can see undeclared files", () => {
+    store.createSprint("g");
+    store.createSubsprint({ description: "d", goals: ["go"], gates: [{ kind: "command", spec: "git rev-parse HEAD" }] });
+    store.addItem({ subsprint: "S01", description: "declared narrowly", code_locations: ["a.ts"], gates: [{ kind: "command", spec: "git rev-parse HEAD" }] });
+    const commit = commitTouching(["a.ts", "surprise.ts"]);
+
+    const { view } = store.done({ item: "S01-001", commit_id: commit, changelog: { verb: "added", line: "Added." } });
+    expect(view.subsprints[0]!.items[0]!.undeclared_code_locations).toEqual(["surprise.ts"]);
+  });
+
+  it("reports no drift when the commit stays inside what was declared", () => {
+    store.createSprint("g");
+    store.createSubsprint({ description: "d", goals: ["go"], gates: [{ kind: "command", spec: "git rev-parse HEAD" }] });
+    store.addItem({ subsprint: "S01", description: "declared exactly", code_locations: ["a.ts", "b.ts"], gates: [{ kind: "command", spec: "git rev-parse HEAD" }] });
+    const commit = commitTouching(["a.ts"]);
+
+    const { view } = store.done({ item: "S01-001", commit_id: commit, changelog: { verb: "added", line: "Added." } });
+    expect(view.subsprints[0]!.items[0]!.undeclared_code_locations).toEqual([]);
+  });
+});

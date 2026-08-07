@@ -872,6 +872,9 @@
                       <div class="detail-copy prose prose-zinc max-w-none dark:prose-invert">{@html markdown(item.description)}</div>
                       <div class="detail-grid">
                         <div><span>Files</span><strong>{item.code_locations.join(", ")}</strong></div>
+                        {#if item.undeclared_code_locations?.length}
+                          <div><span>Also touched</span><strong class="scope-drift">{item.undeclared_code_locations.join(", ")}</strong></div>
+                        {/if}
                         <div><span>Gates</span><strong>{gateSummary(item)}</strong></div>
                         {#if item.gates.length}
                           <div class="gate-rows">

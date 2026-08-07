@@ -472,6 +472,8 @@ function itemGet(view: SprintView, id: string) {
     status: item.status,
     dependencies: item.dependencies,
     code_locations: item.code_locations,
+    ...(item.actual_code_locations.length ? { actual_code_locations: item.actual_code_locations } : {}),
+    ...(item.undeclared_code_locations.length ? { undeclared_code_locations: item.undeclared_code_locations } : {}),
     gates: item.gates,
     updates: compactStrings(item.updates, 5, 160),
     notes: compactStrings(item.notes, 5, 160),

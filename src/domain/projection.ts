@@ -14,6 +14,10 @@ export interface ItemView {
   created_at: string;
   resolved_at: string | null;
   code_locations: string[];
+  /** Files the resolving commit actually touched, from the git change map. */
+  actual_code_locations: string[];
+  /** Touched but never declared: scope drift the human should see. */
+  undeclared_code_locations: string[];
   gates: Gate[];
   status: ItemStatus;
   disposition: Disposition | null;
@@ -146,7 +150,7 @@ export function project(events: LedgerEvent[]): SprintView | null {
           id: e.item_id, subsprint_id: e.subsprint_id, title: e.title ?? titleFromDescription(e.description), description: e.description,
           high_priority: e.high_priority,
           created_at: e.ts, resolved_at: null,
-          code_locations: e.code_locations, gates: e.gates, status: "open",
+          code_locations: e.code_locations, actual_code_locations: [], undeclared_code_locations: [], gates: e.gates, status: "open",
           disposition: null, dependencies: e.dependencies ?? [], commit_id: null, gate_results: [], reason: null,
           spawned_subsprint: null, changelog: null, change_map: emptyChangeMap(), updates: [], notes: [],
           artifacts: [], follow_ups: [],
@@ -180,6 +184,10 @@ export function project(events: LedgerEvent[]): SprintView | null {
           item.spawned_subsprint = e.spawned_subsprint;
           item.changelog = e.changelog ?? null;
           item.change_map = e.change_map ?? emptyChangeMap();
+          item.actual_code_locations = (e.change_map?.by_file ?? []).map((row) => row.file).sort();
+          // Declared entries may be directories or prefixes, so match on prefix rather than equality.
+          item.undeclared_code_locations = item.actual_code_locations
+            .filter((file) => !item.code_locations.some((declared) => file === declared || file.startsWith(declared.replace(/\/*$/, "/"))));
         }
         timeline.push({ seq: e.seq, ts: e.ts, type: e.type, id: e.item_id, text: e.disposition });
         break;
