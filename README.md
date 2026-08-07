@@ -60,6 +60,15 @@ npx -y sprinty-mcp
 The repository also includes a Gemini extension in `clients/gemini/` for clients that install local
 Gemini extensions.
 
+### Cursor, VS Code, Kiro, GitHub Copilot, ChatGPT & Codex
+
+Sprinty ships a portable [Agent Plugins](https://agent-plugins.org) package at the repository root
+(`plugin.json`, `mcp.json`, `skills/`), so any conformant client can load the skills and the MCP
+server without a client-specific bundle. Follow your client's plugin install instructions and point
+it at this repository.
+
+Claude Code and Gemini CLI are not Agent Plugins clients today; they use the bundles above.
+
 ### Any MCP Client
 
 Configure a stdio MCP server with:

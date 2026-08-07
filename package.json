@@ -1,6 +1,6 @@
 {
   "name": "sprinty-mcp",
-  "version": "0.1.16",
+  "version": "0.1.17",
   "description": "Disciplined sprint MCP with dashboard, artifacts, gates, Git-backed change maps, and changelogs for Claude Code, Codex, and Gemini",
   "type": "module",
   "license": "Apache-2.0",
@@ -35,7 +35,9 @@
     "plugins",
     ".agents",
     ".claude-plugin",
-    "docs/sprinty-dashboard.png"
+    "docs/sprinty-dashboard.png",
+    "plugin.json",
+    "mcp.json"
   ],
   "scripts": {
     "build": "npm run build:dashboard && tsc -p tsconfig.json",
