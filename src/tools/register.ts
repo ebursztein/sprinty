@@ -141,7 +141,7 @@ export function buildToolHandlers(
       }),
     item_get: def(S.ItemGetInput, "Read one item with full untruncated detail.",
       async (i) => itemGet((await getStore()).read(), i.id)),
-    item_update: def(S.ItemUpdateInput, "Update an item by id: metadata, replacement gates, gate timeout, and/or dependency ids.",
+    item_update: def(S.ItemUpdateInput, "Update an item by id: metadata, open-item gates/timeout, completed-item commit_id, and/or dependency ids.",
       async (i) => {
         const store = await getStore();
         const view = store.updateItem({
@@ -152,6 +152,7 @@ export function buildToolHandlers(
           high_priority: i.high_priority,
           gates: i.gates,
           gate_timeout_ms: i.gate_timeout_ms,
+          commit_id: i.commit_id,
           dependencies: i.dependencies,
         });
         return ack("item_update", view, { id: i.id });

@@ -139,6 +139,24 @@ describe("project", () => {
     expect(item.gate_timeout_ms).toBeNull();
   });
 
+  it("replaces a completed item's commit and change-map evidence", () => {
+    const replacementMap = {
+      by_file: [{ file: "b.ts", language: "TypeScript", directory: ".", items: ["S01-001"], commits: ["cafebabe"], additions: 2, deletions: 1, net: 1, churn: 3 }],
+      by_directory: [], by_language: [], hotspots: [],
+    };
+    const events: LedgerEvent[] = [
+      ev({ type: "sprint_created", goal: "g", worktree: "/w", branch: "main", dir: "/r" }, 0),
+      ev({ type: "subsprint_created", subsprint_id: "S01", description: "d", goals: ["go"], gates: [{ kind: "build", spec: "b" }], spawned_from_item: null }, 1),
+      ev({ type: "item_added", item_id: "S01-001", subsprint_id: "S01", description: "i1", code_locations: ["b.ts"], gates: [{ kind: "test", spec: "x" }] }, 2),
+      ev({ type: "item_resolved", item_id: "S01-001", disposition: "completed", commit_id: "deadbeef", gate_results: [], spawned_subsprint: null, reason: null }, 3),
+      ev({ type: "item_updated", target_id: "S01-001", commit_id: "cafebabe", change_map: replacementMap }, 4),
+    ];
+    const item = project(events)!.subsprints[0]!.items[0]!;
+    expect(item.commit_id).toBe("cafebabe");
+    expect(item.actual_code_locations).toEqual(["b.ts"]);
+    expect(item.change_map).toEqual(replacementMap);
+  });
+
   it("attaches artifacts to sprint, subsprint, and item views", () => {
     const events: LedgerEvent[] = [
       ev({ type: "sprint_created", goal: "g", worktree: "/w", branch: "main", dir: "/r" }, 0),

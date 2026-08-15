@@ -45,6 +45,12 @@ describe("LedgerEvent", () => {
     expect(() => LedgerEvent.parse({ ...item, gate_timeout_ms: 0 })).toThrow();
   });
 
+  it("accepts a commit correction on item_updated", () => {
+    const update = { ...base, type: "item_updated", target_id: "S01-001", commit_id: "deadbeef" };
+    expect(LedgerEvent.parse(update)).toMatchObject({ commit_id: "deadbeef" });
+    expect(() => LedgerEvent.parse({ ...update, commit_id: "short" })).toThrow();
+  });
+
   it("item_resolved discriminates on disposition payloads", () => {
     const completed = {
       ...base, type: "item_resolved", item_id: "S01-001", disposition: "completed",

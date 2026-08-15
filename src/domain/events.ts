@@ -55,6 +55,8 @@ export const ItemUpdated = z.object({
   high_priority: z.boolean().optional(),
   gates: z.array(Gate).min(1).optional(),
   gate_timeout_ms: z.number().int().positive().nullable().optional(),
+  commit_id: z.string().min(7).optional(),
+  change_map: ChangeMap.optional(),
 });
 
 export const ItemResolved = z.object({

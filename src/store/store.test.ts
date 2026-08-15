@@ -111,6 +111,25 @@ describe("SprintStore lifecycle", () => {
     expect(() => store.updateItem({ target: "S01-001", gate_timeout_ms: 500 })).toThrow(/completed item/);
   });
 
+  it("corrects a completed item's verified commit and recomputes its change map", () => {
+    store.createSprint("g");
+    store.createSubsprint({ description: "d", goals: ["go"], gates: [{ kind: "build", spec: "git rev-parse HEAD" }] });
+    store.addItem({ subsprint: "S01", description: "commit correction", code_locations: ["f.txt"], gates: [{ kind: "command", spec: "git rev-parse HEAD" }] });
+    expect(() => store.updateItem({ target: "S01-001", commit_id: sha })).toThrow(/complete it first/);
+    store.done({ item: "S01-001", commit_id: sha, changelog: { verb: "changed", line: "Changed commit evidence." } });
+    expect(() => store.updateItem({ target: "S01-001", commit_id: "deadbeef" })).toThrow(/not found/);
+
+    writeFileSync(join(dir, "f.txt"), "updated\n");
+    execFileSync("git", ["add", "f.txt"], { cwd: dir });
+    execFileSync("git", ["commit", "-m", "replacement"], { cwd: dir });
+    const replacement = execFileSync("git", ["rev-parse", "HEAD"], { cwd: dir }).toString().trim();
+    const updated = store.updateItem({ target: "S01-001", commit_id: replacement });
+    const item = updated.subsprints[0]!.items[0]!;
+    expect(item.commit_id).toBe(replacement);
+    expect(item.actual_code_locations).toEqual(["f.txt"]);
+    expect(item.change_map.by_file[0]!.commits).toEqual([replacement]);
+  });
+
   it("rejects adding an item to an unknown subsprint", () => {
     store.createSprint("g");
     expect(() => store.addItem({ subsprint: "S99", description: "i", code_locations: ["a.ts"], gates: [{ kind: "command", spec: "git rev-parse HEAD" }] })).toThrow(StoreError);

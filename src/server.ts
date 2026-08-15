@@ -21,7 +21,7 @@ The data_dir/current pointer keeps exactly one open sprint for that binding. Aft
 Call overview() after binding for compact sprint shape, or next() for the active work window.
 Build is item-driven: sprint_new(goal, git_dir, data_dir, context_notes?) -> dashboard URL for the human -> subsprint_new(..., dependencies?)
 -> item_add(title + description + code_locations + gates, dependencies?) -> item_done(commit + changelog; Sprinty runs the executable gates itself under a 5s budget, only manual gates take gate_results)
-| item_split(promote to a subsprint) | item_deprecate(reason). item_deprecate also accepts a subsprint id to drop a whole subsprint and its open items. Use item_update(id, ...) to replace open-item gates, gate_timeout_ms (null disables it), or dependency edges.
+| item_split(promote to a subsprint) | item_deprecate(reason). item_deprecate also accepts a subsprint id to drop a whole subsprint and its open items. Use item_update(id, ...) to replace open-item gates/timeout, correct a completed item's commit_id, or change dependency edges.
 Each subsprint should be one feature. Notes attach only to item ids: use note_add(id, text), note_list(id), note_get(id), and note_update(id, text).
 Use artifact_add/list/get/update for durable file outputs attached to the sprint, optionally related to item ids.
 next() returns a compact work window, blocked item ids/titles, scoped relations, artifacts, and recent activity. It deliberately omits the full dependency graph.

@@ -148,25 +148,31 @@ export class SprintStore {
     return item;
   }
 
-  updateItem(input: { target: string; note?: string | undefined; title?: string | undefined; description?: string | undefined; high_priority?: boolean | undefined; gates?: Gate[] | undefined; gate_timeout_ms?: number | null | undefined; dependencies?: string[] | undefined }): SprintView {
+  updateItem(input: { target: string; note?: string | undefined; title?: string | undefined; description?: string | undefined; high_priority?: boolean | undefined; gates?: Gate[] | undefined; gate_timeout_ms?: number | null | undefined; commit_id?: string | undefined; dependencies?: string[] | undefined }): SprintView {
     const s = this.requireActiveState();
     const updatesExecution = input.gates !== undefined || input.gate_timeout_ms !== undefined;
-    if (!input.note?.trim() && !input.title?.trim() && !input.description?.trim() && input.high_priority === undefined && !updatesExecution && input.dependencies === undefined) {
-      throw new StoreError("Item update requires a note, title, description, high_priority, gates, gate_timeout_ms, or dependencies.");
+    const updatesCommit = input.commit_id !== undefined;
+    if (!input.note?.trim() && !input.title?.trim() && !input.description?.trim() && input.high_priority === undefined && !updatesExecution && !updatesCommit && input.dependencies === undefined) {
+      throw new StoreError("Item update requires a note, title, description, high_priority, gates, gate_timeout_ms, commit_id, or dependencies.");
     }
     const item = s.subsprints.flatMap((x) => x.items).find((i) => i.id === input.target);
     if (!item) {
       const sub = s.subsprints.find((x) => x.id === input.target);
       if (sub) throw new StoreError(`Item metadata can only be set on items, not subsprint ${input.target}.`);
-      if (input.dependencies !== undefined && !input.note?.trim() && !input.title?.trim() && !input.description?.trim() && input.high_priority === undefined && !updatesExecution) {
+      if (input.dependencies !== undefined && !input.note?.trim() && !input.title?.trim() && !input.description?.trim() && input.high_priority === undefined && !updatesExecution && !updatesCommit) {
         throw new StoreError(`Unknown dependency target ${input.target}.`);
       }
       throw new StoreError(`Unknown item ${input.target}.`);
     }
     if (updatesExecution && item.status !== "open") throw new StoreError(`Cannot change gates or gate timeout on ${item.status} item ${input.target}.`);
+    if (updatesCommit && item.status !== "completed") throw new StoreError(`Cannot change commit_id on ${item.status} item ${input.target}; complete it first.`);
+    if (input.commit_id && !verifyCommit(this.dir, input.commit_id)) throw new StoreError(`Commit ${input.commit_id} not found in repo.`);
+    const replacementChangeMap = input.commit_id
+      ? buildItemChangeMap(input.target, input.commit_id, commitNumstat(this.dir, input.commit_id))
+      : undefined;
     if (input.gates !== undefined) this.validateGates(input.gates);
     if (input.dependencies !== undefined) this.validateDependencyReplacement(s, input.target, input.dependencies);
-    if (input.note?.trim() || input.title?.trim() || input.description?.trim() || input.high_priority !== undefined || updatesExecution) {
+    if (input.note?.trim() || input.title?.trim() || input.description?.trim() || input.high_priority !== undefined || updatesExecution || updatesCommit) {
       this.append({
         type: "item_updated",
         target_id: input.target,
@@ -176,6 +182,7 @@ export class SprintStore {
         ...(input.high_priority === undefined ? {} : { high_priority: input.high_priority }),
         ...(input.gates === undefined ? {} : { gates: input.gates }),
         ...(input.gate_timeout_ms === undefined ? {} : { gate_timeout_ms: input.gate_timeout_ms }),
+        ...(input.commit_id === undefined ? {} : { commit_id: input.commit_id, change_map: replacementChangeMap! }),
       });
     }
     if (input.dependencies !== undefined) {

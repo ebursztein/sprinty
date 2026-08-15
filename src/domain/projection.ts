@@ -185,10 +185,20 @@ export function project(events: LedgerEvent[]): SprintView | null {
           if (e.high_priority !== undefined) item.high_priority = e.high_priority;
           if (e.gates) item.gates = e.gates;
           if ("gate_timeout_ms" in e && e.gate_timeout_ms !== undefined) item.gate_timeout_ms = e.gate_timeout_ms;
+          if (e.commit_id) {
+            item.commit_id = e.commit_id;
+            if (e.change_map) {
+              item.change_map = e.change_map;
+              item.actual_code_locations = e.change_map.by_file.map((row) => row.file).sort();
+              item.undeclared_code_locations = item.actual_code_locations
+                .filter((file) => !item.code_locations.some((declared) => file === declared || file.startsWith(declared.replace(/\/*$/, "/"))));
+            }
+          }
         }
         const text = e.note ?? e.title ?? e.description
           ?? (e.high_priority !== undefined ? `high_priority=${e.high_priority}` : undefined)
           ?? (e.gates ? "gates updated" : undefined)
+          ?? (e.commit_id ? `commit_id=${e.commit_id}` : undefined)
           ?? ("gate_timeout_ms" in e ? `gate_timeout_ms=${e.gate_timeout_ms ?? "disabled"}` : "updated");
         timeline.push({ seq: e.seq, ts: e.ts, type: e.type, id: e.target_id, text });
         break;
