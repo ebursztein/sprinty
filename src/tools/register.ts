@@ -100,7 +100,7 @@ export function buildToolHandlers(
         await detachStore();
         return { detached: true };
       }),
-    sprint_close: def(S.SprintCloseInput, "Close the sprint after changelog({path?}) has generated the SemVer Markdown and after a programmatic re-check of all gates.",
+    sprint_close: def(S.SprintCloseInput, "Re-check all gates, write the canonical SemVer changelog, and close the sprint.",
       async (i) => {
         const view = (await getStore()).closeSprint(i);
         await dashboard.close();
@@ -134,17 +134,27 @@ export function buildToolHandlers(
       async (i) => subsprintGet((await getStore()).read(), i.id)),
     subsprint_list: def(S.SubsprintListInput, "List subsprints with compact rows.",
       async () => subsprintList((await getStore()).read())),
-    item_add: def(S.ItemAddInput, "Add an atomic item (bounded title, bounded description, code locations, gates — all required).",
+    item_add: def(S.ItemAddInput, "Add an atomic item (bounded title, bounded description, code locations, gates — all required; gate_timeout_ms defaults to 5000 and null disables it).",
       async (i) => {
         const result = (await getStore()).addItem(i);
         return ack("item_add", result.view, { item: result.id });
       }),
     item_get: def(S.ItemGetInput, "Read one item with full untruncated detail.",
       async (i) => itemGet((await getStore()).read(), i.id)),
-    item_update: def(S.ItemUpdateInput, "Update item metadata: note, title, description, high_priority, and/or replacement dependency ids.",
+    item_update: def(S.ItemUpdateInput, "Update an item by id: metadata, open-item gates/timeout, completed-item commit_id, and/or dependency ids.",
       async (i) => {
         const store = await getStore();
-        const view = store.updateItem({ target: i.id, note: i.note, title: i.title, description: i.description, high_priority: i.high_priority, dependencies: i.dependencies });
+        const view = store.updateItem({
+          target: i.id,
+          note: i.note,
+          title: i.title,
+          description: i.description,
+          high_priority: i.high_priority,
+          gates: i.gates,
+          gate_timeout_ms: i.gate_timeout_ms,
+          commit_id: i.commit_id,
+          dependencies: i.dependencies,
+        });
         return ack("item_update", view, { id: i.id });
       }),
     item_done: def(S.ItemDoneInput, "Resolve an item as completed with a commit id and a semver changelog verb (added/fixed/changed/removed/deprecated/security). Sprinty runs the item's executable gates itself; only manual gates take agent-supplied gate_results.",
@@ -211,7 +221,7 @@ export function buildToolHandlers(
           ...(allMatches.length > matches.length ? { truncated: true, total_matches: allMatches.length } : {}),
         };
       }),
-    changelog: def(S.ChangelogInput, "Generate the SemVer Markdown changelog and return only its path.",
+    changelog: def(S.ChangelogInput, "Preview or export the current SemVer Markdown changelog and return only its path; sprint_close writes the canonical changelog automatically.",
       async (i) => {
         const store = await getStore();
         const path = i.path ?? join(store.dataDir, "CHANGELOG.md");
@@ -477,6 +487,7 @@ function itemGet(view: SprintView, id: string) {
     ...(item.actual_code_locations.length ? { actual_code_locations: item.actual_code_locations } : {}),
     ...(item.undeclared_code_locations.length ? { undeclared_code_locations: item.undeclared_code_locations } : {}),
     gates: item.gates,
+    gate_timeout_ms: item.gate_timeout_ms,
     updates: compactStrings(item.updates, 5, 160),
     notes: compactStrings(item.notes, 5, 160),
     note_count: item.notes.length,
@@ -580,7 +591,7 @@ function pruneEmptyResponseFields(value: unknown): unknown {
   const source = value as Record<string, unknown>;
   const entries = Object.entries(source)
     .map(([key, child]) => {
-      const pruned = pruneEmptyResponseFields(child);
+      const pruned = key === "gate_timeout_ms" && child === null ? null : pruneEmptyResponseFields(child);
       return [key, pruned] as const;
     })
     .filter(([, child]) => child !== undefined);

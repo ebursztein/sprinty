@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { SprintStore } from "../store/store.js";
 import { buildToolHandlers, type DashboardController, type DashboardInfo, type ToolHandlers } from "./register.js";
+import { ItemUpdateInput } from "./schemas.js";
 
 function initRepo(): { dir: string; sha: string } {
   const dir = mkdtempSync(join(tmpdir(), "sprinty-tools-"));
@@ -37,13 +38,14 @@ function sprintInput(goal: string, context_notes?: string[]) {
   return { goal, git_dir: dir, data_dir: join(dir, ".sprinty"), ...(context_notes ? { context_notes } : {}) };
 }
 
-function addInput(input: { subsprint?: string; title?: string; description?: string; code_locations?: string[]; gates?: Array<{ kind: string; spec: string }>; dependencies?: string[]; high_priority?: boolean } = {}) {
+function addInput(input: { subsprint?: string; title?: string; description?: string; code_locations?: string[]; gates?: Array<{ kind: string; spec: string }>; gate_timeout_ms?: number | null; dependencies?: string[]; high_priority?: boolean } = {}) {
   return {
     subsprint: input.subsprint ?? "S01",
     title: input.title ?? "Atomic item",
     description: input.description ?? "Implement one independently verifiable Sprinty item.",
     code_locations: input.code_locations ?? ["a.ts"],
     gates: input.gates ?? [{ kind: "command", spec: "git rev-parse HEAD" }],
+    ...(input.gate_timeout_ms === undefined ? {} : { gate_timeout_ms: input.gate_timeout_ms }),
     ...(input.dependencies ? { dependencies: input.dependencies } : {}),
     ...(input.high_priority === undefined ? {} : { high_priority: input.high_priority }),
   };
@@ -84,6 +86,13 @@ beforeEach(() => {
 });
 
 describe("tool handlers", () => {
+  it("requires an item id and rejects fields outside item_update's allowlist", () => {
+    expect(() => ItemUpdateInput.parse({ gates: [{ kind: "command", spec: "npm test" }] })).toThrow();
+    expect(() => ItemUpdateInput.parse({ id: "S01-001", code_locations: ["b.ts"] })).toThrow();
+    expect(ItemUpdateInput.parse({ id: "S01-001", gate_timeout_ms: null })).toEqual({ id: "S01-001", gate_timeout_ms: null });
+    expect(ItemUpdateInput.parse({ id: "S01-001", commit_id: "deadbeef" })).toEqual({ id: "S01-001", commit_id: "deadbeef" });
+  });
+
   it("info returns startup orientation and sprint rows before a sprint is bound", async () => {
     const dataDir = join(dir, ".sprinty-info");
     new SprintStore(dir, dataDir).createSprint("info sprint");
@@ -238,6 +247,7 @@ describe("tool handlers", () => {
     });
     const closed = await tools.sprint_close!.handler({ coverage: { path: writeCoverage(dir), format: "lcov" } }) as { status: string };
     expect(closed.status).toBe("closed");
+    expect(readFileSync(join(dir, ".sprinty", "CHANGELOG.md"), "utf8")).toContain("added the first tracked item");
     expect(dashboardCloseCalls).toBe(1);
   });
 
@@ -363,6 +373,41 @@ describe("tool handlers", () => {
     await tools.item_update!.handler({ id: "S01-001", high_priority: false });
     const lowered = await tools.item_get!.handler({ id: "S01-001" }) as { high_priority: boolean };
     expect(lowered.high_priority).toBe(false);
+  });
+
+  it("passes mutable gate settings through item_add and item_update", async () => {
+    await tools.sprint_new!.handler(sprintInput("g"));
+    await tools.subsprint_new!.handler({ description: "d", goals: ["go"], gates: [{ kind: "command", spec: "git rev-parse HEAD" }] });
+    await tools.item_add!.handler(addInput({ gate_timeout_ms: 250 }));
+    await tools.item_update!.handler({
+      id: "S01-001",
+      gates: [{ kind: "command", spec: "git status --short" }],
+      gate_timeout_ms: null,
+    });
+    const item = await tools.item_get!.handler({ id: "S01-001" }) as {
+      gates: Array<{ kind: string; spec: string }>;
+      gate_timeout_ms: number | null;
+    };
+    expect(item).toMatchObject({
+      gates: [{ kind: "command", spec: "git status --short" }],
+      gate_timeout_ms: null,
+    });
+  });
+
+  it("corrects a completed item's commit through item_update", async () => {
+    await tools.sprint_new!.handler(sprintInput("g"));
+    await tools.subsprint_new!.handler({ description: "d", goals: ["go"], gates: [{ kind: "command", spec: "git rev-parse HEAD" }] });
+    await tools.item_add!.handler(addInput());
+    await tools.item_done!.handler({ id: "S01-001", commit_id: sha, changelog: { verb: "changed", line: "Changed commit evidence." } });
+
+    writeFileSync(join(dir, "f.txt"), "updated\n");
+    execFileSync("git", ["add", "f.txt"], { cwd: dir });
+    execFileSync("git", ["commit", "-m", "replacement"], { cwd: dir });
+    const replacement = execFileSync("git", ["rev-parse", "HEAD"], { cwd: dir }).toString().trim();
+    await tools.item_update!.handler({ id: "S01-001", commit_id: replacement });
+    const item = await tools.item_get!.handler({ id: "S01-001" }) as { commit_id: string; actual_code_locations: string[] };
+    expect(item.commit_id).toBe(replacement);
+    expect(item.actual_code_locations).toEqual(["f.txt"]);
   });
 
   it("records notes with note ids, supports note updates, and requires item scope", async () => {

@@ -1,6 +1,6 @@
 {
   "name": "sprinty",
-  "version": "0.1.17",
+  "version": "0.1.18",
   "description": "Disciplined sprint workflow for Codex CLI: dashboard-at-start, feature subsprints, artifacts, dependency graphs, coverage gates, changelogs, and change maps.",
   "author": {
     "name": "Elie Bursztein",
@@ -24,7 +24,7 @@
       "Use Sprinty to run this implementation as a disciplined sprint.",
       "Start or continue the sprint with explicit git_dir and data_dir, then share the dashboard URL returned by sprint_new or sprint_resume.",
       "Track each feature as a subsprint, create atomic items with item_add, attach durable outputs with artifact_add/list/get/update, and use item_split when work is too large.",
-      "Resolve every item with item_done, passing gates, a real commit, and a changelog entry; then run changelog and close with coverage."
+      "Resolve every item with item_done, passing gates, a real commit, and a changelog entry; then close with coverage so Sprinty writes the canonical changelog automatically."
     ],
     "brandColor": "#2563EB",
     "screenshots": []

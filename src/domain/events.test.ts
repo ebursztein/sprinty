@@ -34,6 +34,23 @@ describe("LedgerEvent", () => {
     expect(() => LedgerEvent.parse({ ...ok, gates: [] })).toThrow();
   });
 
+  it("defaults item gate timeouts and accepts custom or disabled values", () => {
+    const item = {
+      ...base, type: "item_added", item_id: "S01-001", subsprint_id: "S01", description: "d",
+      code_locations: ["src/x.ts"], gates: [{ kind: "test", spec: "x" }],
+    };
+    expect(LedgerEvent.parse(item)).toMatchObject({ gate_timeout_ms: 5_000 });
+    expect(LedgerEvent.parse({ ...item, gate_timeout_ms: 250 })).toMatchObject({ gate_timeout_ms: 250 });
+    expect(LedgerEvent.parse({ ...item, gate_timeout_ms: null })).toMatchObject({ gate_timeout_ms: null });
+    expect(() => LedgerEvent.parse({ ...item, gate_timeout_ms: 0 })).toThrow();
+  });
+
+  it("accepts a commit correction on item_updated", () => {
+    const update = { ...base, type: "item_updated", target_id: "S01-001", commit_id: "deadbeef" };
+    expect(LedgerEvent.parse(update)).toMatchObject({ commit_id: "deadbeef" });
+    expect(() => LedgerEvent.parse({ ...update, commit_id: "short" })).toThrow();
+  });
+
   it("item_resolved discriminates on disposition payloads", () => {
     const completed = {
       ...base, type: "item_resolved", item_id: "S01-001", disposition: "completed",

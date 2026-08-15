@@ -45,4 +45,10 @@ describe("runGate", () => {
     expect(failed.passed).toBe(false);
     expect(failed.timed_out).toBeUndefined();
   });
+
+  it("allows the timeout to be disabled", () => {
+    const result = runGate({ kind: "command", spec: "node -e \"setTimeout(() => {}, 30)\"" }, process.cwd(), null);
+    expect(result.passed).toBe(true);
+    expect(result.timed_out).toBeUndefined();
+  });
 });

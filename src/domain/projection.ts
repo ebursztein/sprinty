@@ -1,5 +1,5 @@
 import type { ArtifactKind, ChangelogEntry, LedgerEvent } from "./events.js";
-import type { Gate, GateResult } from "./gates.js";
+import { DEFAULT_ITEM_GATE_TIMEOUT_MS, type Gate, type GateResult } from "./gates.js";
 import type { Disposition, ItemStatus, SubsprintStatus, SprintStatus } from "./enums.js";
 import type { CoverageState, CoverageSummary } from "./coverage.js";
 import { aggregateChangeMaps, emptyChangeMap, type ChangeMap } from "./change-map.js";
@@ -19,6 +19,7 @@ export interface ItemView {
   /** Touched but never declared: scope drift the human should see. */
   undeclared_code_locations: string[];
   gates: Gate[];
+  gate_timeout_ms: number | null;
   status: ItemStatus;
   disposition: Disposition | null;
   dependencies: string[];
@@ -64,6 +65,18 @@ export interface ChangelogLine {
   line: string;
 }
 
+export interface CompletionMetrics {
+  total_items: number;
+  finished_items: number;
+  percent_complete: number;
+  intervals_ms: number[];
+  fastest_ms: number | null;
+  median_ms: number | null;
+  slowest_ms: number | null;
+  eta_ms: number | null;
+  eta_at: string | null;
+}
+
 export interface SubsprintView {
   id: string;
   description: string;
@@ -102,6 +115,7 @@ export interface SprintView {
   change_map: ChangeMap;
   coverage: CoverageSummary | null;
   coverage_state: CoverageState;
+  completion: CompletionMetrics;
 }
 
 export interface TimelineEntry {
@@ -128,7 +142,8 @@ export function project(events: LedgerEvent[]): SprintView | null {
           goal: e.goal, worktree: e.worktree, branch: e.branch, dir: e.dir, data_dir: e.data_dir,
           context_notes: e.context_notes ?? [], created_at: e.ts, closed_at: null, status: "active",
           subsprints: [], timeline, graph: buildDependencyGraph([], []), artifacts: [], follow_ups: [],
-          changelog: [], change_map: emptyChangeMap(), coverage: null, coverage_state: { status: "not_configured" },
+          changelog: [], change_map: emptyChangeMap(), coverage: null,
+          coverage_state: { status: "not_configured" }, completion: emptyCompletionMetrics(),
         };
         timeline.push({ seq: e.seq, ts: e.ts, type: e.type, id: "sprint", text: e.goal });
         break;
@@ -150,7 +165,8 @@ export function project(events: LedgerEvent[]): SprintView | null {
           id: e.item_id, subsprint_id: e.subsprint_id, title: e.title ?? titleFromDescription(e.description), description: e.description,
           high_priority: e.high_priority,
           created_at: e.ts, resolved_at: null,
-          code_locations: e.code_locations, actual_code_locations: [], undeclared_code_locations: [], gates: e.gates, status: "open",
+          code_locations: e.code_locations, actual_code_locations: [], undeclared_code_locations: [], gates: e.gates,
+          gate_timeout_ms: "gate_timeout_ms" in e ? e.gate_timeout_ms : DEFAULT_ITEM_GATE_TIMEOUT_MS, status: "open",
           disposition: null, dependencies: e.dependencies ?? [], commit_id: null, gate_results: [], reason: null,
           spawned_subsprint: null, changelog: null, change_map: emptyChangeMap(), updates: [], notes: [],
           artifacts: [], follow_ups: [],
@@ -167,8 +183,23 @@ export function project(events: LedgerEvent[]): SprintView | null {
           if (e.title) item.title = e.title;
           if (e.description) item.description = e.description;
           if (e.high_priority !== undefined) item.high_priority = e.high_priority;
+          if (e.gates) item.gates = e.gates;
+          if ("gate_timeout_ms" in e && e.gate_timeout_ms !== undefined) item.gate_timeout_ms = e.gate_timeout_ms;
+          if (e.commit_id) {
+            item.commit_id = e.commit_id;
+            if (e.change_map) {
+              item.change_map = e.change_map;
+              item.actual_code_locations = e.change_map.by_file.map((row) => row.file).sort();
+              item.undeclared_code_locations = item.actual_code_locations
+                .filter((file) => !item.code_locations.some((declared) => file === declared || file.startsWith(declared.replace(/\/*$/, "/"))));
+            }
+          }
         }
-        const text = e.note ?? e.title ?? e.description ?? (e.high_priority === undefined ? "updated" : `high_priority=${e.high_priority}`);
+        const text = e.note ?? e.title ?? e.description
+          ?? (e.high_priority !== undefined ? `high_priority=${e.high_priority}` : undefined)
+          ?? (e.gates ? "gates updated" : undefined)
+          ?? (e.commit_id ? `commit_id=${e.commit_id}` : undefined)
+          ?? ("gate_timeout_ms" in e ? `gate_timeout_ms=${e.gate_timeout_ms ?? "disabled"}` : "updated");
         timeline.push({ seq: e.seq, ts: e.ts, type: e.type, id: e.target_id, text });
         break;
       }
@@ -342,6 +373,7 @@ export function project(events: LedgerEvent[]): SprintView | null {
     sprint.changelog = sprint.subsprints
       .flatMap((sub) => sub.changelog.map((entry) => ({ ...entry, subsprint: sub.id })));
     sprint.change_map = aggregateChangeMaps(sprint.subsprints.flatMap((sub) => sub.items.map((item) => item.change_map)));
+    sprint.completion = deriveCompletionMetrics(sprint.subsprints.flatMap((sub) => sub.items));
   }
   return sprint;
 }
@@ -359,4 +391,52 @@ function titleFromDescription(description: string): string {
   const firstSentence = firstLine.match(/^(.+?[.!?])(?:\s|$)/)?.[1] ?? firstLine;
   const title = firstSentence.trim();
   return title.length > 80 ? `${title.slice(0, 77).trimEnd()}...` : title || "Untitled item";
+}
+
+function emptyCompletionMetrics(): CompletionMetrics {
+  return {
+    total_items: 0,
+    finished_items: 0,
+    percent_complete: 0,
+    intervals_ms: [],
+    fastest_ms: null,
+    median_ms: null,
+    slowest_ms: null,
+    eta_ms: null,
+    eta_at: null,
+  };
+}
+
+function deriveCompletionMetrics(items: ItemView[]): CompletionMetrics {
+  const completedAt = items
+    .filter((item) => item.status === "completed" && item.resolved_at)
+    .map((item) => item.resolved_at!)
+    .sort();
+  const intervals = completedAt.slice(1).map((ts, index) => new Date(ts).getTime() - new Date(completedAt[index]!).getTime());
+  const validIntervals = intervals.filter((ms) => Number.isFinite(ms) && ms >= 0);
+  const finished = completedAt.length;
+  const total = items.length;
+  const cadence = validIntervals.length > 0 ? [...validIntervals].sort((a, b) => a - b) : [];
+  const median = cadence.length > 0 ? medianOf(cadence) : null;
+  const remaining = Math.max(0, total - finished);
+  const etaMs = median == null || completedAt.length === 0 ? null : median * remaining;
+
+  return {
+    total_items: total,
+    finished_items: finished,
+    percent_complete: total === 0 ? 0 : Math.round((finished / total) * 100),
+    intervals_ms: validIntervals,
+    fastest_ms: cadence[0] ?? null,
+    median_ms: median,
+    slowest_ms: cadence[cadence.length - 1] ?? null,
+    eta_ms: etaMs,
+    eta_at: etaMs == null ? null : new Date(new Date(completedAt[completedAt.length - 1]!).getTime() + etaMs).toISOString(),
+  };
+}
+
+function medianOf(sortedValues: number[]): number {
+  const midpoint = Math.floor(sortedValues.length / 2);
+  return sortedValues.length % 2 === 0
+    ? (sortedValues[midpoint - 1]! + sortedValues[midpoint]!) / 2
+    : sortedValues[midpoint]!;
 }

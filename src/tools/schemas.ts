@@ -104,6 +104,7 @@ export const AddInput = z.object({
   high_priority: z.boolean().default(false),
   code_locations: z.array(z.string().min(1)).min(1),
   gates: z.array(GateInput).min(1).max(GATES_MAX),
+  gate_timeout_ms: z.number().int().positive().nullable().optional(),
   dependencies: z.array(z.string().min(1)).default([]),
 });
 export const ItemAddInput = AddInput;
@@ -113,9 +114,12 @@ export const ItemUpdateInput = z.object({
   title: ItemTitleInput.optional(),
   description: ItemDescriptionInput.optional(),
   high_priority: z.boolean().optional(),
+  gates: z.array(GateInput).min(1).max(GATES_MAX).optional(),
+  gate_timeout_ms: z.number().int().positive().nullable().optional(),
+  commit_id: z.string().min(7).optional(),
   dependencies: z.array(z.string().min(1)).optional(),
   note: z.string().min(1).optional(),
-});
+}).strict();
 export const DoneInput = z.object({
   id: z.string().min(1),
   commit_id: z.string().min(7),

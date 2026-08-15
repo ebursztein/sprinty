@@ -47,6 +47,32 @@ describe("project", () => {
     ]);
   });
 
+  it("derives completion cadence from intervals between completed items", () => {
+    const events: LedgerEvent[] = [
+      { ...ev({ type: "sprint_created", goal: "g", worktree: "/w", branch: "main", dir: "/r" }, 0), ts: "2026-06-14T08:00:00.000Z" },
+      { ...ev({ type: "subsprint_created", subsprint_id: "S01", description: "d", goals: ["go"], gates: [{ kind: "build", spec: "b" }], spawned_from_item: null }, 1), ts: "2026-06-14T08:00:00.000Z" },
+      { ...ev({ type: "item_added", item_id: "S01-001", subsprint_id: "S01", description: "first", code_locations: ["a.ts"], gates: [{ kind: "test", spec: "x" }] }, 2), ts: "2026-06-14T08:00:00.000Z" },
+      { ...ev({ type: "item_added", item_id: "S01-002", subsprint_id: "S01", description: "second", code_locations: ["b.ts"], gates: [{ kind: "test", spec: "y" }] }, 3), ts: "2026-06-14T08:00:00.000Z" },
+      { ...ev({ type: "item_added", item_id: "S01-003", subsprint_id: "S01", description: "third", code_locations: ["c.ts"], gates: [{ kind: "test", spec: "z" }] }, 4), ts: "2026-06-14T08:00:00.000Z" },
+      { ...ev({ type: "item_added", item_id: "S01-004", subsprint_id: "S01", description: "open", code_locations: ["d.ts"], gates: [{ kind: "test", spec: "w" }] }, 5), ts: "2026-06-14T08:00:00.000Z" },
+      { ...ev({ type: "item_resolved", item_id: "S01-001", disposition: "completed", commit_id: "deadbeef", gate_results: [{ kind: "test", spec: "x", passed: true, evidence: "ok" }], spawned_subsprint: null, reason: null }, 6), ts: "2026-06-14T10:00:00.000Z" },
+      { ...ev({ type: "item_resolved", item_id: "S01-002", disposition: "completed", commit_id: "deadbeef", gate_results: [{ kind: "test", spec: "y", passed: true, evidence: "ok" }], spawned_subsprint: null, reason: null }, 7), ts: "2026-06-14T10:10:00.000Z" },
+      { ...ev({ type: "item_resolved", item_id: "S01-003", disposition: "completed", commit_id: "deadbeef", gate_results: [{ kind: "test", spec: "z", passed: true, evidence: "ok" }], spawned_subsprint: null, reason: null }, 8), ts: "2026-06-14T10:40:00.000Z" },
+    ];
+
+    const s = project(events)!;
+
+    expect(s.completion.finished_items).toBe(3);
+    expect(s.completion.total_items).toBe(4);
+    expect(s.completion.percent_complete).toBe(75);
+    expect(s.completion.intervals_ms).toEqual([10 * 60 * 1000, 30 * 60 * 1000]);
+    expect(s.completion.fastest_ms).toBe(10 * 60 * 1000);
+    expect(s.completion.median_ms).toBe(20 * 60 * 1000);
+    expect(s.completion.slowest_ms).toBe(30 * 60 * 1000);
+    expect(s.completion.eta_ms).toBe(20 * 60 * 1000);
+    expect(s.completion.eta_at).toBe("2026-06-14T11:00:00.000Z");
+  });
+
   it("projects context notes, dependency graph, terminal item states, and changelog", () => {
     const events: LedgerEvent[] = [
       { ...ev({ type: "sprint_created", goal: "g", worktree: "/w", branch: "main", dir: "/r", context_notes: ["ship carefully"] } as never, 0), ts: "2026-06-14T00:00:00.000Z" },
@@ -98,6 +124,37 @@ describe("project", () => {
     expect(s.subsprints[0]!.items[0]!.notes).toEqual(["discovery: shaped like Y"]);
     expect(s.subsprints[0]!.items[0]!.updates).toEqual(["halfway"]);
     expect(s.subsprints[0]!.notes).toEqual(["subsprint-level note"]);
+  });
+
+  it("defaults and updates mutable item execution settings", () => {
+    const events: LedgerEvent[] = [
+      ev({ type: "sprint_created", goal: "g", worktree: "/w", branch: "main", dir: "/r" }, 0),
+      ev({ type: "subsprint_created", subsprint_id: "S01", description: "d", goals: ["go"], gates: [{ kind: "build", spec: "b" }], spawned_from_item: null }, 1),
+      ev({ type: "item_added", item_id: "S01-001", subsprint_id: "S01", description: "i1", code_locations: ["a.ts"], gates: [{ kind: "test", spec: "x" }] }, 2),
+      ev({ type: "item_updated", target_id: "S01-001", gates: [{ kind: "command", spec: "npm test" }], gate_timeout_ms: null }, 3),
+    ];
+    const item = project(events)!.subsprints[0]!.items[0]!;
+    expect(item.code_locations).toEqual(["a.ts"]);
+    expect(item.gates).toEqual([{ kind: "command", spec: "npm test" }]);
+    expect(item.gate_timeout_ms).toBeNull();
+  });
+
+  it("replaces a completed item's commit and change-map evidence", () => {
+    const replacementMap = {
+      by_file: [{ file: "b.ts", language: "TypeScript", directory: ".", items: ["S01-001"], commits: ["cafebabe"], additions: 2, deletions: 1, net: 1, churn: 3 }],
+      by_directory: [], by_language: [], hotspots: [],
+    };
+    const events: LedgerEvent[] = [
+      ev({ type: "sprint_created", goal: "g", worktree: "/w", branch: "main", dir: "/r" }, 0),
+      ev({ type: "subsprint_created", subsprint_id: "S01", description: "d", goals: ["go"], gates: [{ kind: "build", spec: "b" }], spawned_from_item: null }, 1),
+      ev({ type: "item_added", item_id: "S01-001", subsprint_id: "S01", description: "i1", code_locations: ["b.ts"], gates: [{ kind: "test", spec: "x" }] }, 2),
+      ev({ type: "item_resolved", item_id: "S01-001", disposition: "completed", commit_id: "deadbeef", gate_results: [], spawned_subsprint: null, reason: null }, 3),
+      ev({ type: "item_updated", target_id: "S01-001", commit_id: "cafebabe", change_map: replacementMap }, 4),
+    ];
+    const item = project(events)!.subsprints[0]!.items[0]!;
+    expect(item.commit_id).toBe("cafebabe");
+    expect(item.actual_code_locations).toEqual(["b.ts"]);
+    expect(item.change_map).toEqual(replacementMap);
   });
 
   it("attaches artifacts to sprint, subsprint, and item views", () => {

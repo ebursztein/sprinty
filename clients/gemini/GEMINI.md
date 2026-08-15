@@ -14,7 +14,6 @@ sprint_new(goal, git_dir, data_dir?, context_notes?)
   -> item_update(id, note?, title?, description?, high_priority?, dependencies?)
   -> artifact_add/list/get/update(...)
   -> item_done(id, commit_id, gate_results[], changelog) | item_split(...) | item_deprecate(reason)
-  -> changelog()
   -> sprint_close(coverage: { path, format: "lcov", command? })
 ```
 
@@ -31,8 +30,7 @@ subsprint should be one feature. Use `artifact_add/list/get/update` for durable
 outputs. `next()` returns the active
 work window with relevant artifacts and recent activity: all available `high_priority` items first
 by default, then normal available items per subsprint. `item_update({ id, dependencies })` replaces
-dependencies, so pass `dependencies: []` to remove a bad edge. `item_done` records a Git-backed change map and each item's SemVer changelog entry. `changelog({ path? })` generates the SemVer Markdown file with
-sections, item entries, commits, coverage, and change-map tables; run it before `sprint_close`. `sprint_close` rechecks commits, re-runs executable gates, requires
+dependencies, so pass `dependencies: []` to remove a bad edge. `item_done` records a Git-backed change map and each item's SemVer changelog entry. `changelog({ path? })` previews or exports the current SemVer Markdown. `sprint_close` rechecks commits, re-runs executable gates, writes the canonical changelog, requires
 an LCOV coverage report path, and refuses to close on any blocker. Use `search(pattern,
 context_lines)` to query the immutable ledger. Show the dashboard URL returned by `sprint_new()` or
 `sprint_resume()` to the human so they can watch the sprint timeline; use `dashboard_info()` to
