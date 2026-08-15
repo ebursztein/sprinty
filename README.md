@@ -113,9 +113,9 @@ data dirs together, then `sprint_resume({ git_dir, data_dir })`.
 | `subsprint_new` | Create a feature-sized unit of work. |
 | `subsprint_list` | List subsprints with compact item counts. |
 | `subsprint_get` | Read one subsprint and its item rows. |
-| `item_add` | Create one atomic, gated item. |
+| `item_add` | Create one atomic, gated item with an optional gate timeout. |
 | `item_get` | Read full item detail. |
-| `item_update` | Update item metadata, priority, notes, or dependency edges. |
+| `item_update` | Update item metadata, execution settings, or dependency edges. |
 | `item_done` | Complete an item with a real commit, gate evidence, and changelog entry. |
 | `item_split` | Resolve an oversized item by creating a seeded subsprint. |
 | `item_deprecate` | Drop an item with an explicit reason, or pass a subsprint id to drop it and its open items. |

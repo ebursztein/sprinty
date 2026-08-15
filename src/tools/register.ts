@@ -134,17 +134,26 @@ export function buildToolHandlers(
       async (i) => subsprintGet((await getStore()).read(), i.id)),
     subsprint_list: def(S.SubsprintListInput, "List subsprints with compact rows.",
       async () => subsprintList((await getStore()).read())),
-    item_add: def(S.ItemAddInput, "Add an atomic item (bounded title, bounded description, code locations, gates — all required).",
+    item_add: def(S.ItemAddInput, "Add an atomic item (bounded title, bounded description, code locations, gates — all required; gate_timeout_ms defaults to 5000 and null disables it).",
       async (i) => {
         const result = (await getStore()).addItem(i);
         return ack("item_add", result.view, { item: result.id });
       }),
     item_get: def(S.ItemGetInput, "Read one item with full untruncated detail.",
       async (i) => itemGet((await getStore()).read(), i.id)),
-    item_update: def(S.ItemUpdateInput, "Update item metadata: note, title, description, high_priority, and/or replacement dependency ids.",
+    item_update: def(S.ItemUpdateInput, "Update an item by id: metadata, replacement gates, gate timeout, and/or dependency ids.",
       async (i) => {
         const store = await getStore();
-        const view = store.updateItem({ target: i.id, note: i.note, title: i.title, description: i.description, high_priority: i.high_priority, dependencies: i.dependencies });
+        const view = store.updateItem({
+          target: i.id,
+          note: i.note,
+          title: i.title,
+          description: i.description,
+          high_priority: i.high_priority,
+          gates: i.gates,
+          gate_timeout_ms: i.gate_timeout_ms,
+          dependencies: i.dependencies,
+        });
         return ack("item_update", view, { id: i.id });
       }),
     item_done: def(S.ItemDoneInput, "Resolve an item as completed with a commit id and a semver changelog verb (added/fixed/changed/removed/deprecated/security). Sprinty runs the item's executable gates itself; only manual gates take agent-supplied gate_results.",
@@ -477,6 +486,7 @@ function itemGet(view: SprintView, id: string) {
     ...(item.actual_code_locations.length ? { actual_code_locations: item.actual_code_locations } : {}),
     ...(item.undeclared_code_locations.length ? { undeclared_code_locations: item.undeclared_code_locations } : {}),
     gates: item.gates,
+    gate_timeout_ms: item.gate_timeout_ms,
     updates: compactStrings(item.updates, 5, 160),
     notes: compactStrings(item.notes, 5, 160),
     note_count: item.notes.length,
@@ -580,7 +590,7 @@ function pruneEmptyResponseFields(value: unknown): unknown {
   const source = value as Record<string, unknown>;
   const entries = Object.entries(source)
     .map(([key, child]) => {
-      const pruned = pruneEmptyResponseFields(child);
+      const pruned = key === "gate_timeout_ms" && child === null ? null : pruneEmptyResponseFields(child);
       return [key, pruned] as const;
     })
     .filter(([, child]) => child !== undefined);

@@ -2,7 +2,7 @@ import { z } from "zod";
 import { ChangelogVerb, Disposition } from "./enums.js";
 import { ChangeMap } from "./change-map.js";
 import { CoverageState, CoverageSummary } from "./coverage.js";
-import { Gate, GateResult } from "./gates.js";
+import { DEFAULT_ITEM_GATE_TIMEOUT_MS, Gate, GateResult } from "./gates.js";
 
 const base = {
   seq: z.number().int().nonnegative(),
@@ -42,6 +42,7 @@ export const ItemAdded = z.object({
   high_priority: z.boolean().default(false),
   code_locations: z.array(z.string().min(1)).min(1),
   gates: z.array(Gate).min(1),
+  gate_timeout_ms: z.number().int().positive().nullable().default(DEFAULT_ITEM_GATE_TIMEOUT_MS),
   dependencies: z.array(z.string().min(1)).default([]),
 });
 
@@ -52,6 +53,8 @@ export const ItemUpdated = z.object({
   title: z.string().min(1).max(80).optional(),
   description: z.string().min(1).optional(),
   high_priority: z.boolean().optional(),
+  gates: z.array(Gate).min(1).optional(),
+  gate_timeout_ms: z.number().int().positive().nullable().optional(),
 });
 
 export const ItemResolved = z.object({

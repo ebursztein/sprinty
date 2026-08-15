@@ -15,6 +15,10 @@ const view: SprintView = {
   status: "active",
   subsprints: [],
   timeline: [],
+  completion: {
+    total_items: 0, finished_items: 0, percent_complete: 0, intervals_ms: [],
+    fastest_ms: null, median_ms: null, slowest_ms: null, eta_ms: null, eta_at: null,
+  },
 };
 let dash: Dashboard | undefined;
 afterEach(async () => { await dash?.stop(); dash = undefined; });
@@ -24,10 +28,9 @@ describe("dashboard", () => {
     dash = await startDashboard(() => view);
     const state = await (await fetch(`${dash.url}/state`)).json();
     expect(state.goal).toBe("g");
+    expect(state.completion.percent_complete).toBe(0);
     const html = await (await fetch(`${dash.url}/`)).text();
     expect(html).toContain("<!doctype html>");
-    expect(html).toContain('id="metric-completion"');
-    expect(html).toContain('id="metric-eta"');
   });
 
   it("serves the compiled dashboard shell and static assets", async () => {

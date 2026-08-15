@@ -126,6 +126,19 @@ describe("project", () => {
     expect(s.subsprints[0]!.notes).toEqual(["subsprint-level note"]);
   });
 
+  it("defaults and updates mutable item execution settings", () => {
+    const events: LedgerEvent[] = [
+      ev({ type: "sprint_created", goal: "g", worktree: "/w", branch: "main", dir: "/r" }, 0),
+      ev({ type: "subsprint_created", subsprint_id: "S01", description: "d", goals: ["go"], gates: [{ kind: "build", spec: "b" }], spawned_from_item: null }, 1),
+      ev({ type: "item_added", item_id: "S01-001", subsprint_id: "S01", description: "i1", code_locations: ["a.ts"], gates: [{ kind: "test", spec: "x" }] }, 2),
+      ev({ type: "item_updated", target_id: "S01-001", gates: [{ kind: "command", spec: "npm test" }], gate_timeout_ms: null }, 3),
+    ];
+    const item = project(events)!.subsprints[0]!.items[0]!;
+    expect(item.code_locations).toEqual(["a.ts"]);
+    expect(item.gates).toEqual([{ kind: "command", spec: "npm test" }]);
+    expect(item.gate_timeout_ms).toBeNull();
+  });
+
   it("attaches artifacts to sprint, subsprint, and item views", () => {
     const events: LedgerEvent[] = [
       ev({ type: "sprint_created", goal: "g", worktree: "/w", branch: "main", dir: "/r" }, 0),

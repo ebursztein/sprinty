@@ -91,6 +91,26 @@ describe("SprintStore lifecycle", () => {
     expect(() => store.updateItem({ target: "S01", high_priority: true })).toThrow(/metadata/);
   });
 
+  it("replaces an open item's gates and timeout by id", () => {
+    store.createSprint("g");
+    store.createSubsprint({ description: "d", goals: ["go"], gates: [{ kind: "build", spec: "git rev-parse HEAD" }] });
+    const added = store.addItem({ subsprint: "S01", description: "mutable", code_locations: ["a.ts"], gates: [{ kind: "command", spec: "git rev-parse HEAD" }], gate_timeout_ms: 250 });
+    expect(added.view.subsprints[0]!.items[0]!.gate_timeout_ms).toBe(250);
+
+    const updated = store.updateItem({
+      target: "S01-001",
+      gates: [{ kind: "command", spec: "git status --short" }],
+      gate_timeout_ms: null,
+    });
+    expect(updated.subsprints[0]!.items[0]).toMatchObject({
+      code_locations: ["a.ts"],
+      gates: [{ kind: "command", spec: "git status --short" }],
+      gate_timeout_ms: null,
+    });
+    store.done({ item: "S01-001", commit_id: sha, changelog: { verb: "changed", line: "Changed gate settings." } });
+    expect(() => store.updateItem({ target: "S01-001", gate_timeout_ms: 500 })).toThrow(/completed item/);
+  });
+
   it("rejects adding an item to an unknown subsprint", () => {
     store.createSprint("g");
     expect(() => store.addItem({ subsprint: "S99", description: "i", code_locations: ["a.ts"], gates: [{ kind: "command", spec: "git rev-parse HEAD" }] })).toThrow(StoreError);
@@ -533,15 +553,25 @@ describe("item_done executes gates instead of trusting claims", () => {
     expect(store.read().subsprints[0]!.items[0]!.status).toBe("open");
   });
 
-  it("completes the item when a gate blows the 5s budget, but records it unverified", () => {
+  it("uses the item's configured timeout and records overruns as unverified", () => {
     store.createSprint("g");
     store.createSubsprint({ description: "d", goals: ["go"], gates: [{ kind: "command", spec: "git status --short" }] });
-    store.addItem({ subsprint: "S01", description: "guarded by a slow gate", code_locations: ["f.txt"], gates: [{ kind: "command", spec: "node -e \"setTimeout(() => {}, 9000)\"" }] });
-    const { view } = store.done({ item: "S01-001", commit_id: sha, changelog: { verb: "added", line: "Added." } });
+    store.addItem({ subsprint: "S01", description: "guarded by a slow gate", code_locations: ["f.txt"], gates: [{ kind: "command", spec: "node -e \"setTimeout(() => {}, 200)\"" }], gate_timeout_ms: 25 });
+    const { view, warning } = store.done({ item: "S01-001", commit_id: sha, changelog: { verb: "added", line: "Added." } });
     const item = view.subsprints[0]!.items[0]!;
     expect(item.status).toBe("completed");
     expect(item.gate_results[0]!.timed_out).toBe(true);
     expect(item.gate_results[0]!.passed).toBe(false);
+    expect(warning).toContain("25ms");
+  });
+
+  it("runs an item gate without a timeout when explicitly disabled", () => {
+    store.createSprint("g");
+    store.createSubsprint({ description: "d", goals: ["go"], gates: [{ kind: "command", spec: "git status --short" }] });
+    store.addItem({ subsprint: "S01", description: "unbounded gate", code_locations: ["f.txt"], gates: [{ kind: "command", spec: "node -e \"setTimeout(() => {}, 30)\"" }], gate_timeout_ms: null });
+    const { view, warning } = store.done({ item: "S01-001", commit_id: sha, changelog: { verb: "added", line: "Added." } });
+    expect(view.subsprints[0]!.items[0]!.gate_results[0]!.passed).toBe(true);
+    expect(warning).toBeNull();
   });
 
   it("still takes agent evidence for manual gates, which cannot be executed", () => {

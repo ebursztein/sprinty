@@ -1,6 +1,8 @@
 import { z } from "zod";
 import { GateKind } from "./enums.js";
 
+export const DEFAULT_ITEM_GATE_TIMEOUT_MS = 5_000;
+
 export const Gate = z.object({
   kind: GateKind,
   spec: z.string().min(1),

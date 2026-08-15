@@ -77,9 +77,9 @@ describe("gate policy: item budget", () => {
   });
 
   it("warns sternly and names a replacement path when a gate blows the budget", () => {
-    const warning = slowGateWarning([{ kind: "test", spec: "just bench", passed: false, evidence: "…", timed_out: true }]);
+    const warning = slowGateWarning([{ kind: "test", spec: "just bench", passed: false, evidence: "…", timed_out: true }], 250);
     expect(warning).toContain("just bench");
-    expect(warning).toContain("5000ms");
+    expect(warning).toContain("250ms");
     // The agent must be told the item still completed, and what to do instead.
     expect(warning).toMatch(/replace/i);
     expect(warning).toMatch(/subsprint/i);

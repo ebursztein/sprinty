@@ -28,10 +28,10 @@ Prefer compact commands first. Lists are compact and say which `_get()` tool ret
 | `subsprint_new` | `{ description, goals[], gates[], dependencies?[] }` | Create a feature-sized unit. |
 | `subsprint_list` | `{}` | Compact subsprint rows. Use `subsprint_get({ id })` for full detail. |
 | `subsprint_get` | `{ id }` | Full subsprint detail and compact item rows. |
-| `item_add` | `{ subsprint, title, description, code_locations[], gates[], dependencies?[], high_priority? }` | Create an atomic item. Title 3-80 chars, single line; description 20-800 chars; at least one `code_locations` entry; 1-3 gates. Bullet lists, headings, or "phase N" in a description are rejected as plan dumps - create more items instead. |
+| `item_add` | `{ subsprint, title, description, code_locations[], gates[], gate_timeout_ms?, dependencies?[], high_priority? }` | Create an atomic item. `gate_timeout_ms` defaults to 5000; use a positive integer to customize it or `null` to disable the timeout. Title 3-80 chars, single line; description 20-800 chars; at least one `code_locations` entry; 1-3 gates. |
 | `item_get` | `{ id }` | Full item detail. |
-| `item_update` | `{ id, note?, title?, description?, high_priority?, dependencies?[] }` | Mutate item metadata and/or replace dependency ids. Use `dependencies:[]` to remove all dependencies. |
-| `item_done` | `{ id, commit_id, changelog, gate_results?[] }` | Complete an item. Sprinty runs the executable gates itself under a 5s budget and records their real output; pass `gate_results` only for `manual` gates. A gate that overruns is marked unverified and does not block the item, but a `warning` says so. Commit must resolve. |
+| `item_update` | `{ id, note?, title?, description?, high_priority?, gates?[], gate_timeout_ms?, dependencies?[] }` | Mutate the identified item's allowlisted fields. Gates and timeout can only change while it is open. Use `gate_timeout_ms:null` to disable the timeout. |
+| `item_done` | `{ id, commit_id, changelog, gate_results?[] }` | Complete an item. Sprinty runs executable gates under the item's configured timeout and records their real output; pass `gate_results` only for `manual` gates. A timed-out gate is marked unverified and does not block the item. Commit must resolve. |
 | `item_split` | `{ id, description, goals[], gates[], dependencies?[] }` | Resolve an oversized item by creating a new subsprint. |
 | `item_deprecate` | `{ id, reason }` | Resolve an item as intentionally dropped. Also accepts a subsprint id: that deprecates the subsprint and cascades to its open items. |
 

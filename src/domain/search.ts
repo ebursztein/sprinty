@@ -13,7 +13,7 @@ export function renderEvent(e: LedgerEvent): string {
     case "sprint_created": return `[sprint] goal: ${e.goal}`;
     case "subsprint_created": return `[${e.subsprint_id}] subsprint: ${e.description} | goals: ${e.goals.join("; ")} | gates: ${e.gates.map((g) => `${g.kind}:${g.spec}`).join(", ")}${e.spawned_from_item ? ` | from ${e.spawned_from_item}` : ""}`;
     case "item_added": return `[${e.item_id}] item: ${e.description} @ ${e.code_locations.join(", ")} | gates: ${e.gates.map((g) => `${g.kind}:${g.spec}`).join(", ")}`;
-    case "item_updated": return `[${e.target_id}] item update: ${[e.note, e.title ? `title=${e.title}` : "", e.description ? "description updated" : "", e.high_priority === undefined ? "" : `high_priority=${e.high_priority}`].filter(Boolean).join(" | ") || "metadata updated"}`;
+    case "item_updated": return `[${e.target_id}] item update: ${[e.note, e.title ? `title=${e.title}` : "", e.description ? "description updated" : "", e.high_priority === undefined ? "" : `high_priority=${e.high_priority}`, e.gates ? "gates updated" : "", "gate_timeout_ms" in e ? `gate_timeout_ms=${e.gate_timeout_ms ?? "disabled"}` : ""].filter(Boolean).join(" | ") || "metadata updated"}`;
     case "item_resolved": return `[${e.item_id}] resolved: ${e.disposition}${e.commit_id ? ` @${e.commit_id}` : ""}${e.reason ? ` reason: ${e.reason}` : ""}${e.spawned_subsprint ? ` -> ${e.spawned_subsprint}` : ""}`;
     case "note_added": return `[${e.element_id}] note: ${e.text}`;
     case "note_updated": return `[${e.note_id}] note updated: ${e.text}`;

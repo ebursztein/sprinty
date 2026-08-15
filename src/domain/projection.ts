@@ -1,5 +1,5 @@
 import type { ArtifactKind, ChangelogEntry, LedgerEvent } from "./events.js";
-import type { Gate, GateResult } from "./gates.js";
+import { DEFAULT_ITEM_GATE_TIMEOUT_MS, type Gate, type GateResult } from "./gates.js";
 import type { Disposition, ItemStatus, SubsprintStatus, SprintStatus } from "./enums.js";
 import type { CoverageState, CoverageSummary } from "./coverage.js";
 import { aggregateChangeMaps, emptyChangeMap, type ChangeMap } from "./change-map.js";
@@ -19,6 +19,7 @@ export interface ItemView {
   /** Touched but never declared: scope drift the human should see. */
   undeclared_code_locations: string[];
   gates: Gate[];
+  gate_timeout_ms: number | null;
   status: ItemStatus;
   disposition: Disposition | null;
   dependencies: string[];
@@ -164,7 +165,8 @@ export function project(events: LedgerEvent[]): SprintView | null {
           id: e.item_id, subsprint_id: e.subsprint_id, title: e.title ?? titleFromDescription(e.description), description: e.description,
           high_priority: e.high_priority,
           created_at: e.ts, resolved_at: null,
-          code_locations: e.code_locations, actual_code_locations: [], undeclared_code_locations: [], gates: e.gates, status: "open",
+          code_locations: e.code_locations, actual_code_locations: [], undeclared_code_locations: [], gates: e.gates,
+          gate_timeout_ms: "gate_timeout_ms" in e ? e.gate_timeout_ms : DEFAULT_ITEM_GATE_TIMEOUT_MS, status: "open",
           disposition: null, dependencies: e.dependencies ?? [], commit_id: null, gate_results: [], reason: null,
           spawned_subsprint: null, changelog: null, change_map: emptyChangeMap(), updates: [], notes: [],
           artifacts: [], follow_ups: [],
@@ -181,8 +183,13 @@ export function project(events: LedgerEvent[]): SprintView | null {
           if (e.title) item.title = e.title;
           if (e.description) item.description = e.description;
           if (e.high_priority !== undefined) item.high_priority = e.high_priority;
+          if (e.gates) item.gates = e.gates;
+          if ("gate_timeout_ms" in e && e.gate_timeout_ms !== undefined) item.gate_timeout_ms = e.gate_timeout_ms;
         }
-        const text = e.note ?? e.title ?? e.description ?? (e.high_priority === undefined ? "updated" : `high_priority=${e.high_priority}`);
+        const text = e.note ?? e.title ?? e.description
+          ?? (e.high_priority !== undefined ? `high_priority=${e.high_priority}` : undefined)
+          ?? (e.gates ? "gates updated" : undefined)
+          ?? ("gate_timeout_ms" in e ? `gate_timeout_ms=${e.gate_timeout_ms ?? "disabled"}` : "updated");
         timeline.push({ seq: e.seq, ts: e.ts, type: e.type, id: e.target_id, text });
         break;
       }
