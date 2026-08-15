@@ -104,12 +104,12 @@ data dirs together, then `sprint_resume({ git_dir, data_dir })`.
 | `sprint_new` | Start a sprint with explicit `git_dir` and `data_dir`; returns orientation and dashboard info. |
 | `sprint_resume` | Reattach this MCP session to an existing sprint. |
 | `sprint_detach` | Clear this MCP process binding and stop the dashboard. |
-| `sprint_close` | Close only after all work is resolved, changelog exists, gates pass, and coverage is supplied. |
+| `sprint_close` | Recheck gates, write the canonical changelog, and close after work and coverage are complete. |
 | `sprint_archive` | Archive an active sprint with a recovery reason. |
 | `overview` | Compact sprint summary for orientation. |
 | `next` | Compact active work window with current, next, blocked, relations, notes, and artifacts. |
 | `search` | Regex search over the immutable sprint ledger. |
-| `changelog` | Generate SemVer Markdown and return the path. |
+| `changelog` | Preview or export SemVer Markdown; canonical output is automatic at close. |
 | `subsprint_new` | Create a feature-sized unit of work. |
 | `subsprint_list` | List subsprints with compact item counts. |
 | `subsprint_get` | Read one subsprint and its item rows. |

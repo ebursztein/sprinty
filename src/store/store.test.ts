@@ -128,6 +128,10 @@ describe("SprintStore lifecycle", () => {
     expect(item.commit_id).toBe(replacement);
     expect(item.actual_code_locations).toEqual(["f.txt"]);
     expect(item.change_map.by_file[0]!.commits).toEqual([replacement]);
+    store.closeSprint({ coverage: { not_applicable: "commit correction test" } });
+    const changelog = readFileSync(join(dir, ".sprinty", "CHANGELOG.md"), "utf8");
+    expect(changelog).toContain(replacement);
+    expect(changelog).not.toContain(sha);
   });
 
   it("rejects adding an item to an unknown subsprint", () => {
@@ -400,6 +404,9 @@ describe("sprint_close teeth", () => {
       status: "reported",
       summary: { lines: { covered: 9, total: 10, percent: 90 } },
     });
+    const changelog = readFileSync(join(dir, ".sprinty", "CHANGELOG.md"), "utf8");
+    expect(changelog).toContain("Added close coverage.");
+    expect(changelog).toContain("90%");
   });
 
   it("deduplicates identical executable gates at close time", () => {

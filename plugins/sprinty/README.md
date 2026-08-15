@@ -30,7 +30,7 @@ Expected agent loop:
 4. Add atomic work with `item_add(...)`.
 5. Record durable outputs with `artifact_add/list/get/update`.
 6. Resolve each item with `item_done(...)`, passing gate evidence, a Git commit, and a SemVer changelog verb plus line.
-7. Run `changelog(...)`, then `sprint_close(...)`.
+7. Run `sprint_close(...)`; it rechecks gates and writes the canonical changelog automatically. Use `changelog(...)` only for previews or custom exports.
 
 For MCP-only setup without plugin skills:
 

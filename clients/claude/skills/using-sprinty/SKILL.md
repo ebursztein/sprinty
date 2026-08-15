@@ -50,7 +50,7 @@ Prefer compact commands first. Lists are compact and say which `_get()` tool ret
 
 ## Close
 
-Sprinty generates the changelog for you. First call `changelog({ path? })` to write the SemVer Markdown file with sections, item entries, commits, coverage, and change-map tables; the response returns only `{ path }`. Then call `sprint_close({ coverage:{ path, format:"lcov", command? } })`; close re-runs executable gates and refuses open items, missing commits, missing changelog entries, missing coverage, or failing gates. Use `sprint_archive({ reason })` only for recovery.
+`sprint_close({ coverage:{ path, format:"lcov", command? } })` re-runs executable gates and writes the canonical SemVer changelog with item entries, current commits, coverage, and change maps. Use `changelog({ path? })` only to preview or export that content before close. Close refuses open items, missing commits/item changelog entries/coverage, or failing gates. Use `sprint_archive({ reason })` only for recovery.
 
 ## Rules
 

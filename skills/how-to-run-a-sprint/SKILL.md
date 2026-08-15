@@ -33,8 +33,8 @@ changelog and coverage. Pay it for multi-commit or multi-session work. Skip it f
 5. Work against one owning item. Every `item_update` requires its item `id` and accepts only allowlisted fields. Use `item_update({ id, gates, gate_timeout_ms })` for open-item execution settings, or `item_update({ id, commit_id })` to correct a completed item's verified commit before sprint close. Structural fields stay immutable.
 6. Resolve each item exactly once: `item_done({ id, commit_id, changelog })`, `item_split({ id, description, goals, gates, dependencies })`, or `item_deprecate({ id, reason })`. `item_deprecate` also accepts a subsprint id to drop a whole subsprint and its open items.
 7. Use `search({ pattern, context_size:512 })`, `*_list`, and focused `*_get` tools when you need detail.
-8. Generate the sprint changelog with `changelog({ path? })`; Sprinty writes SemVer Markdown and returns only the path.
-9. Close only after the changelog exists: `sprint_close({ coverage:{ path, format:"lcov", command } })`.
+8. Optionally preview or export the current changelog with `changelog({ path? })`.
+9. Close with `sprint_close({ coverage:{ path, format:"lcov", command } })`; Sprinty rechecks gates and writes the canonical changelog automatically.
 
 ## Rules
 
@@ -45,6 +45,6 @@ changelog and coverage. Pay it for multi-commit or multi-session work. Skip it f
 - Gates prove items. Sprinty runs each executable gate itself at `item_done` and records the real output, so do not pass `gate_results` for them; only `manual` gates take your evidence. A gate that cannot fail (`true`, `echo ok`) is rejected when you declare it.
 - Item gates run under a 5s default budget. Set `gate_timeout_ms` to a positive integer to customize it or `null` to disable the timeout. A gate that overruns is killed and marked unverified: the item still completes, but nothing was proven.
 - Every response carries `next_tools`, concrete calls derived from real state. Prefer them over guessing ids.
-- `item_done` records each item's SemVer changelog verb and line; `changelog({ path? })` generates the Markdown file from those entries.
-- `sprint_close` is the final gate and comes after changelog generation: it rejects open items, missing commits/changelog/coverage, and failing executable gates.
+- `item_done` records each item's SemVer changelog verb and line; `changelog({ path? })` previews or exports Markdown from those entries.
+- `sprint_close` is the final gate: it rejects open items, missing commits/item changelog entries/coverage, or failing executable gates, then writes the canonical changelog automatically.
 - Every subsprint must end resolved. A subsprint you created but never filled with items still counts as open work; give it items or drop it with `item_deprecate({ id: "S0n", reason })`.

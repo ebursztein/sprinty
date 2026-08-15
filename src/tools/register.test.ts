@@ -247,6 +247,7 @@ describe("tool handlers", () => {
     });
     const closed = await tools.sprint_close!.handler({ coverage: { path: writeCoverage(dir), format: "lcov" } }) as { status: string };
     expect(closed.status).toBe("closed");
+    expect(readFileSync(join(dir, ".sprinty", "CHANGELOG.md"), "utf8")).toContain("added the first tracked item");
     expect(dashboardCloseCalls).toBe(1);
   });
 

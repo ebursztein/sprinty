@@ -100,7 +100,7 @@ export function buildToolHandlers(
         await detachStore();
         return { detached: true };
       }),
-    sprint_close: def(S.SprintCloseInput, "Close the sprint after changelog({path?}) has generated the SemVer Markdown and after a programmatic re-check of all gates.",
+    sprint_close: def(S.SprintCloseInput, "Re-check all gates, write the canonical SemVer changelog, and close the sprint.",
       async (i) => {
         const view = (await getStore()).closeSprint(i);
         await dashboard.close();
@@ -221,7 +221,7 @@ export function buildToolHandlers(
           ...(allMatches.length > matches.length ? { truncated: true, total_matches: allMatches.length } : {}),
         };
       }),
-    changelog: def(S.ChangelogInput, "Generate the SemVer Markdown changelog and return only its path.",
+    changelog: def(S.ChangelogInput, "Preview or export the current SemVer Markdown changelog and return only its path; sprint_close writes the canonical changelog automatically.",
       async (i) => {
         const store = await getStore();
         const path = i.path ?? join(store.dataDir, "CHANGELOG.md");

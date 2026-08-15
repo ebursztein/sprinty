@@ -25,9 +25,9 @@ Build is item-driven: sprint_new(goal, git_dir, data_dir, context_notes?) -> das
 Each subsprint should be one feature. Notes attach only to item ids: use note_add(id, text), note_list(id), note_get(id), and note_update(id, text).
 Use artifact_add/list/get/update for durable file outputs attached to the sprint, optionally related to item ids.
 next() returns a compact work window, blocked item ids/titles, scoped relations, artifacts, and recent activity. It deliberately omits the full dependency graph.
-item_done() records a Git-backed file change map and a semver changelog verb in the ledger; compact tool responses omit change maps. changelog({ path? }) generates SemVer Markdown with sections, coverage, and change-map tables, then returns only the path.
-Before sprint_close, call changelog({ path? }) so the SemVer Markdown changelog is written for the sprint. Subsprints close automatically when their items are completed, split, or deprecated. sprint_close re-runs executable gates;
-it refuses to close if anything is open, uncommitted, missing changelog, missing coverage, or failing a gate. A subsprint left with no items is open work: give it items or drop it with item_deprecate. IDs are minted by the server.
+item_done() records a Git-backed file change map and a semver changelog verb in the ledger; compact tool responses omit change maps. changelog({ path? }) previews or exports the current SemVer Markdown and returns only the path.
+sprint_close writes the canonical data-dir changelog automatically after re-running executable gates;
+it refuses to close if anything is open, uncommitted, missing an item changelog entry, missing coverage, or failing a gate. A subsprint left with no items is open work: give it items or drop it with item_deprecate. IDs are minted by the server.
 Every response carries next_tools: concrete calls derived from live state, with ids that exist. sprint_resume returns a bounded briefing so state is recovered rather than re-derived.
 Use search(pattern, context_size) to query the immutable record with bounded character context and focused tool_call hints. sprint_new and sprint_resume return a live dashboard URL; dashboard_info reports it and dashboard_restart refreshes it.`;
 

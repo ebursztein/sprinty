@@ -1,6 +1,6 @@
 import { Ledger } from "../ledger/ledger.js";
 import { SprintBook } from "../ledger/book.js";
-import { existsSync, statSync } from "node:fs";
+import { existsSync, mkdirSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { project, type SprintView } from "../domain/projection.js";
 import { mintSubsprintId, mintItemId, mintNoteId, legacyNoteId } from "../domain/ids.js";
@@ -463,6 +463,13 @@ export class SprintStore {
     }
 
     if (blockers.length > 0) throw new StoreError("Sprint cannot close.", blockers);
+    mkdirSync(this.dataDir, { recursive: true });
+    writeFileSync(join(this.dataDir, "CHANGELOG.md"), renderChangelogMarkdown({
+      ...s,
+      status: "closed",
+      coverage,
+      coverage_state: coverageState,
+    }));
     this.append({ type: "sprint_closed", gate_results: results, coverage, coverage_state: coverageState });
     return this.requireState();
   }

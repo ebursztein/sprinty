@@ -28,9 +28,7 @@ export function nextTools(view: SprintView | null, context: { id?: string | unde
   const open = items.filter((item) => item.status === "open");
 
   if (open.length === 0) {
-    return view.changelog.length > 0
-      ? [`changelog({})`, `sprint_close({ coverage })`]
-      : [`sprint_close({ coverage })`];
+    return [`sprint_close({ coverage })`];
   }
 
   const statusById = new Map(view.graph.nodes.map((node) => [node.id, node.status]));

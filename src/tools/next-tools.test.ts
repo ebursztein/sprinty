@@ -79,7 +79,7 @@ describe("nextTools suggests calls that actually work", () => {
     store.createSubsprint({ description: "d", goals: ["go"], gates: [GATE] });
     store.addItem({ subsprint: "S01", description: "the only item", code_locations: ["a.ts"], gates: [GATE] });
     store.done({ item: "S01-001", commit_id: sha, changelog: { verb: "added", line: "Added." } });
-    expect(nextTools(store.read())).toEqual([`changelog({})`, `sprint_close({ coverage })`]);
+    expect(nextTools(store.read())).toEqual([`sprint_close({ coverage })`]);
   });
 
   it("biases to the item the caller just touched", () => {
