@@ -11,6 +11,7 @@ import { buildToolHandlers, type ToolHandlers } from "./register.js";
 const root = dirname(dirname(dirname(fileURLToPath(import.meta.url))));
 const baselineFixtureDir = join(root, "tests/data/capsem-sprinty-baseline");
 const activeEtaFixtureDir = join(root, "tests/data/capsem-active-eta-regression");
+const nightlyCleanupFixtureDir = join(root, "tests/data/capsem-nightly-cleanup");
 const gitDir = root;
 const item = "S03-008";
 const noteWritableItem = "S06-019";
@@ -206,6 +207,22 @@ async function measureP95(run: () => Promise<void>): Promise<{ avg: number; p95:
 }
 
 describe("public Sprinty tool responses", () => {
+  it("loads the large capsem nightly cleanup fixture", () => {
+    const view = new SprintStore(gitDir, nightlyCleanupFixtureDir).read();
+    const items = view.subsprints.flatMap((entry) => entry.items);
+
+    expect(view.status).toBe("active");
+    expect(view.subsprints).toHaveLength(12);
+    expect(items).toHaveLength(178);
+    expect(view.completion.finished_items).toBe(159);
+    expect(items.filter((entry) => entry.status === "completed")).toHaveLength(159);
+    expect(items.filter((entry) => entry.status === "deprecated")).toHaveLength(6);
+    expect(items.filter((entry) => entry.status === "split")).toHaveLength(4);
+    expect(items.filter((entry) => entry.status === "open")).toHaveLength(9);
+    expect(view.artifacts).toHaveLength(105);
+    expect(items.some((entry) => entry.id === "S12-036")).toBe(true);
+  });
+
   it("exposes only the canonical public tool list", async () => {
     await withFixture(async (tools) => {
       expect(Object.keys(tools).sort()).toEqual(publicTools);
