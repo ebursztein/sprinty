@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { SprintStore } from "../store/store.js";
 import { buildToolHandlers, type DashboardController, type DashboardInfo, type ToolHandlers } from "./register.js";
-import { ItemUpdateInput } from "./schemas.js";
+import { ItemUpdateInput, SprintCloseInput } from "./schemas.js";
 
 function initRepo(): { dir: string; sha: string } {
   const dir = mkdtempSync(join(tmpdir(), "sprinty-tools-"));
@@ -86,11 +86,13 @@ beforeEach(() => {
 });
 
 describe("tool handlers", () => {
-  it("requires an item id and rejects fields outside item_update's allowlist", () => {
+  it("validates item_update and sprint_close recovery inputs", () => {
     expect(() => ItemUpdateInput.parse({ gates: [{ kind: "command", spec: "npm test" }] })).toThrow();
     expect(() => ItemUpdateInput.parse({ id: "S01-001", code_locations: ["b.ts"] })).toThrow();
     expect(ItemUpdateInput.parse({ id: "S01-001", gate_timeout_ms: null })).toEqual({ id: "S01-001", gate_timeout_ms: null });
     expect(ItemUpdateInput.parse({ id: "S01-001", commit_id: "deadbeef" })).toEqual({ id: "S01-001", commit_id: "deadbeef" });
+    expect(SprintCloseInput.parse({ force: true })).toEqual({ force: true });
+    expect(SprintCloseInput.parse({})).toEqual({ force: false });
   });
 
   it("info returns startup orientation and sprint rows before a sprint is bound", async () => {

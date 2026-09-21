@@ -108,7 +108,20 @@ describe("SprintStore lifecycle", () => {
       gate_timeout_ms: null,
     });
     store.done({ item: "S01-001", commit_id: sha, changelog: { verb: "changed", line: "Changed gate settings." } });
-    expect(() => store.updateItem({ target: "S01-001", gate_timeout_ms: 500 })).toThrow(/completed item/);
+    const completed = store.updateItem({
+      target: "S01-001",
+      gates: [{ kind: "command", spec: "git rev-parse --is-inside-work-tree" }],
+      gate_timeout_ms: 500,
+    });
+    expect(completed.subsprints[0]!.items[0]).toMatchObject({
+      status: "completed",
+      gates: [{ kind: "command", spec: "git rev-parse --is-inside-work-tree" }],
+      gate_timeout_ms: 500,
+    });
+    expect(() => store.updateItem({
+      target: "S01-001",
+      gates: [{ kind: "manual", spec: "reviewer approves the revised result" }],
+    })).toThrow(/manual evidence cannot be added after completion/);
   });
 
   it("corrects a completed item's verified commit and recomputes its change map", () => {
@@ -388,7 +401,7 @@ describe("sprint_close teeth", () => {
     store.createSprint("g");
     store.createSubsprint({ description: "d", goals: ["go"], gates: [{ kind: "command", spec: "git rev-parse HEAD" }] });
     store.addItem({ subsprint: "S01", description: "i", code_locations: ["a.ts"], gates: [{ kind: "command", spec: "git rev-parse HEAD" }] });
-    try { store.closeSprint({ coverage: { path: writeCoverage(dir), format: "lcov" } }); throw new Error("should have thrown"); }
+    try { store.closeSprint({ coverage: { path: writeCoverage(dir), format: "lcov" }, force: true }); throw new Error("should have thrown"); }
     catch (e) { expect(e).toBeInstanceOf(StoreError); expect((e as StoreError).blockers.join(" ")).toContain("S01-001"); }
   });
 
@@ -519,6 +532,38 @@ describe("sprint_close teeth", () => {
     store.addItem({ subsprint: "S01", description: "i", code_locations: ["a.ts"], gates: [{ kind: "command", spec: "git rev-parse HEAD" }] });
     store.done({ item: "S01-001", commit_id: sha, gate_results: [{ kind: "command", spec: "git rev-parse HEAD", passed: true, evidence: "ok" }], changelog: { verb: "added", line: "Added close failure coverage." } });
     expect(() => store.closeSprint({ coverage: { path: writeCoverage(dir), format: "lcov" } })).toThrow(StoreError);
+  });
+
+  it("uses a completed item's revised gate and timeout during close", () => {
+    store.createSprint("g");
+    store.createSubsprint({ description: "d", goals: ["go"], gates: [{ kind: "command", spec: "git rev-parse HEAD" }] });
+    store.addItem({ subsprint: "S01", description: "i", code_locations: ["a.ts"], gates: [{ kind: "command", spec: "git rev-parse HEAD" }] });
+    store.done({ item: "S01-001", commit_id: sha, changelog: { verb: "changed", line: "Changed recoverable gate settings." } });
+    const slowGate = { kind: "command" as const, spec: "node -e \"setTimeout(() => {}, 80)\"" };
+    store.updateItem({ target: "S01-001", gates: [slowGate], gate_timeout_ms: 10 });
+
+    try { store.closeSprint({ coverage: { not_applicable: "timeout recovery test" } }); throw new Error("should have thrown"); }
+    catch (error) {
+      expect(error).toBeInstanceOf(StoreError);
+      expect((error as StoreError).blockers.join(" ")).toContain("Gate failed");
+    }
+
+    store.updateItem({ target: "S01-001", gate_timeout_ms: 500 });
+    expect(store.closeSprint({ coverage: { not_applicable: "timeout recovery test" } }).status).toBe("closed");
+  });
+
+  it("force closes past gate failures but records the override", () => {
+    store.createSprint("g");
+    store.createSubsprint({ description: "d", goals: ["go"], gates: [{ kind: "command", spec: "node -e \"process.exit(1)\"" }] });
+    store.addItem({ subsprint: "S01", description: "i", code_locations: ["a.ts"], gates: [{ kind: "command", spec: "git rev-parse HEAD" }] });
+    store.done({ item: "S01-001", commit_id: sha, changelog: { verb: "changed", line: "Changed forced close handling." } });
+
+    const view = store.closeSprint({ coverage: { not_applicable: "forced close test" }, force: true });
+    const closeEvent = new Ledger(join(dir, ".sprinty", "001.jsonl")).read().findLast((event) => event.type === "sprint_closed");
+
+    expect(view.status).toBe("closed");
+    expect(closeEvent).toMatchObject({ forced: true });
+    expect(closeEvent?.gate_results).toContainEqual(expect.objectContaining({ passed: false }));
   });
 
   it("re-verifies completed item commits when closing", () => {

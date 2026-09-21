@@ -28,7 +28,10 @@ export const InfoInput = z.object({
   workspace_dirs: z.array(z.string().min(1)).optional(),
 });
 export const SprintDetachInput = z.object({});
-export const SprintCloseInput = z.object({ coverage: z.union([CoverageInput, CoverageNotApplicableInput]).optional() });
+export const SprintCloseInput = z.object({
+  coverage: z.union([CoverageInput, CoverageNotApplicableInput]).optional(),
+  force: z.boolean().default(false),
+});
 export const SprintArchiveInput = z.object({ reason: z.string().min(1) });
 export const ChangelogInput = z.object({
   path: z.string().min(1).optional(),

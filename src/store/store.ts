@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { project, type SprintView } from "../domain/projection.js";
 import { mintSubsprintId, mintItemId, mintNoteId, legacyNoteId } from "../domain/ids.js";
 import { commitNumstat, gitContext, verifyCommit } from "../git/git.js";
-import { runGate } from "../gates/run.js";
+import { DEFAULT_GATE_TIMEOUT_MS, runGate } from "../gates/run.js";
 import { GateEvidenceError, ITEM_GATE_TIMEOUT_MS, gateKey, isExecutable, looksLikeProse, slowGateWarning, specIsNoOp, validateGateEvidence } from "../gates/policy.js";
 import { searchLedger, type SearchMatch } from "../domain/search.js";
 import { GraphCycleError, buildDependencyGraph } from "../domain/graph.js";
@@ -164,7 +164,12 @@ export class SprintStore {
       }
       throw new StoreError(`Unknown item ${input.target}.`);
     }
-    if (updatesExecution && item.status !== "open") throw new StoreError(`Cannot change gates or gate timeout on ${item.status} item ${input.target}.`);
+    if (updatesExecution && item.status !== "open" && item.status !== "completed") {
+      throw new StoreError(`Cannot change gates or gate timeout on ${item.status} item ${input.target}.`);
+    }
+    if (item.status === "completed" && input.gates?.some((gate) => !isExecutable(gate))) {
+      throw new StoreError(`Completed item ${input.target} can only replace gates with executable gates; manual evidence cannot be added after completion.`);
+    }
     if (updatesCommit && item.status !== "completed") throw new StoreError(`Cannot change commit_id on ${item.status} item ${input.target}; complete it first.`);
     if (input.commit_id && !verifyCommit(this.dir, input.commit_id)) throw new StoreError(`Commit ${input.commit_id} not found in repo.`);
     const replacementChangeMap = input.commit_id
@@ -390,7 +395,7 @@ export class SprintStore {
     return renderChangelogMarkdown(this.requireState());
   }
 
-  closeSprint(input: { coverage?: CoverageInput | CoverageNotApplicableInput | undefined } = {}): SprintView {
+  closeSprint(input: { coverage?: CoverageInput | CoverageNotApplicableInput | undefined; force?: boolean | undefined } = {}): SprintView {
     const s = this.requireState();
     if (s.status !== "active") throw new StoreError(`Sprint is already ${s.status}.`);
     const blockers: string[] = [];
@@ -405,7 +410,10 @@ export class SprintStore {
         if (!item.commit_id) blockers.push(`Item ${item.id} completed without a commit.`);
         else if (!verifyCommit(this.dir, item.commit_id)) blockers.push(`Item ${item.id} completed with a commit that no longer resolves: ${item.commit_id}.`);
         if (!item.changelog) blockers.push(`Item ${item.id} completed without a changelog line.`);
-        try { this.validateGateEvidence(item.gates, item.gate_results); }
+        const manualGates = item.gates.filter((gate) => !isExecutable(gate));
+        const manualKeys = new Set(manualGates.map(gateKey));
+        const manualResults = item.gate_results.filter((result) => manualKeys.has(gateKey(result.supersedes ?? result)));
+        try { this.validateGateEvidence(manualGates, manualResults); }
         catch (err) { blockers.push(`Item ${item.id}: ${(err as Error).message}`); }
       }
     }
@@ -444,22 +452,26 @@ export class SprintStore {
     }
 
     // Re-run executable gates: every completed item's gates + every subsprint's gates.
-    const toRun = new Map<string, { owners: string[]; gate: Gate }>();
-    const queueGate = (owner: string, gate: Gate): void => {
+    const toRun = new Map<string, { owners: string[]; gate: Gate; timeoutMs: number | null }>();
+    const queueGate = (owner: string, gate: Gate, timeoutMs: number | null): void => {
       if (!isExecutable(gate)) return;
       const key = gateKey(gate);
       const existing = toRun.get(key);
-      if (existing) existing.owners.push(owner);
-      else toRun.set(key, { owners: [owner], gate });
+      if (existing) {
+        existing.owners.push(owner);
+        existing.timeoutMs = existing.timeoutMs === null || timeoutMs === null
+          ? null
+          : Math.max(existing.timeoutMs, timeoutMs);
+      } else toRun.set(key, { owners: [owner], gate, timeoutMs });
     };
-    for (const item of allItems) if (item.status === "completed") for (const g of item.gates) queueGate(item.id, g);
-    for (const sub of s.subsprints) for (const g of sub.gates) queueGate(sub.id, g);
+    for (const item of allItems) if (item.status === "completed") for (const g of item.gates) queueGate(item.id, g, item.gate_timeout_ms);
+    for (const sub of s.subsprints) for (const g of sub.gates) queueGate(sub.id, g, DEFAULT_GATE_TIMEOUT_MS);
 
     const results: GateResult[] = [];
-    for (const { owners, gate } of toRun.values()) {
-      const r = runGate(gate, this.dir);
+    for (const { owners, gate, timeoutMs } of toRun.values()) {
+      const r = runGate(gate, this.dir, timeoutMs);
       results.push(r);
-      if (!r.passed) blockers.push(`Gate failed for ${owners.join(", ")}: ${gate.spec}`);
+      if (!r.passed && !input.force) blockers.push(`Gate failed for ${owners.join(", ")}: ${gate.spec}`);
     }
 
     if (blockers.length > 0) throw new StoreError("Sprint cannot close.", blockers);
@@ -470,7 +482,7 @@ export class SprintStore {
       coverage,
       coverage_state: coverageState,
     }));
-    this.append({ type: "sprint_closed", gate_results: results, coverage, coverage_state: coverageState });
+    this.append({ type: "sprint_closed", gate_results: results, forced: input.force ?? false, coverage, coverage_state: coverageState });
     return this.requireState();
   }
 

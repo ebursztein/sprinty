@@ -100,11 +100,11 @@ export function buildToolHandlers(
         await detachStore();
         return { detached: true };
       }),
-    sprint_close: def(S.SprintCloseInput, "Re-check all gates, write the canonical SemVer changelog, and close the sprint.",
+    sprint_close: def(S.SprintCloseInput, "Re-check all gates, write the canonical SemVer changelog, and close the sprint; force bypasses only executable gate failures.",
       async (i) => {
         const view = (await getStore()).closeSprint(i);
         await dashboard.close();
-        return ack("sprint_close", view, { status: view.status });
+        return ack("sprint_close", view, { status: view.status, forced: i.force });
       }),
     sprint_archive: def(S.SprintArchiveInput, "Archive the sprint with a recovery reason, bypassing normal close gates.",
       async (i) => {

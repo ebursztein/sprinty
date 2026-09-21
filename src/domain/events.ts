@@ -139,6 +139,7 @@ export const SubsprintDeprecated = z.object({
 export const SprintClosed = z.object({
   ...base, type: z.literal("sprint_closed"),
   gate_results: z.array(GateResult),
+  forced: z.boolean().default(false),
   coverage: CoverageSummary.nullable().default(null),
   coverage_state: CoverageState.optional(),
 });

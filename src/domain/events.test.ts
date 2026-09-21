@@ -132,6 +132,12 @@ describe("LedgerEvent", () => {
     expect(e.reason).toBe("alpha recovery");
   });
 
+  it("records whether sprint closure forced past gate failures", () => {
+    const closed = { ...base, type: "sprint_closed", gate_results: [], coverage: null };
+    expect(LedgerEvent.parse(closed)).toMatchObject({ forced: false });
+    expect(LedgerEvent.parse({ ...closed, forced: true })).toMatchObject({ forced: true });
+  });
+
   it("rejects an unknown event type", () => {
     expect(() => LedgerEvent.parse({ ...base, type: "smuggled" })).toThrow();
   });

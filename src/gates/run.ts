@@ -2,11 +2,11 @@ import { execSync } from "node:child_process";
 import { resolve } from "node:path";
 import type { Gate, GateResult } from "../domain/gates.js";
 
-const DEFAULT_TIMEOUT_MS = 5 * 60 * 1000;
+export const DEFAULT_GATE_TIMEOUT_MS = 5 * 60 * 1000;
 
 export { isExecutable } from "./policy.js";
 
-export function runGate(gate: Gate, cwd: string, timeoutMs: number | null = DEFAULT_TIMEOUT_MS): GateResult {
+export function runGate(gate: Gate, cwd: string, timeoutMs: number | null = DEFAULT_GATE_TIMEOUT_MS): GateResult {
   const gateCwd = gate.cwd ? resolve(cwd, gate.cwd) : cwd;
   try {
     const out = execSync(gate.spec, {
