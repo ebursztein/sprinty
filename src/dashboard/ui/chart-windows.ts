@@ -142,11 +142,20 @@ export function buildCompletionSummary(
   const completedItemDurations: number[] = [];
   const rateTotal = Math.max(0, totalItems);
   const remainingItems = Math.max(0, openItems);
+  const finishedItems = Math.max(0, Math.min(rateTotal, rateTotal - remainingItems));
+  const resolvedInWindow = new Set(
+    normalized
+      .filter((row) => row.entry.type === "item_resolved" && row.time >= windowStart)
+      .map((row) => row.entry.id),
+  );
+  const chartedResolutionIds = new Set<string>();
   let completedItems = 0;
   let lastResolvedAt: number | null = null;
 
   if (rateTotal > 0) {
-    completedItems = Math.min(rateTotal, normalized.filter((row) => row.entry.type === "item_resolved" && row.time < windowStart).length);
+    // Current item state is authoritative. Timeline rows provide the shape of the
+    // chart, but may be outside the visible/history window or absent in older data.
+    completedItems = Math.max(0, finishedItems - resolvedInWindow.size);
     ratePoints.push({ time: windowStart, percent: percent(completedItems, rateTotal), completed: completedItems });
   }
 
@@ -156,7 +165,8 @@ export function buildCompletionSummary(
       continue;
     }
 
-    if (entry.type !== "item_resolved") continue;
+    if (entry.type !== "item_resolved" || chartedResolutionIds.has(entry.id)) continue;
+    chartedResolutionIds.add(entry.id);
     const itemStartedAt = starts.get(entry.id);
     const itemDurationMs = itemStartedAt === undefined ? null : Math.max(0, time - itemStartedAt);
     if (itemDurationMs !== null) completedItemDurations.push(itemDurationMs);
@@ -174,7 +184,7 @@ export function buildCompletionSummary(
     points.push({ time, durationMs, movingAverageMs: 0 });
 
     if (rateTotal > 0) {
-      completedItems = Math.min(rateTotal, completedItems + 1);
+      completedItems = Math.min(finishedItems, completedItems + 1);
       ratePoints.push({ time, percent: percent(completedItems, rateTotal), completed: completedItems });
     }
   }

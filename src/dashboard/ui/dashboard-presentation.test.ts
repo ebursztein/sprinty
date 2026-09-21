@@ -62,6 +62,9 @@ describe("dashboard presentation", () => {
     expect(app).toContain("recentTimelineWindow(model.sprint.timeline, chartWindowMs, nowMs, sprintStartedAtMs)");
     expect(app).toContain("buildEventBuckets(recentTimeline, { nowMs, windowMs: chartWindowMs, sprintStartedAtMs");
     expect(app).toContain("buildCompletionSummary(model.sprint.timeline, model.progress.items.open, model.progress.items.total, {");
+    expect(app).toContain('fetch("/state", { cache: "no-store" })');
+    expect(app).toContain("{model.progress.items.done} finished item");
+    expect(app).not.toContain("{completionSummary.points.length} finished item");
     expect(app).toContain("new Chart(eventChartCanvas");
     expect(app).toContain("new Chart(completionChartCanvas");
     expect(app).toContain("new Chart(changelogVerbChartCanvas");

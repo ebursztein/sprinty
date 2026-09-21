@@ -12,7 +12,12 @@ export function startDashboard(getState: () => SprintView | null): Promise<Dashb
   const staticRoot = dashboardStaticRoot();
   const server: Server = createServer((req, res) => {
     if (req.url === "/state") {
-      res.writeHead(200, { "content-type": "application/json" });
+      res.writeHead(200, {
+        "content-type": "application/json",
+        "cache-control": "no-store, no-cache, must-revalidate",
+        pragma: "no-cache",
+        expires: "0",
+      });
       res.end(JSON.stringify(getState() ?? {
         goal: "(no sprint)",
         worktree: "",

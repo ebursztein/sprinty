@@ -222,7 +222,7 @@ function render(s){
 }
 async function tick(){
   try{
-    const response=await fetch("/state");
+    const response=await fetch("/state",{cache:"no-store"});
     render(await response.json());
   }catch(err){
     byId("goal").textContent="Dashboard disconnected";

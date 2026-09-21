@@ -65,6 +65,24 @@ describe("dashboard fixed chart windows", () => {
     expect(summary.rateEnd).toBe(now + hour);
   });
 
+  it("anchors chart completion to the current done count when timeline history is incomplete", () => {
+    const summary = buildCompletionSummary([
+      event("item_added", 2, "S01-003"),
+      event("item_resolved", 1, "S01-003"),
+    ], 1, 3, {
+      nowMs: now,
+      windowMs,
+      movingAverageWindow: 5,
+      formatEta: (ts) => new Date(ts).toISOString(),
+    });
+
+    expect(summary.ratePoints.map((point) => [point.time, point.completed])).toEqual([
+      [now - windowMs, 1],
+      [now - hour, 2],
+      [now, 2],
+    ]);
+  });
+
   it("stops completion rate at the last item resolution when nothing remains", () => {
     const summary = buildCompletionSummary([
       event("item_added", 3, "S01-001"),

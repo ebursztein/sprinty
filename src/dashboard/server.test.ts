@@ -33,6 +33,22 @@ describe("dashboard", () => {
     expect(html).toContain("<!doctype html>");
   });
 
+  it("serves every /state poll from the latest projection without browser caching", async () => {
+    let current = view;
+    dash = await startDashboard(() => current);
+
+    const first = await fetch(`${dash.url}/state`);
+    expect(first.headers.get("cache-control")).toContain("no-store");
+    expect((await first.json()).completion.finished_items).toBe(0);
+
+    current = {
+      ...view,
+      completion: { ...view.completion, total_items: 1, finished_items: 1, percent_complete: 100 },
+    };
+    const second = await fetch(`${dash.url}/state`);
+    expect((await second.json()).completion.finished_items).toBe(1);
+  });
+
   it("serves the compiled dashboard shell and static assets", async () => {
     dash = await startDashboard(() => ({
       ...view,

@@ -148,7 +148,7 @@
   async function tick(): Promise<void> {
     nowMs = Date.now();
     try {
-      const response = await fetch("/state");
+      const response = await fetch("/state", { cache: "no-store" });
       if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
       sprint = await response.json() as SprintView;
       error = null;
@@ -634,7 +634,7 @@
                   <canvas bind:this={completionChartCanvas} aria-label="Completion rate trend"></canvas>
                   <div class="completion-scale">
                     <span>{completionSummary.ratePoints.at(-1)?.percent ?? 0}% complete</span>
-                    <span>{completionSummary.points.length} finished item{completionSummary.points.length === 1 ? "" : "s"}</span>
+                    <span>{model.progress.items.done} finished item{model.progress.items.done === 1 ? "" : "s"}</span>
                   </div>
                 </div>
                 <div class="completion-summary-line">{completionStatsLine(completionSummary)}</div>
