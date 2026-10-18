@@ -8,6 +8,18 @@ change maps; SemVer changelogs; and a local dashboard so humans can watch the wo
 
 ![Sprinty dashboard](/docs/sprinty-dashboard.png)
 
+## What's new in 0.2.0
+
+- **Multiple agents, one sprint.** Each agent gets an adjective–animal name and its own token. Exclusive item claims and claim generations prevent agents from overwriting each other's work.
+- **Visible stalls and handovers.** Track claim age and ownership history. Sprinty flags potential stalls after an hour without owner activity or three other item completions without progress; reassignment always requires an explicit handover.
+- **ETA that handles laptop sleep.** Tools and dashboard share an activity-aware estimate that separates queue time from observed work, accounts for parallel agents and dependencies, and shows when work is paused or awaiting its owner.
+- **Safer concurrent writes.** Cross-process locking, journaled recovery, pinned sprint bindings, and asynchronous gates protect shared local sprint data.
+- **Updated agent skills.** Claude, Codex, and Gemini bundles explain tokens, claims, heartbeats, progress, and takeovers.
+
+To upgrade, use `npx -y sprinty-mcp@0.2.0` as your MCP server command and restart the connection. Resume your existing sprint, retain the returned agent token, and call `item_claim` before editing or completing work. Concurrent agents must share the same canonical repository and data directory, with a separate token per agent. Existing ledgers remain readable; the new ETA shows “learning” until it has three eligible completed items.
+
+See the [0.2.0 release notes](https://github.com/ebursztein/sprinty/releases/tag/v0.2.0) and [concurrent-agent workflow](#concurrent-agents-and-timing).
+
 ## Install
 
 Sprinty is published to npm as `sprinty-mcp`. The npm package is the MCP server. Claude and Codex
