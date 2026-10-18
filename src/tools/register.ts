@@ -303,8 +303,8 @@ export function buildToolHandlers(
     return { id: i.id, claim: compactClaim(findItem(view, i.id)!.claim) };
   });
   handlers.item_release = def(claimInput, "Release your claim for another agent.", async i => { (await getStore()).releaseItem(i.id); return { released: i.id }; });
-  handlers.item_takeover = def(claimInput.extend({ explanation: z.string().trim().min(1).max(500) }), "Take over a potentially stalled claim with a bounded handover explanation.", async i => {
-    const view = (await getStore()).claimItem(i.id, i.explanation);
+  handlers.item_takeover = def(claimInput.extend({ explanation: z.string().trim().min(1).max(500), recover_inactive: z.boolean().default(false) }), "Take over a potentially stalled claim with a 1–500 character explanation. For an interrupted owner inactive over five minutes, explicitly set recover_inactive:true; active owners cannot be recovered.", async i => {
+    const view = (await getStore()).claimItem(i.id, i.explanation, i.recover_inactive);
     return { id: i.id, claim: compactClaim(findItem(view, i.id)!.claim) };
   });
   handlers.item_progress = def(claimInput.extend({ message: z.string().trim().min(1).max(500) }), "Record meaningful progress on your claimed item.", async i => { (await getStore()).progressItem(i.id, i.message); return { progressed: i.id }; });

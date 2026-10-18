@@ -111,6 +111,23 @@ describe("concurrent writers and agents", () => {
         expect(timed.read().subsprints[0]!.items.every(i => i.claim.owner === b.actor.id)).toBe(true);
         expect(() => actors.run(b.actor, () => timed.claimItem(second, "x".repeat(501)))).toThrow();
     });
+    it("grants exactly one recovery across processes and fences the interrupted owner", async () => {
+        const { dir, store, add } = fixture();
+        const id = add();
+        const original = store.attachAgent();
+        actors.run(original.actor, () => store.claimItem(id));
+        const now = Date.now() + 6 * 60000;
+        const result = await Promise.all(Array.from({ length: 3 }, () => child(`
+      import { SprintStore } from ${JSON.stringify(storeModule)};
+      import { actors } from ${JSON.stringify(actorModule)};
+      const store = new SprintStore(${JSON.stringify(dir)}, ${JSON.stringify(join(dir, ".sprinty"))}, () => ${now});
+      const identity = store.attachAgent();
+      actors.run(identity.actor,()=>{try {store.claimItem(${JSON.stringify(id)},'Original session terminated.',true);process.stdout.write('won')} catch {process.stdout.write('lost')}});
+    `)));
+        expect(result.filter(r => r === "won")).toHaveLength(1);
+        expect(store.read().subsprints[0]!.items[0]!.claim.generation).toBe(2);
+        expect(() => actors.run(original.actor, () => store.progressItem(id, "Stale write"))).toThrow("Claim");
+    });
     it("rejects ambiguity on a shared connection and scopes authenticated calls", async () => {
         const { store, add } = fixture();
         const id = add();

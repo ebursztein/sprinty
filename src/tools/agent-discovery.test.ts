@@ -20,6 +20,32 @@ function fixture() {
 }
 const caller = (agent: string) => ({ client_session_id: "claude-session", client_agent_id: agent });
 describe("automatic native identity and discovery", () => {
+  it("recovers interrupted inactive owners explicitly and fences a returning session", async () => {
+    const { dir, make, advance, store } = fixture();
+    const tools = make();
+    const call = async (name: string, args = {}) => await tools[name]!.handler(args) as any;
+    await call("sprint_new", { goal: "Interrupted agents", git_dir: dir, ...caller("parent") });
+    await call("subsprint_new", { description: "Recovery", goals: ["Recover safely"], gates: [{ kind: "manual", spec: "Inspect" }], ...caller("parent") });
+    await call("item_add", { subsprint: "S01", title: "Interrupted work", description: "Recover an interrupted owner's work.", code_locations: ["src"], gates: [{ kind: "manual", spec: "Inspect" }], ...caller("parent") });
+    const owned = await call("item_claim", { id: "S01-001", ...caller("child") });
+    const takeover = { id: "S01-001", explanation: "Child session terminated; continuing its work.", ...caller("parent") };
+    advance(5 * 60000);
+    await expect(call("item_takeover", { ...takeover, recover_inactive: true })).rejects.toThrow(/must exceed 300000 ms/);
+    advance(1);
+    const listed = await call("agent_list", caller("parent"));
+    expect(listed.agents.find((a: any) => a.id === owned.agent.id).status).toBe("inactive");
+    await expect(call("item_takeover", takeover)).rejects.toThrow(/300001 ms.*3600000 ms.*0\/3.*recover_inactive/);
+    await expect(call("item_takeover", { ...takeover, recover_inactive: true, explanation: " " })).rejects.toThrow();
+    const recovered = await call("item_takeover", { ...takeover, recover_inactive: true });
+    expect(recovered.claim.generation).toBe(2);
+    expect(store.read().subsprints[0]!.items[0]!.claim.history[1]!.explanation).toBe(takeover.explanation);
+    // A resumed original caller keeps its identity but cannot mutate the new owner's work.
+    const restarted = make();
+    await restarted.sprint_resume!.handler({ git_dir: dir, ...caller("child") });
+    await expect(restarted.item_progress!.handler({ id: "S01-001", message: "Stale write", ...caller("child") })).rejects.toThrow(/Claim/);
+    await call("item_progress", { id: "S01-001", message: "Recovered", ...caller("parent") });
+  });
+
   it("isolates shared-connection callers, recovers after restart, and scopes mine without tokens", async () => {
     const { dir, store, make, advance } = fixture();
     let tools = make();
