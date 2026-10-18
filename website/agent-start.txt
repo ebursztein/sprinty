@@ -1,4 +1,4 @@
-Set up Sprinty for this project so our implementation plan, item ownership, verification evidence, and changelog survive context compaction and session restarts.
+Set up Sprinty for this project so we can plan the work, coordinate our agents, and finish with verified results. Keep our implementation plan, item ownership, verification evidence, and changelog available across context compaction and session restarts.
 
 1. Inspect the current repository and identify my coding client. Preserve existing settings and sprint data.
 2. Install the two official Sprinty skills from https://github.com/ebursztein/sprinty using:

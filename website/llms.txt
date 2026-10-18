@@ -1,6 +1,6 @@
 # Sprinty
 
-> Sprinty is an open-source MCP server and pair of agent skills for durable coding sprints. It records the plan, dependencies, item claims, progress, gate evidence, artifacts, and changelog in a local append-only ledger.
+> Agentic sprints. Done right. Sprinty is an open-source MCP server and pair of agent skills that help coding agents plan work, coordinate ownership, and finish with verified results. It records the plan, dependencies, item claims, progress, gate evidence, artifacts, and changelog in a local append-only ledger.
 
 ## Get started
 - [Copyable setup prompt](https://ebursztein.github.io/sprinty/agent-start.txt): instructions a user can paste into a coding agent to install skills and configure the MCP server.
