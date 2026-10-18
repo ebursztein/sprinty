@@ -24,7 +24,7 @@
     <meta name="theme-color" content="#2563eb" />
     <link rel="canonical" href="https://ebursztein.github.io/sprinty/" />
     <link rel="icon" href="assets/mark.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="styles.css?v=3" />
+    <link rel="stylesheet" href="styles.css?v=4" />
     <link
       rel="alternate"
       type="text/plain"
@@ -36,278 +36,74 @@
   <body>
     <a class="skip-link" href="#main">Skip to content</a>
     <header class="site-header">
-      <a class="logo" href="./" aria-label="Sprinty home"
-        ><span class="logo-mark" aria-hidden="true">s</span>Sprinty</a
-      >
+      <a class="logo" href="./" aria-label="Sprinty home"><span class="logo-mark" aria-hidden="true">s</span>Sprinty</a>
       <nav aria-label="Main navigation">
-        <a href="#product">Product</a><a href="#how-it-works">How it works</a
-        ><a href="#get-started">Get started</a>
+        <a href="#product">Product</a>
+        <a href="#how-it-works">Continuity</a>
+        <a href="https://github.com/ebursztein/sprinty">GitHub ↗</a>
       </nav>
-      <a class="github-link" href="https://github.com/ebursztein/sprinty"
-        >GitHub <span aria-hidden="true">↗</span></a
-      ><a class="button small" href="#get-started"
-        >Start sprinting <span aria-hidden="true">→</span></a
-      >
     </header>
     <main id="main">
-      <section class="hero">
-        <div class="hero-grid"></div>
+      <section class="hero" id="get-started">
         <div class="hero-copy">
           <h1>Agentic sprints<br /><span>done right</span></h1>
-          <p class="hero-lede">
-            Plan, coordinate, and verify your agents’ work.
-          </p>
+          <p class="hero-lede">Plan, coordinate, and verify your agents’ work.</p>
           <div class="install-command">
-            <span class="terminal-dollar" aria-hidden="true">$</span
-            ><code>curl -fsSL https://ebursztein.github.io/sprinty/install.sh | sh</code
-            ><button
-              data-copy="install"
-              aria-label="Copy installation command"
-            >
-              Copy <span aria-hidden="true">⧉</span>
-            </button>
+            <code>curl -fsSL https://ebursztein.github.io/sprinty/install.sh | sh</code>
+            <button data-copy="install" aria-label="Copy installation command">Copy ⧉</button>
           </div>
-          <p class="command-note">
-            Run in your project. Installs the MCP connection and skills.
-          </p>
-          <div class="hero-actions">
-            <button class="button" data-copy="prompt">
-              Let your agent set it up <span aria-hidden="true">↗</span></button
-            ><a class="text-button" href="#product"
-              >See it in action <span aria-hidden="true">↓</span></a
-            >
-          </div>
-          <p class="hero-footnote">
-            Open source. Runs locally.
-          </p>
-        </div>
-        <div class="hero-terminal">
-          <div class="terminal-top">
-            <span><i></i><i></i><i></i></span
-            ><span>the work survives the window</span><span>↗</span>
-          </div>
-          <div class="terminal-body">
-            <p class="terminal-comment">// a new session, the same sprint</p>
-            <p>
-              <b>agent</b> <span>›</span> sprint_resume({ git_dir, data_dir })
-            </p>
-            <div class="terminal-response">
-              <span class="terminal-label">RESUMED</span
-              ><strong>Ship the next release</strong>
-              <p>3 completed · 3 claimed · 1 blocked</p>
-              <span class="terminal-divider"></span>
-              <dl>
-                <div>
-                  <dt>identity</dt>
-                  <dd>steady-owl</dd>
-                </div>
-                <div>
-                  <dt>your work</dt>
-                  <dd>S02-002 · item inspector</dd>
-                </div>
-                <div>
-                  <dt>last progress</dt>
-                  <dd>Keyboard checks in progress</dd>
-                </div>
-                <div>
-                  <dt>next step</dt>
-                  <dd>Finish verification</dd>
-                </div>
-              </dl>
-            </div>
-            <p>
-              <b>agent</b> <span>›</span>
-              <span class="terminal-cursor">Ready to continue.</span>
-            </p>
-          </div>
-          <div class="terminal-bottom">
-            <span>LOCAL LEDGER</span><span>CONTEXT RECOVERED</span>
+          <p class="command-note">MCP + skills for Codex or Claude Code. Run in your project.</p>
+          <button class="button" data-copy="prompt">Let your agent set it up ↗</button>
+          <div class="setup-links">
+            <a href="install.sh">Read installer</a>
+            <a href="agent-start.txt" download>Download prompt</a>
+            <a href="https://github.com/ebursztein/sprinty#install">Other clients ↗</a>
           </div>
         </div>
-      </section>
-      <section class="compatibility" aria-label="Compatible coding agents">
-        <div>
-          <span>Codex</span><span>Claude Code</span><span>Gemini CLI</span
-          ><span>Cursor</span
-          ><span class="compatibility-more"
-            >Any standard MCP client <span aria-hidden="true">↗</span></span
-          >
-        </div>
-      </section>
-      <section id="product" class="product-overview section">
-        <div class="section-intro">
-          <h2>Code fast.<br /><span>Finish strong.</span></h2>
-          <p>Tasks, owners, blockers, and checks. One live view.</p>
-        </div>
-        <figure class="product-frame hero-product">
-          <div class="browser-bar">
-            <span class="browser-dots">● ● ●</span
-            ><span>SPRINTY / WORKSPACE</span
-            ><span class="frame-pill">LOCAL</span>
-          </div>
-          <img
-            src="assets/workspace.jpg"
-            alt="Sprinty work table with named agent owners, claim ages, verification gates, and a potential stall warning"
-            width="1425"
-            height="1735"
-            fetchpriority="high"
-          />
-          <figcaption>
-            Next dashboard preview · illustrative sprint data · read-only
-            monitoring
-          </figcaption>
+        <figure class="product-frame hero-preview">
+          <img src="assets/workspace.jpg" alt="Sprinty work table with agent owners, claim ages, verification gates, and a potential stall warning" width="1425" height="1735" fetchpriority="high" />
+          <figcaption>Dashboard preview · illustrative data</figcaption>
         </figure>
       </section>
-      <section class="continuity section" id="how-it-works">
-        <div class="split-feature">
-          <div class="feature-copy">
-            <h2>Give your agents<br />a plan <span>that lasts.</span></h2>
-            <p>
-              Compaction happens. Your sprint stays: tasks, decisions, progress,
-              and evidence. Resume in a new session and pick up where you left off.
-            </p>
-            <a
-              class="text-button"
-              href="https://github.com/ebursztein/sprinty#use"
-              >Explore the workflow <span aria-hidden="true">↗</span></a
-            >
-          </div>
-          <figure class="product-frame">
-            <div class="browser-bar">
-              <span class="browser-dots">● ● ●</span
-              ><span>SPRINTY / THE RECORD</span>
-            </div>
-            <img
-              src="assets/activity.jpg"
-              alt="Sprinty activity view showing the append-only record of item updates, claims, progress, and gate outcomes"
-              width="1440"
-              height="1000"
-              loading="lazy"
-            />
-            <figcaption>
-              Your work record, preserved across sessions.
-            </figcaption>
-          </figure>
-        </div>
-      </section>
-      <section class="collaboration section">
-        <div class="split-feature reverse">
-          <figure class="product-frame">
-            <div class="browser-bar">
-              <span class="browser-dots">● ● ●</span
-              ><span>SPRINTY / AGENTS</span>
-            </div>
-            <img
-              src="assets/agents.jpg"
-              alt="Sprinty agent roster showing distinct named agents, their current claims, and recent activity"
-              width="1440"
-              height="1000"
-              loading="lazy"
-            />
-            <figcaption>
-              Named agents. Clear ownership.
-            </figcaption>
-          </figure>
-          <div class="feature-copy">
-            <h2>More agents.<br /><span>One sprint.</span></h2>
-            <p>
-              Each agent gets a name. Each task gets an owner. Spot stalled work
-              and hand it over explicitly, across sessions and subagents.
-            </p>
-          </div>
-        </div>
-      </section>
-      <section class="evidence section">
-        <div class="split-feature">
-          <div class="feature-copy">
-            <h2>Done means<br /><span>verified.</span></h2>
-            <p>
-              Link the commit. Run the checks. Keep the results. Close your
-              sprint with coverage and a changelog.
-            </p>
-          </div>
-          <figure class="product-frame">
-            <div class="browser-bar">
-              <span class="browser-dots">● ● ●</span
-              ><span>SPRINTY / VERIFICATION</span>
-            </div>
-            <img
-              src="assets/verification.jpg"
-              alt="Sprinty item inspector showing recorded test and typecheck gate evidence alongside the work table"
-              width="1440"
-              height="1000"
-              loading="lazy"
-            />
-            <figcaption>
-              Inspect the output behind an item’s verification status.
-            </figcaption>
-          </figure>
-        </div>
-      </section>
-      <section id="get-started" class="get-started section">
-        <div class="section-intro">
-          <h2>Your next sprint<br /><span>starts here.</span></h2>
-          <p>
-            One command. Or let your agent handle setup.
-          </p>
-        </div>
-        <div class="install-grid">
-          <article class="install-card">
-            <span class="install-index">01 / COMMAND LINE</span>
-            <h3>Install Sprinty</h3>
-            <p>MCP connection and skills for Codex or Claude Code.</p>
-            <div class="code-box">
-              <code>curl -fsSL https://ebursztein.github.io/sprinty/install.sh | sh</code>
-              <button data-copy="install" aria-label="Copy installation command">Copy ⧉</button>
-            </div>
-            <p class="install-help">Run in your project. Requires Node.js 20+ and Git.</p>
-            <div class="prompt-links"><a href="install.sh">Read the installer ↗</a></div>
-            <a
-              class="text-button"
-              href="https://github.com/ebursztein/sprinty#install"
-              >Client-specific instructions ↗</a
-            >
+      <div class="compatibility" aria-label="Compatible coding agents">
+        <span>Codex</span><span>Claude Code</span><span>Gemini CLI</span><span>Cursor</span><span>Any MCP client</span>
+      </div>
+      <section id="product" class="product section">
+        <h2>Code fast. <span>Finish strong.</span></h2>
+        <div class="feature-grid">
+          <article>
+            <h3>Clear ownership</h3>
+            <p>Named agents, exclusive claims, and explicit handovers. See stalled work before it gets lost.</p>
+            <figure class="product-frame">
+              <img src="assets/agents.jpg" alt="Agent roster showing named agents, claims, and recent activity" width="1440" height="1000" loading="lazy" />
+            </figure>
           </article>
-          <article class="install-card prompt-card">
-            <span class="install-index">02 / LET YOUR AGENT DO IT</span>
-            <h3>Paste a setup prompt</h3>
-            <p>Paste this into your coding agent. It handles the setup.</p>
-            <button class="button" data-copy="prompt">
-              Copy the full setup prompt <span aria-hidden="true">⧉</span>
-            </button>
-            <div class="prompt-links">
-              <a href="agent-start.txt">Read the prompt ↗</a
-              ><a href="agent-start.txt" download>Download .txt ↓</a>
-            </div>
+          <article>
+            <h3>Verified completion</h3>
+            <p>Commits, checks, and coverage attached to the work. A changelog when the sprint closes.</p>
+            <figure class="product-frame">
+              <img src="assets/verification.jpg" alt="Item inspector showing recorded test and typecheck evidence" width="1440" height="1000" loading="lazy" />
+            </figure>
           </article>
         </div>
-        <div class="agent-docs">
-          <span class="agent-docs-symbol" aria-hidden="true">{ }</span>
-          <div>
-            <strong>For agents</strong>
-            <p>
-              Setup and workflow instructions.
-            </p>
-          </div>
-          <a href="agent-start.txt">agent-start.txt ↗</a
-          ><a href="llms.txt">llms.txt ↗</a
-          ><a href="https://skills.sh/ebursztein/sprinty">Find the skills ↗</a>
+      </section>
+      <section id="how-it-works" class="continuity section">
+        <div>
+          <h2>Give your agents<br />a plan <span>that lasts.</span></h2>
+          <p>Tasks, decisions, and progress survive compaction. Resume in a new session and pick up where you left off.</p>
         </div>
+        <figure class="product-frame">
+          <img src="assets/activity.jpg" alt="Persistent sprint activity record with claims, progress, and gate outcomes" width="1440" height="1000" loading="lazy" />
+        </figure>
       </section>
     </main>
     <footer class="site-footer">
-      <a class="logo" href="./"
-        ><span class="logo-mark" aria-hidden="true">s</span>Sprinty</a
-      >
-      <p>
-        Open source · Apache 2.0 · Built by
-        <a href="https://elie.net/">Elie Bursztein</a>
-      </p>
-      <div>
-        <a href="https://github.com/ebursztein/sprinty">GitHub</a
-        ><a href="https://www.npmjs.com/package/sprinty-mcp">npm</a
-        ><a href="llms.txt">For agents</a>
-      </div>
+      <p>Open source · Runs locally · By <a href="https://elie.net/">Elie Bursztein</a></p>
+      <nav aria-label="Resources">
+        <a href="https://www.npmjs.com/package/sprinty-mcp">npm</a>
+        <a href="https://skills.sh/ebursztein/sprinty">Skills</a>
+        <a href="llms.txt">llms.txt</a>
+      </nav>
     </footer>
     <div class="copy-toast" role="status" aria-live="polite"></div>
   </body>
