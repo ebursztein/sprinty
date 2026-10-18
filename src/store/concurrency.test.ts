@@ -111,7 +111,7 @@ describe("concurrent writers and agents", () => {
         expect(timed.read().subsprints[0]!.items.every(i => i.claim.owner === b.actor.id)).toBe(true);
         expect(() => actors.run(b.actor, () => timed.claimItem(second, "x".repeat(501)))).toThrow();
     });
-    it("grants exactly one recovery across processes and fences the interrupted owner", async () => {
+    it("serializes explicit forced claims and fences every superseded owner", async () => {
         const { dir, store, add } = fixture();
         const id = add();
         const original = store.attachAgent();
@@ -122,10 +122,14 @@ describe("concurrent writers and agents", () => {
       import { actors } from ${JSON.stringify(actorModule)};
       const store = new SprintStore(${JSON.stringify(dir)}, ${JSON.stringify(join(dir, ".sprinty"))}, () => ${now});
       const identity = store.attachAgent();
-      actors.run(identity.actor,()=>{try {store.claimItem(${JSON.stringify(id)},'Original session terminated.',true);process.stdout.write('won')} catch {process.stdout.write('lost')}});
+      actors.run(identity.actor,()=>{try {const view=store.claimItem(${JSON.stringify(id)},undefined,'Explicit reassignment.');process.stdout.write(JSON.stringify({id:identity.actor.id,generation:view.subsprints[0].items[0].claim.generation}))} catch {process.stdout.write('lost')}});
     `)));
-        expect(result.filter(r => r === "won")).toHaveLength(1);
-        expect(store.read().subsprints[0]!.items[0]!.claim.generation).toBe(2);
+        const claims = result.map(r => JSON.parse(r));
+        expect(claims.map(c => c.generation).sort()).toEqual([2, 3, 4]);
+        expect(store.read().subsprints[0]!.items[0]!.claim.history).toHaveLength(4);
+        for (const stale of claims.filter(c => c.generation < 4)) {
+            expect(() => actors.run({ id: stale.id, name: "stale", generations: new Map([[id, stale.generation]]) }, () => store.progressItem(id, "Stale forced write"))).toThrow("Claim");
+        }
         expect(() => actors.run(original.actor, () => store.progressItem(id, "Stale write"))).toThrow("Claim");
     });
     it("rejects ambiguity on a shared connection and scopes authenticated calls", async () => {

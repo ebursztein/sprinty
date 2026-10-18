@@ -20,30 +20,34 @@ function fixture() {
 }
 const caller = (agent: string) => ({ client_session_id: "claude-session", client_agent_id: agent });
 describe("automatic native identity and discovery", () => {
-  it("recovers interrupted inactive owners explicitly and fences a returning session", async () => {
-    const { dir, make, advance, store } = fixture();
+  it.each<[string, number]>([["item_claim", 0], ["item_claim", 6 * 60000], ["item_takeover", 0]])("%s forces an interrupted claim at %d ms and fences a returning session", async (tool, delay) => {
+    const { dir, make, store, advance } = fixture();
     const tools = make();
     const call = async (name: string, args = {}) => await tools[name]!.handler(args) as any;
     await call("sprint_new", { goal: "Interrupted agents", git_dir: dir, ...caller("parent") });
     await call("subsprint_new", { description: "Recovery", goals: ["Recover safely"], gates: [{ kind: "manual", spec: "Inspect" }], ...caller("parent") });
     await call("item_add", { subsprint: "S01", title: "Interrupted work", description: "Recover an interrupted owner's work.", code_locations: ["src"], gates: [{ kind: "manual", spec: "Inspect" }], ...caller("parent") });
     const owned = await call("item_claim", { id: "S01-001", ...caller("child") });
-    const takeover = { id: "S01-001", explanation: "Child session terminated; continuing its work.", ...caller("parent") };
-    advance(5 * 60000);
-    await expect(call("item_takeover", { ...takeover, recover_inactive: true })).rejects.toThrow(/must exceed 300000 ms/);
-    advance(1);
-    const listed = await call("agent_list", caller("parent"));
-    expect(listed.agents.find((a: any) => a.id === owned.agent.id).status).toBe("inactive");
-    await expect(call("item_takeover", takeover)).rejects.toThrow(/300001 ms.*3600000 ms.*0\/3.*recover_inactive/);
-    await expect(call("item_takeover", { ...takeover, recover_inactive: true, explanation: " " })).rejects.toThrow();
-    const recovered = await call("item_takeover", { ...takeover, recover_inactive: true });
+    const takeover = { id: "S01-001", ...caller("parent") };
+    const force = "Child session terminated; continuing its work.";
+    advance(delay);
+    await expect(call("item_claim", takeover)).rejects.toThrow(/claimed by.*force/);
+    await expect(call("item_takeover", { ...takeover, explanation: "Continue" })).rejects.toThrow(/ms.*3600000 ms.*0\/3.*force/);
+    for (const invalid of [true, false, "", " ", "x".repeat(501)]) {
+      await expect(call(tool, { ...takeover, force: invalid })).rejects.toThrow();
+    }
+    // Force also works immediately after termination, while activity still appears current.
+    const recovered = await call(tool, { ...takeover, force: ` ${force} ` });
     expect(recovered.claim.generation).toBe(2);
-    expect(store.read().subsprints[0]!.items[0]!.claim.history[1]!.explanation).toBe(takeover.explanation);
+    expect(store.read().subsprints[0]!.items[0]!.claim.history[1]!.explanation).toBe(force);
     // A resumed original caller keeps its identity but cannot mutate the new owner's work.
     const restarted = make();
-    await restarted.sprint_resume!.handler({ git_dir: dir, ...caller("child") });
+    const resumed = await restarted.sprint_resume!.handler({ git_dir: dir, ...caller("child") }) as any;
+    expect(resumed.agent.id).toBe(owned.agent.id);
     await expect(restarted.item_progress!.handler({ id: "S01-001", message: "Stale write", ...caller("child") })).rejects.toThrow(/Claim/);
     await call("item_progress", { id: "S01-001", message: "Recovered", ...caller("parent") });
+    const repeated = await call(tool, { ...takeover, force });
+    expect(repeated.claim.generation).toBe(2);
   });
 
   it("isolates shared-connection callers, recovers after restart, and scopes mine without tokens", async () => {

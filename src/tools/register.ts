@@ -298,13 +298,15 @@ export function buildToolHandlers(
   handlers.agent_detach = def(z.object({}), "Detach only this agent and release its claims.", async () => { (await getStore()).detachAgent(); return { detached: true }; });
   handlers.agent_heartbeat = def(z.object({}), "Report activity during long tasks; does not reset item progress or stall completion counts.", () => ({ active: true }));
   const claimInput = z.object({ id: z.string().min(1) });
-  handlers.item_claim = def(claimInput, "Exclusively claim an open item before editing it.", async i => {
-    const view = (await getStore()).claimItem(i.id);
+  const handoverReason = z.string().trim().min(1).max(500);
+  handlers.item_claim = def(claimInput.extend({ force: handoverReason.optional() }), "Claim an open item. Optional force is a 1–500 character explanation that overrides existing ownership immediately, without activity or stall conditions; recorded in handover history.", async i => {
+    const view = (await getStore()).claimItem(i.id, undefined, i.force);
     return { id: i.id, claim: compactClaim(findItem(view, i.id)!.claim) };
   });
   handlers.item_release = def(claimInput, "Release your claim for another agent.", async i => { (await getStore()).releaseItem(i.id); return { released: i.id }; });
-  handlers.item_takeover = def(claimInput.extend({ explanation: z.string().trim().min(1).max(500), recover_inactive: z.boolean().default(false) }), "Take over a potentially stalled claim with a 1–500 character explanation. For an interrupted owner inactive over five minutes, explicitly set recover_inactive:true; active owners cannot be recovered.", async i => {
-    const view = (await getStore()).claimItem(i.id, i.explanation, i.recover_inactive);
+  handlers.item_takeover = def(claimInput.extend({ explanation: handoverReason.optional(), force: handoverReason.optional() }), "Take over a potentially stalled claim with an explanation, or pass force as a 1–500 character explanation to override ownership immediately without activity or stall conditions.", async i => {
+    if (!i.explanation && !i.force) throw new Error("Provide explanation for a potential stall, or force as the explanation for an explicit override (1–500 characters).");
+    const view = (await getStore()).claimItem(i.id, i.explanation, i.force);
     return { id: i.id, claim: compactClaim(findItem(view, i.id)!.claim) };
   });
   handlers.item_progress = def(claimInput.extend({ message: z.string().trim().min(1).max(500) }), "Record meaningful progress on your claimed item.", async i => { (await getStore()).progressItem(i.id, i.message); return { progressed: i.id }; });

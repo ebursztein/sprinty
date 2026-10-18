@@ -2,7 +2,7 @@ import type { Ledger } from "../ledger/ledger.js";
 import { SprintBook } from "../ledger/book.js";
 import { existsSync, mkdirSync, statSync } from "node:fs";
 import { actors, newIdentity, tokenHash, type Actor } from "../domain/agents.js";
-import { ACTIVITY_WINDOW_MS, INACTIVE_STALL_MS } from "../domain/collaboration.js";
+import { INACTIVE_STALL_MS } from "../domain/collaboration.js";
 import { withDataLock, canonicalDirectory, type FileWrite } from "../ledger/transaction.js";
 import { LedgerEvent as EventSchema } from "../domain/events.js";
 import { runGateAsync } from "../gates/run.js";
@@ -586,22 +586,22 @@ export class SprintStore {
     this.append({ type: "agent_detached", id: actor.id });
     return this.read();
   }
-  claimItem(id: string, explanation?: string, recoverInactive = false): SprintView {
+  claimItem(id: string, explanation?: string, force?: string): SprintView {
     const actor = this.requireActor();
     const state = this.requireActiveState();
     const item = this.findOpenItem(state, id);
     if (explanation !== undefined && (!explanation.trim() || explanation.trim().length > 500)) throw new StoreError("Handover explanation must contain 1–500 characters.");
+    if (force !== undefined && (typeof force !== "string" || !force.trim() || force.trim().length > 500)) throw new StoreError("Force must be an explanation containing 1–500 characters.");
     if (item.claim.owner === actor.id) { actor.generations.set(id, item.claim.generation); return this.read(); }
     if (item.claim.owner) {
-      if (!explanation?.trim()) throw new StoreError(`Item ${id} is claimed by ${item.claim.owner_name}; use item_takeover with a nonempty explanation (1–500 characters).`);
-      if (recoverInactive) {
-        if (item.claim.owner_inactive_ms <= ACTIVITY_WINDOW_MS) throw new StoreError(`Cannot recover ${id}: owner ${item.claim.owner_name} inactivity is ${item.claim.owner_inactive_ms} ms; it must exceed ${ACTIVITY_WINDOW_MS} ms. Recovery does not override an active owner.`);
-      } else if (!item.claim.stall_reasons.length) {
-        throw new StoreError(`Cannot take over ${id}: owner ${item.claim.owner_name} inactivity is ${item.claim.owner_inactive_ms} ms (requires ${INACTIVE_STALL_MS} ms); other completions since item progress: ${item.claim.other_completions}/3. Neither potential-stall condition is met. For an interrupted owner inactive longer than ${ACTIVITY_WINDOW_MS} ms, use item_takeover with recover_inactive:true and an explanation.`);
+      if (!force && !explanation?.trim()) throw new StoreError(`Item ${id} is claimed by ${item.claim.owner_name}; use item_claim({ id, force: "reason for reassignment" }) to override ownership, or item_takeover with an explanation for a potential stall.`);
+      if (!force && !item.claim.stall_reasons.length) {
+        throw new StoreError(`Cannot take over ${id}: owner ${item.claim.owner_name} inactivity is ${item.claim.owner_inactive_ms} ms (requires ${INACTIVE_STALL_MS} ms); other completions since item progress: ${item.claim.other_completions}/3. Neither potential-stall condition is met. To override ownership explicitly, use item_claim({ id, force: "reason for reassignment" }).`);
       }
     }
     const generation = item.claim.generation + 1;
-    this.append({ type: "item_claimed", item_id: id, owner: actor.id, generation, ...(explanation ? { explanation: explanation.trim() } : {}) });
+    const reason = force ?? explanation;
+    this.append({ type: "item_claimed", item_id: id, owner: actor.id, generation, ...(reason ? { explanation: reason.trim() } : {}) });
     actor.generations.set(id, generation);
     return this.read();
   }
