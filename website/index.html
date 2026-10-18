@@ -3,18 +3,18 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>Sprinty — Agentic sprints. Done right.</title>
+    <title>Sprinty — Agentic sprints done right</title>
     <meta
       name="description"
-      content="Code fast. Finish strong. Give your coding agents a shared plan, clear ownership, and a finish line—from the first task to verified completion."
+      content="Plan, coordinate, and verify your agents’ work. Open-source sprint tools for coding agents."
     />
     <meta
       property="og:title"
-      content="Sprinty — Code fast. Finish strong."
+      content="Sprinty — Agentic sprints done right"
     />
     <meta
       property="og:description"
-      content="Agentic sprints. Done right. A shared plan, clear ownership, and verified completion for your coding agents. Open source and local."
+      content="Plan, coordinate, and verify your agents’ work. Open source. Runs locally."
     />
     <meta property="og:type" content="website" />
     <meta
@@ -24,23 +24,17 @@
     <meta name="theme-color" content="#2563eb" />
     <link rel="canonical" href="https://ebursztein.github.io/sprinty/" />
     <link rel="icon" href="assets/mark.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="styles.css?v=3" />
     <link
       rel="alternate"
       type="text/plain"
       href="llms.txt"
       title="Agent documentation"
     />
-    <script src="site.js" defer></script>
+    <script src="site.js?v=3" defer></script>
   </head>
   <body>
     <a class="skip-link" href="#main">Skip to content</a>
-    <div class="announcement">
-      <span class="tiny-dot"></span>From the first task to verified completion.
-      <a href="https://github.com/ebursztein/sprinty/releases"
-        >See what’s new <span aria-hidden="true">↗</span></a
-      >
-    </div>
     <header class="site-header">
       <a class="logo" href="./" aria-label="Sprinty home"
         ><span class="logo-mark" aria-hidden="true">s</span>Sprinty</a
@@ -59,27 +53,22 @@
       <section class="hero">
         <div class="hero-grid"></div>
         <div class="hero-copy">
-          <p class="eyebrow">
-            <span class="tiny-dot"></span>AGENTIC SPRINTS. DONE RIGHT.
-          </p>
-          <h1>Code fast.<br /><span>Finish strong.</span></h1>
+          <h1>Agentic sprints<br /><span>done right</span></h1>
           <p class="hero-lede">
-            Give your agents a shared plan, clear ownership, and a finish line.
-            Sprinty keeps work moving across sessions and subagents—from the
-            first task to verified completion.
+            Plan, coordinate, and verify your agents’ work.
           </p>
           <div class="install-command">
             <span class="terminal-dollar" aria-hidden="true">$</span
-            ><code>npx skills add ebursztein/sprinty</code
+            ><code>curl -fsSL https://ebursztein.github.io/sprinty/install.sh | sh</code
             ><button
-              data-copy="skills"
-              aria-label="Copy skills installation command"
+              data-copy="install"
+              aria-label="Copy installation command"
             >
               Copy <span aria-hidden="true">⧉</span>
             </button>
           </div>
           <p class="command-note">
-            Install the agent skills. Connect the MCP server in the next step.
+            Run in your project. Installs the MCP connection and skills.
           </p>
           <div class="hero-actions">
             <button class="button" data-copy="prompt">
@@ -89,7 +78,7 @@
             >
           </div>
           <p class="hero-footnote">
-            Open source. Runs locally. No Sprinty account required.
+            Open source. Runs locally.
           </p>
         </div>
         <div class="hero-terminal">
@@ -137,7 +126,6 @@
         </div>
       </section>
       <section class="compatibility" aria-label="Compatible coding agents">
-        <p>YOUR AGENTS. ONE SHARED SPRINT.</p>
         <div>
           <span>Codex</span><span>Claude Code</span><span>Gemini CLI</span
           ><span>Cursor</span
@@ -145,21 +133,11 @@
             >Any standard MCP client <span aria-hidden="true">↗</span></span
           >
         </div>
-        <small
-          >Client setup varies. Shared Claude subagents use the plugin’s
-          identity hook.</small
-        >
       </section>
       <section id="product" class="product-overview section">
         <div class="section-intro">
-          <p class="eyebrow">KEEP THE SPRINT MOVING.</p>
-          <h2>
-            A shared plan.<br /><span>A clear way forward.</span>
-          </h2>
-          <p>
-            Turn a goal into ready tasks. See who owns each one, what’s blocking
-            progress, and what needs verification—all in one live sprint view.
-          </p>
+          <h2>Code fast.<br /><span>Finish strong.</span></h2>
+          <p>Tasks, owners, blockers, and checks. One live view.</p>
         </div>
         <figure class="product-frame hero-product">
           <div class="browser-bar">
@@ -179,52 +157,15 @@
             monitoring
           </figcaption>
         </figure>
-        <div class="value-strip">
-          <div>
-            <span class="feature-number">01 / MOMENTUM</span>
-            <h3>Keep the sprint moving.</h3>
-            <p>
-              Dependencies, claims, and handovers keep agents coordinated.
-            </p>
-          </div>
-          <div>
-            <span class="feature-number">02 / CONTINUITY</span>
-            <h3>Pick up where you left off.</h3>
-            <p>
-              Plans, decisions, and progress survive context resets.
-            </p>
-          </div>
-          <div>
-            <span class="feature-number">03 / EVIDENCE</span>
-            <h3>Finish means verified.</h3>
-            <p>
-              Tests, commits, and evidence make completion explicit.
-            </p>
-          </div>
-        </div>
       </section>
       <section class="continuity section" id="how-it-works">
         <div class="split-feature">
           <div class="feature-copy">
-            <p class="eyebrow">01 / WORK THAT OUTLIVES CONTEXT</p>
             <h2>Give your agents<br />a plan <span>that lasts.</span></h2>
             <p>
-              Compaction trims a conversation. Sprinty preserves the work record
-              in an append-only local ledger: what was planned, what changed,
-              who owns it, and which checks ran.
+              Compaction happens. Your sprint stays: tasks, decisions, progress,
+              and evidence. Resume in a new session and pick up where you left off.
             </p>
-            <p>
-              Resume the sprint to recover a compact briefing and the next work
-              window. Your agent continues from recorded state, with less
-              detective work.
-            </p>
-            <ul class="check-list">
-              <li>Sprint, subsprint, and item IDs stay on disk</li>
-              <li>
-                Notes, artifacts, dependencies, and evidence stay attached
-              </li>
-              <li>Resume returns current work and useful next calls</li>
-            </ul>
             <a
               class="text-button"
               href="https://github.com/ebursztein/sprinty#use"
@@ -244,8 +185,7 @@
               loading="lazy"
             />
             <figcaption>
-              The work record survives compaction; it is not a backup of the
-              entire conversation.
+              Your work record, preserved across sessions.
             </figcaption>
           </figure>
         </div>
@@ -265,60 +205,26 @@
               loading="lazy"
             />
             <figcaption>
-              Separate identities, one shared canonical repository and data
-              directory.
+              Named agents. Clear ownership.
             </figcaption>
           </figure>
           <div class="feature-copy">
-            <p class="eyebrow">02 / COLLABORATION WITH CLEAR OWNERSHIP</p>
-            <h2>More agents.<br /><span>One coordinated sprint.</span></h2>
+            <h2>More agents.<br /><span>One sprint.</span></h2>
             <p>
-              Run several coding sessions against the same local sprint. Each
-              agent gets a name. Each claimed item gets one owner. Claim
-              generations stop a former owner from writing after a handover.
+              Each agent gets a name. Each task gets an owner. Spot stalled work
+              and hand it over explicitly, across sessions and subagents.
             </p>
-            <p>
-              Potential stalls make quiet work visible. They never reassign it
-              automatically. Progress, activity, and ownership history make a
-              deliberate handover easier.
-            </p>
-            <ul class="check-list">
-              <li>Automatic identity for ordinary MCP connections</li>
-              <li>Agent roster, claim ages, and explicit handovers</li>
-              <li>Claude plugin support for shared subagent connections</li>
-            </ul>
-            <small class="feature-caveat"
-              >Separate worktrees keep separate sprint bindings. Stable identity
-              across a restart depends on the client supplying a native session
-              ID.</small
-            >
           </div>
         </div>
       </section>
       <section class="evidence section">
         <div class="split-feature">
           <div class="feature-copy">
-            <p class="eyebrow">03 / PROOF BUILT INTO THE WORKFLOW</p>
-            <h2>A finish line.<br /><span>With the proof to match.</span></h2>
+            <h2>Done means<br /><span>verified.</span></h2>
             <p>
-              An item completes with a real resolving commit and declared
-              verification. Sprinty runs executable gates, records their output,
-              and builds the change map from Git.
+              Link the commit. Run the checks. Keep the results. Close your
+              sprint with coverage and a changelog.
             </p>
-            <p>
-              At sprint close, it checks the work again and writes the canonical
-              changelog. The result is a record you can review, resume, and
-              trust.
-            </p>
-            <ul class="check-list">
-              <li>Commit-backed changes and recorded gate output</li>
-              <li>Coverage and changelog at sprint close</li>
-              <li>A shared ETA that separates queue time from observed work</li>
-            </ul>
-            <small class="feature-caveat"
-              >Timed-out gates are marked unverified. ETA is activity-derived
-              and shows learning or paused states when appropriate.</small
-            >
           </div>
           <figure class="product-frame">
             <div class="browser-bar">
@@ -338,88 +244,24 @@
           </figure>
         </div>
       </section>
-      <section class="workflow section">
-        <div class="section-intro">
-          <p class="eyebrow">FROM THE PLAN TO THE FINISH LINE.</p>
-          <h2>Plan. Claim. Build. Verify.</h2>
-          <p>
-            Give the work a home before the first edit. Keep the record useful
-            all the way through the final check.
-          </p>
-        </div>
-        <ol class="workflow-steps">
-          <li>
-            <span>01</span>
-            <h3>Start or resume</h3>
-            <p>
-              Bind the repository and recover the existing sprint before
-              creating new work.
-            </p>
-            <code>info() → sprint_resume()</code>
-          </li>
-          <li>
-            <span>02</span>
-            <h3>Choose & claim</h3>
-            <p>
-              Inspect ready items and take exclusive ownership before changing
-              code.
-            </p>
-            <code>next() → item_claim()</code>
-          </li>
-          <li>
-            <span>03</span>
-            <h3>Build with context</h3>
-            <p>
-              Record meaningful progress, decisions, and artifacts against the
-              item.
-            </p>
-            <code>item_progress()</code>
-          </li>
-          <li>
-            <span>04</span>
-            <h3>Verify & resolve</h3>
-            <p>
-              Link the commit, run the gates, and close with the evidence
-              attached.
-            </p>
-            <code>item_done() → sprint_close()</code>
-          </li>
-        </ol>
-      </section>
       <section id="get-started" class="get-started section">
         <div class="section-intro">
-          <p class="eyebrow">PICK YOUR WAY IN</p>
           <h2>Your next sprint<br /><span>starts here.</span></h2>
           <p>
-            Use the CLI, or give your agent a prompt and let it handle setup in
-            your project.
+            One command. Or let your agent handle setup.
           </p>
         </div>
         <div class="install-grid">
           <article class="install-card">
             <span class="install-index">01 / COMMAND LINE</span>
-            <h3>Install the agent skills</h3>
-            <p>
-              Discover and install Sprinty’s workflow and tool reference with
-              the open skills CLI.
-            </p>
+            <h3>Install Sprinty</h3>
+            <p>MCP connection and skills for Codex or Claude Code.</p>
             <div class="code-box">
-              <code>npx skills add ebursztein/sprinty</code
-              ><button data-copy="skills" aria-label="Copy skills command">
-                Copy ⧉
-              </button>
+              <code>curl -fsSL https://ebursztein.github.io/sprinty/install.sh | sh</code>
+              <button data-copy="install" aria-label="Copy installation command">Copy ⧉</button>
             </div>
-            <p class="install-next">Then connect the MCP server:</p>
-            <div class="code-box">
-              <code>npx -y sprinty-mcp@latest</code
-              ><button data-copy="server" aria-label="Copy MCP server command">
-                Copy ⧉
-              </button>
-            </div>
-            <p class="install-help">
-              Configure this as a stdio MCP server in your client. Installing
-              skills supplies guidance; connecting the server supplies tools.
-            </p>
+            <p class="install-help">Run in your project. Requires Node.js 20+ and Git.</p>
+            <div class="prompt-links"><a href="install.sh">Read the installer ↗</a></div>
             <a
               class="text-button"
               href="https://github.com/ebursztein/sprinty#install"
@@ -429,15 +271,7 @@
           <article class="install-card prompt-card">
             <span class="install-index">02 / LET YOUR AGENT DO IT</span>
             <h3>Paste a setup prompt</h3>
-            <p>
-              No terminal ceremony. Copy the prompt into Codex, Claude Code, or
-              your preferred coding agent. It will check your project and walk
-              through the right setup.
-            </p>
-            <blockquote>
-              “Set up Sprinty for this project so we can plan the work,
-              coordinate our agents, and finish with verified results…”
-            </blockquote>
+            <p>Paste this into your coding agent. It handles the setup.</p>
             <button class="button" data-copy="prompt">
               Copy the full setup prompt <span aria-hidden="true">⧉</span>
             </button>
@@ -445,36 +279,20 @@
               <a href="agent-start.txt">Read the prompt ↗</a
               ><a href="agent-start.txt" download>Download .txt ↓</a>
             </div>
-            <small
-              >The prompt preserves existing configuration, checks the
-              connection, and tells you when a client restart is needed.</small
-            >
           </article>
         </div>
         <div class="agent-docs">
           <span class="agent-docs-symbol" aria-hidden="true">{ }</span>
           <div>
-            <strong>An agent looking for the instructions?</strong>
+            <strong>For agents</strong>
             <p>
-              Start with the setup prompt, or read the compact product and
-              workflow reference.
+              Setup and workflow instructions.
             </p>
           </div>
           <a href="agent-start.txt">agent-start.txt ↗</a
           ><a href="llms.txt">llms.txt ↗</a
           ><a href="https://skills.sh/ebursztein/sprinty">Find the skills ↗</a>
         </div>
-      </section>
-      <section class="closing">
-        <div>
-          <span class="logo-mark" aria-hidden="true">s</span>
-          <h2>Your next sprint.<br />Done right.</h2>
-          <p>Code fast. Finish strong. Bring your agents along.</p>
-          <a class="button light" href="https://github.com/ebursztein/sprinty"
-            >Explore Sprinty on GitHub <span aria-hidden="true">↗</span></a
-          >
-        </div>
-        <span class="closing-art" aria-hidden="true">s</span>
       </section>
     </main>
     <footer class="site-footer">

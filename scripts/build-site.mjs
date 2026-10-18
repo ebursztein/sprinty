@@ -10,6 +10,7 @@ for (const file of [
   "site.js",
   "llms.txt",
   "agent-start.txt",
+  "install.sh",
   "assets/workspace.jpg",
   "assets/agents.jpg",
   "assets/activity.jpg",
@@ -21,7 +22,7 @@ for (const match of html.matchAll(/(?:href|src)="([^"]+)"/g)) {
   const value = match[1];
   if (value.startsWith("http") || value.startsWith("#") || value === "./")
     continue;
-  assert(existsSync(join(source, value)), `Broken local link: ${value}`);
+  assert(existsSync(join(source, value.split(/[?#]/)[0])), `Broken local link: ${value}`);
 }
 rmSync(out, { recursive: true, force: true });
 mkdirSync(out);

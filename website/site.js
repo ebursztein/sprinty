@@ -1,5 +1,5 @@
 const commands = {
-  skills: "npx skills add ebursztein/sprinty",
+  install: "curl -fsSL https://ebursztein.github.io/sprinty/install.sh | sh",
   server: "npx -y sprinty-mcp@latest",
 };
 let prompt;

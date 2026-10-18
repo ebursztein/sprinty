@@ -1,6 +1,6 @@
 # Sprinty
 
-> Agentic sprints. Done right. Sprinty is an open-source MCP server and pair of agent skills that help coding agents plan work, coordinate ownership, and finish with verified results. It records the plan, dependencies, item claims, progress, gate evidence, artifacts, and changelog in a local append-only ledger.
+> Agentic sprints done right. Sprinty is an open-source MCP server and pair of agent skills that help coding agents plan work, coordinate ownership, and finish with verified results. It records the plan, dependencies, item claims, progress, gate evidence, artifacts, and changelog in a local append-only ledger.
 
 ## Get started
 - [Copyable setup prompt](https://ebursztein.github.io/sprinty/agent-start.txt): instructions a user can paste into a coding agent to install skills and configure the MCP server.
@@ -10,7 +10,9 @@
 - [npm server package](https://www.npmjs.com/package/sprinty-mcp): stdio MCP server.
 
 ## Install
-Skills: npx skills add ebursztein/sprinty
+One-command setup for Codex or Claude Code (run in the project): curl -fsSL https://ebursztein.github.io/sprinty/install.sh | sh
+Requires Node.js 20+, Git, npx and the client CLI. Choose a client if both are installed. Preserves existing MCP entries; restart the client afterward. Claude shared-subagent hooks require the plugin separately.
+Skills only: npx skills add ebursztein/sprinty
 Server: npx -y sprinty-mcp@latest
 These are separate installations. Skills supply guidance; the MCP server supplies tools. The skills CLI does not install Claude plugin hooks.
 

@@ -253,8 +253,9 @@ a:focus-visible {
 .install-command code {
   font-family: var(--mono);
   font-size: 12px;
-  white-space: nowrap;
-  overflow-x: auto;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  min-width: 0;
   flex: 1;
 }
 .install-command button {
@@ -702,8 +703,9 @@ a:focus-visible {
 .code-box code {
   font-family: var(--mono);
   font-size: 11px;
-  white-space: nowrap;
-  overflow-x: auto;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  min-width: 0;
   flex: 1;
 }
 .code-box button {

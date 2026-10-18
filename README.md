@@ -37,6 +37,16 @@ To upgrade, use `npx -y sprinty-mcp@0.2.0` as your MCP server command and restar
 
 See the [0.2.0 release notes](https://github.com/ebursztein/sprinty/releases/tag/v0.2.0) and [concurrent-agent workflow](#concurrent-agents-and-timing).
 
+## Quick setup
+
+Run from your project to install the MCP connection and skills for Codex or Claude Code:
+
+```sh
+curl -fsSL https://ebursztein.github.io/sprinty/install.sh | sh
+```
+
+Requires Node.js 20+, Git, and a client CLI. If both clients are installed, choose one when prompted, or append `-s -- --client codex` (or `claude`) after `sh`. The [installer](https://ebursztein.github.io/sprinty/install.sh) preserves existing MCP entries and installs skills in the repository. Restart your client afterward. Claude shared-subagent hooks still require the plugin below. Other clients can use the [agent setup prompt](https://ebursztein.github.io/sprinty/agent-start.txt) or manual instructions.
+
 ## Agent skills via `npx skills`
 
 Discover and install the workflow and tool-reference skills for Codex, Claude Code, and other supported agents:
