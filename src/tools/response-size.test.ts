@@ -52,7 +52,7 @@ const readGateFixtures = [
 ];
 
 const publicTools = [
-  "agent_attach", "agent_detach", "agent_heartbeat",
+  "agent_attach", "agent_detach", "agent_heartbeat", "agent_list", "items_claimed",
   "item_claim", "item_release", "item_takeover", "item_progress",
   "artifact_add", "artifact_get", "artifact_list", "artifact_update",
   "changelog", "dashboard_info", "dashboard_restart",
@@ -280,6 +280,8 @@ describe("public Sprinty tool responses", () => {
     };
 
     const cases: ToolCase[] = [
+      { tool: "agent_list", seed: "fixture", maxChars: 2_000, maxMs: 100, args: () => ({}) },
+      { tool: "items_claimed", seed: "fixture", maxChars: 2_000, maxMs: 100, args: () => ({ mine: true }) },
       { tool: "agent_attach", seed: "fixture", maxChars: 900, maxMs: 100, args: () => ({}) },
       { tool: "agent_detach", seed: "fixture", maxChars: 900, maxMs: 100, args: () => ({}) },
       { tool: "agent_heartbeat", seed: "fixture", maxChars: 900, maxMs: 100, args: () => ({}) },

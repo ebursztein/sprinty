@@ -58,6 +58,8 @@ export class SprintStore {
     }
   }
 
+  get sprintId(): string | null { return this.pinnedId; }
+
   private invalidate(): void {
     this.cachedId = null;
     this.cachedSignature = null;

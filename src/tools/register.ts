@@ -1,3 +1,5 @@
+import { attachNativeAgent } from "../domain/native-identity.js";
+import { ACTIVITY_WINDOW_MS } from "../domain/collaboration.js";
 import { withDataLock, commitTransaction } from "../ledger/transaction.js";
 import { dependencyResolver } from "../domain/work-order.js";
 import { actors, newIdentity, type Actor } from "../domain/agents.js";
@@ -260,6 +262,7 @@ export function buildToolHandlers(
   };
   const identities = new Map<string, Actor>();
   const processIdentity = newIdentity([]);
+  const nativeTokens = new Map<string, string>();
   const identityView = (actor: Actor, token?: string) => ({ id: actor.id, name: actor.name, ...(token ? { token } : {}) });
   const resolveActor = async (token?: string): Promise<{ actor: Actor; token: string }> => {
     if (token) {
@@ -277,6 +280,20 @@ export function buildToolHandlers(
     const [entry] = identities;
     return { token: entry![0], actor: entry![1] };
   };
+  const pageInput = z.object({ offset: z.number().int().nonnegative().default(0), limit: z.number().int().min(1).max(50).default(20) });
+  handlers.agent_list = def(pageInput, "List named agents, activity state and claim counts; paginated and token-free.", async i => {
+    const state = (await getStore()).read();
+    const items = state.subsprints.flatMap(s => s.items);
+    const now = Date.parse(state.eta.estimated_at);
+    const rows = state.agents.map(a => ({ id: a.id, name: a.name, status: !a.attached ? "detached" : now - Date.parse(a.last_activity_at) <= ACTIVITY_WINDOW_MS ? "active" : "inactive", last_activity_at: a.last_activity_at, claimed_items: items.filter(item => item.claim.owner === a.id).length }));
+    return { agents: rows.slice(i.offset, i.offset + i.limit), total: rows.length, offset: i.offset, ...(i.offset + i.limit < rows.length ? { next_offset: i.offset + i.limit } : {}) };
+  });
+  handlers.items_claimed = def(pageInput.extend({ mine: z.boolean().default(false) }), "List current item claims, optionally only yours; includes timing, progress and stall reasons.", async i => {
+    const state = (await getStore()).read();
+    const caller = actors.getStore()!;
+    const rows = state.subsprints.flatMap(s => s.items).filter(item => item.claim.owner && (!i.mine || item.claim.owner === caller.id)).sort((a,b) => a.id.localeCompare(b.id));
+    return { items: rows.slice(i.offset, i.offset + i.limit).map(item => ({ id: item.id, title: truncate(item.title, 80), ...compactClaim(item.claim), owner_id: item.claim.owner, last_progress_at: item.claim.last_progress_at, total_claimed_ms: item.claim.total_claimed_ms, active_work_ms: item.claim.active_work_ms })), total: rows.length, offset: i.offset, ...(i.offset + i.limit < rows.length ? { next_offset: i.offset + i.limit } : {}) };
+  });
   handlers.agent_attach = def(z.object({}), "Attach an independent named agent; retain its returned token for shared connections.", () => ({}));
   handlers.agent_detach = def(z.object({}), "Detach only this agent and release its claims.", async () => { (await getStore()).detachAgent(); return { detached: true }; });
   handlers.agent_heartbeat = def(z.object({}), "Report activity during long tasks; does not reset item progress or stall completion counts.", () => ({ active: true }));
@@ -293,38 +310,50 @@ export function buildToolHandlers(
   handlers.item_progress = def(claimInput.extend({ message: z.string().trim().min(1).max(500) }), "Record meaningful progress on your claimed item.", async i => { (await getStore()).progressItem(i.id, i.message); return { progressed: i.id }; });
   for (const [name, definition] of Object.entries(handlers)) {
     const original = definition.handler;
-    definition.schema = definition.schema.extend({ agent_token: z.string().min(1).optional(), claim_generation: z.number().int().positive().optional() });
+    definition.schema = definition.schema.extend({ agent_token: z.string().min(1).optional(), claim_generation: z.number().int().positive().optional(), client_session_id: z.string().trim().min(1).max(200).optional(), client_agent_id: z.string().trim().min(1).max(200).optional() });
     definition.handler = async raw => {
       const parsed = definition.schema.parse(raw);
-      const { agent_token, claim_generation, ...input } = parsed;
-      if (name === "agent_attach") {
-        const identity = (await getStore()).attachAgent(agent_token as string | undefined);
+      const { agent_token, claim_generation, client_session_id, client_agent_id, ...input } = parsed;
+      if (client_agent_id && !client_session_id) throw new Error("client_agent_id requires client_session_id.");
+      const nativeKey = client_session_id ? JSON.stringify([client_session_id, client_agent_id ?? "main"]) : undefined;
+      const automatic = async () => {
+        if (!nativeKey) return resolveActor(agent_token as string | undefined);
+        const existing = nativeTokens.get(nativeKey);
+        if (existing && identities.has(existing)) return resolveActor(existing);
+        const identity = attachNativeAgent(await getStore(), client_session_id as string, client_agent_id as string | undefined);
         identities.set(identity.token, identity.actor);
-        return { agent: identityView(identity.actor, identity.token), next_tools: ["item_claim({ id, agent_token })"] };
+        nativeTokens.set(nativeKey, identity.token);
+        return identity;
+      };
+      if (name === "agent_attach") {
+        const identity = nativeKey ? await automatic() : (await getStore()).attachAgent(agent_token as string | undefined);
+        identities.set(identity.token, identity.actor);
+        return { agent: identityView(identity.actor, identity.token), next_tools: [nativeKey ? "item_claim({ id })" : "item_claim({ id, agent_token })"] };
       }
       if (name === "sprint_new" || name === "sprint_resume") {
         const continuing = name === "sprint_new" && agent_token ? await resolveActor(agent_token as string) : undefined;
         const result = await original(input) as Record<string, unknown>;
-        if (name === "sprint_new") identities.clear();
-        if (!identities.size || agent_token) {
+        if (name === "sprint_new") { identities.clear(); nativeTokens.clear(); }
+        if (!nativeKey && (!identities.size || agent_token)) {
           const identity = (await getStore()).attachAgent(name === "sprint_new" ? undefined : agent_token as string | undefined, name === "sprint_new" ? continuing ?? processIdentity : !agent_token ? processIdentity : undefined);
           identities.set(identity.token, identity.actor);
         }
-        const identity = await resolveActor(agent_token as string | undefined);
+        const identity = await automatic();
         const store = await getStore();
         const state = store.read();
         return actors.run(identity.actor, () => ({ ...result, briefing: briefing(state, store.listAllNotes()), next_tools: nextTools(state), agent: identityView(identity.actor, identity.token) }));
       }
       if (name === "info") {
         const result = await original(input) as Record<string, unknown>;
-        if (!identities.size && !agent_token) return { ...result, agent: identityView(processIdentity.actor) };
-        const identity = await resolveActor(agent_token as string | undefined);
+        if (!identities.size && !agent_token && !nativeKey) return { ...result, agent: identityView(processIdentity.actor) };
+        if (nativeKey && !await readViewOrNull(getStore)) return { ...result, agent: identityView(processIdentity.actor) };
+        const identity = await automatic();
         const store = await getStore();
         actors.run(identity.actor, () => store.activity());
         return { ...result, agent: identityView(identity.actor) };
       }
       if (!identities.size && ["dashboard_info", "dashboard_restart", "sprint_detach"].includes(name)) return original(input);
-      const identity = await resolveActor(agent_token as string | undefined);
+      const identity = await automatic();
       // Capture generations per call; an overlapping handoff must not change an in-flight operation's fence.
       const actor: Actor = { ...identity.actor, generations: new Map(identity.actor.generations) };
       if (claim_generation !== undefined && typeof input.id === "string") actor.generations.set(input.id, claim_generation as number);
@@ -338,7 +367,7 @@ export function buildToolHandlers(
           const generation = actor.generations.get(input.id)!;
           identity.actor.generations.set(input.id, Math.max(identity.actor.generations.get(input.id) ?? 0, generation));
         }
-        if (name === "agent_detach" || name === "sprint_detach") identities.delete(identity.token);
+        if (name === "agent_detach" || name === "sprint_detach") { identities.delete(identity.token); if (nativeKey) nativeTokens.delete(nativeKey); }
         return { ...result, agent: identityView(actor) };
       });
     };
@@ -350,7 +379,7 @@ function orientation(): { skills: string[]; how: string } {
   return {
     skills: ["how-to-run-a-sprint", "using-sprinty"],
     how:
-      "One sprint per binding. Retain your agent token and claim items before editing. Build item-driven: subsprint_new -> item_add -> item_done/item_split/item_deprecate. " +
+      "One sprint per binding. Your MCP connection identifies you automatically. Claim items before editing. Build item-driven: subsprint_new -> item_add -> item_done/item_split/item_deprecate. " +
       "Start with explicit git_dir and a worktree-scoped, uncommitted data_dir, such as <git_dir>/.sprinty when it is gitignored, so Sprinty cannot bind to a temp MCP cwd or unrelated state. " +
       "Items need a short title, bounded description, code_locations, and gates; keep them atomic. Each subsprint should represent one feature. " +
       "sprint_new and sprint_resume return a dashboard URL for the human; use dashboard_info to inspect it or dashboard_restart to refresh it. Resolve every item, generate the SemVer Markdown with changelog({path?}), then sprint_close re-runs gates.",
@@ -380,7 +409,7 @@ async function infoPayload(
     tools: [
       "info",
       "sprint_resume",
-      "agent_attach", "agent_detach", "agent_heartbeat",
+      "agent_attach", "agent_detach", "agent_heartbeat", "agent_list", "items_claimed",
       "item_claim", "item_release", "item_takeover", "item_progress",
       "sprint_new",
       "sprint_detach",

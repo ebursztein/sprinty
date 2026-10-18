@@ -23,10 +23,12 @@ Prefer compact commands first. Lists are compact and say which `_get()` tool ret
 
 ## Agent and claim tools
 
-Bound tools accept `agent_token`; omitting it is valid only when exactly one agent is attached to that connection. Use a separate token for every agent, including separate MCP processes sharing the same canonical repository and data directory. Resume with your retained token after a restart.
+Identity is automatic for one agent per MCP connection and for native caller integration. Claude plugin hooks supply native `client_session_id`/`client_agent_id`; these fields are client plumbing, not values the model should construct. Bound tools still accept `agent_token` as a fallback for other shared clients. Native identity credentials live in private files under the gitignored data directory; never commit that directory.
 
 | Tool | Input | Use |
 |---|---|---|
+| `agent_list` | `{ offset?=0, limit?=20 }` | Paginated agent names, active/inactive/detached state, last activity and claim counts; no tokens. |
+| `items_claimed` | `{ mine?=false, offset?=0, limit?=20 }` | Paginated current claims with owner, timing, progress and stall reasons. `mine:true` uses automatic caller identity. Maximum page size is 50. |
 | `agent_attach` | `{ agent_token? }` | Attach a new identity or recover an existing one; returns its generated name and token. |
 | `agent_detach` | `{ agent_token? }` | Release only this agent's claims and detach its identity. |
 | `agent_heartbeat` | `{ agent_token? }` | Report owner activity without recording item progress. |
@@ -35,7 +37,7 @@ Bound tools accept `agent_token`; omitting it is valid only when exactly one age
 | `item_takeover` | `{ id, explanation, agent_token? }` | Acquire potentially stalled work with a nonempty explanation of at most 500 characters; retain the new generation. |
 | `item_progress` | `{ id, message, agent_token?, claim_generation? }` | Record meaningful progress on your claim; message is nonempty and at most 500 characters. |
 
-Include the current `claim_generation` on item mutations as an explicit stale-owner fence. A result from `next` does not reserve work: if a claim fails because another agent owns it, select other ready work or wait. Do not retry edits using a former owner's generation. Subsprint deprecation is rejected if it would resolve another agent's claimed work.
+The connection remembers the current claim generation. Advanced clients can supply `claim_generation` as an explicit stale-owner fence. A result from `next` does not reserve work: if a claim fails because another agent owns it, select other ready work or wait. Do not retry edits using a former owner's generation. Subsprint deprecation is rejected if it would resolve another agent's claimed work.
 
 ## Work Tools
 
@@ -81,9 +83,9 @@ Include the current `claim_generation` on item mutations as an explicit stale-ow
 
 ## Concurrent agents and timing
 
-`sprint_new` and `sprint_resume` return `agent: { id, name, token }`; `info` reports your generated adjective–animal identity. Retain the opaque token across context recovery. Additional agents sharing a connection call `agent_attach({})`, then pass their own `agent_token` on bound calls. Omitting it is allowed only with one attached agent. Never share tokens between agents or put them in notes/artifacts. `agent_detach` releases only your claims; it keeps the shared dashboard and other agents attached. Use `sprint_detach` only when you are the connection's sole agent.
+`sprint_new` and `sprint_resume` return `agent: { id, name, token }`; `info` reports your generated adjective–animal identity. The connection remembers your identity automatically; ordinary calls need no name or token. Tokens are an advanced fallback for clients without automatic caller integration. Codex stdio agents normally have separate connections. The Claude plugin bundles a `PreToolUse` hook that supplies native session/subagent IDs, so shared-connection callers are also identified automatically. Update the installed plugin to get this hook; an MCP-only install does not include it. Other shared clients can use `agent_attach({})` and explicit `agent_token`. Without native caller integration, omitting it is allowed only with one attached agent. Never share tokens between agents or put them in notes/artifacts. `agent_detach` releases only your claims; it keeps the shared dashboard and other agents attached. Use `sprint_detach` only when you are the connection's sole agent.
 
-Before editing an item, call `item_claim({ id, agent_token? })`. Then use the returned claim generation when appropriate: item mutation tools accept `claim_generation` as an explicit stale-write fence. Repeating your own claim is idempotent. `item_release({ id })` hands work back. Item edits, completion, splitting and deprecation require ownership; collaborative notes and artifacts remain available to other agents. A completed item's last owner may correct its recorded metadata and gates. After restarting, resume with your existing `agent_token` to recover identity and ownership generations.
+Before editing an item, call `item_claim({ id, agent_token? })`. Then use the returned claim generation when appropriate: item mutation tools accept `claim_generation` as an explicit stale-write fence. Repeating your own claim is idempotent. `item_release({ id })` hands work back. Item edits, completion, splitting and deprecation require ownership; collaborative notes and artifacts remain available to other agents. A completed item's last owner may correct its recorded metadata and gates. Native caller mappings recover identity and claim generations after an MCP restart. Codex can supply `CODEX_THREAD_ID`, or a launcher can set `SPRINTY_SESSION_ID`; without a stable native ID, a new MCP process gets a new identity. For manual recovery, resume with your existing `agent_token`. Never invent native caller IDs in tool arguments.
 
 For long tasks, call `agent_heartbeat({})` every four minutes while actively working and `item_progress({ id, message })` when meaningful progress occurs. Progress messages are trimmed and limited to 500 characters. Generic server uptime and dashboard polling do not count as agent activity. Repeated calls within one second coalesce their durable heartbeat, while mutations retain their own attributed timestamps.
 

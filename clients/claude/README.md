@@ -26,3 +26,7 @@ Validate before release:
 claude plugin validate clients/claude --strict
 claude plugin validate . --strict
 ```
+
+## Automatic subagent identity (0.2.1)
+
+The plugin bundles `hooks/hooks.json` and `hooks/sprinty-identity.cjs`. Its PreToolUse hook injects Claude's native session and subagent IDs into Sprinty calls; agents do not need to remember tokens. Update/reload the plugin after upgrading. MCP-only installs do not install this hook. Existing stdio connections still identify one caller automatically.

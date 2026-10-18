@@ -1,6 +1,6 @@
 {
   "name": "sprinty",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Disciplined sprint workflow with dashboard-at-start, feature subsprints, artifacts, an immutable git-anchored ledger, and close gates.",
   "contextFileName": "GEMINI.md",
   "mcpServers": {

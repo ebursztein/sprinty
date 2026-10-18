@@ -8,7 +8,7 @@ import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 import { resolveBinding, resolveRepoDir, SERVER_VERSION } from "./server.js";
 
 const publicTools = [
-  "agent_attach", "agent_detach", "agent_heartbeat",
+  "agent_attach", "agent_detach", "agent_heartbeat", "agent_list", "items_claimed",
   "item_claim", "item_release", "item_takeover", "item_progress",
   "artifact_add", "artifact_get", "artifact_list", "artifact_update",
   "changelog", "dashboard_info", "dashboard_restart",
@@ -58,7 +58,7 @@ function connect(dir: string, options: { cwd?: string; env?: Record<string, stri
     command: "node",
     args: [entry],
     cwd: options.cwd ?? dir,
-    env: { ...process.env, ...options.env },
+    env: { ...process.env, CODEX_THREAD_ID: "", SPRINTY_SESSION_ID: "", ...options.env },
   });
   const client = new Client({ name: "test", version: "0" });
   return client.connect(transport).then(() => client);
@@ -220,6 +220,21 @@ describe("sprinty e2e over MCP", () => {
     const launchDir = mkdtempSync(join(tmpdir(), "sprinty-launch-"));
     expect(() => resolveRepoDir([], {}, launchDir)).toThrow(/git_dir is required/);
     expect(() => resolveRepoDir([], { SPRINTY_GIT_DIR: launchDir }, "/")).toThrow(/must be a git worktree/);
+  });
+
+  it("recovers automatic launcher identity across server restarts", async () => {
+    const fresh = initRepo();
+    const env = { SPRINTY_SESSION_ID: "stable-native-session" };
+    const first = await connect(fresh.dir, { env });
+    let identity: string;
+    try {
+      identity = (await call(first, "sprint_new", sprintInput(fresh.dir, { goal: "Native launcher identity" }))).json.agent.id;
+    } finally { await first.close(); }
+    const resumed = await connect(fresh.dir, { env });
+    try {
+      expect((await call(resumed, "sprint_resume", { git_dir: fresh.dir })).json.agent.id).toBe(identity!);
+      expect((await call(resumed, "agent_list", {})).json.total).toBe(1);
+    } finally { await resumed.close(); }
   });
 
   it("coordinates named agents sharing one MCP connection", async () => {

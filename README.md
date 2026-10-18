@@ -8,6 +8,13 @@ change maps; SemVer changelogs; and a local dashboard so humans can watch the wo
 
 ![Sprinty dashboard](/docs/sprinty-dashboard.png)
 
+## What's new in 0.2.1
+
+- **Automatic caller identity.** Normal MCP connections remember the agent; the Claude plugin now supplies session/subagent IDs automatically through a bundled hook. Stable native IDs recover identities across MCP restarts without model-managed tokens.
+- **Agent and claim discovery.** `agent_list()` shows agents and their activity; `items_claimed({ mine:true })` shows your work, claim age, progress, and potential stalls. Both support pagination.
+
+Use `npx -y sprinty-mcp@0.2.1` and restart your MCP connection. Update the Claude plugin as well to install its automatic-identity hook. Existing MCP-only Claude installs retain connection identity; shared subagents need the plugin hook or explicit tokens.
+
 ## What's new in 0.2.0
 
 - **Multiple agents, one sprint.** Each agent gets an adjective–animal name and its own token. Exclusive item claims and claim generations prevent agents from overwriting each other's work.
@@ -110,9 +117,9 @@ data dirs together, then `sprint_resume({ git_dir, data_dir })`.
 
 ## Concurrent agents and timing
 
-`sprint_new` and `sprint_resume` return `agent: { id, name, token }`; `info` reports your generated adjective–animal identity. Retain the opaque token across context recovery. Additional agents sharing a connection call `agent_attach({})`, then pass their own `agent_token` on bound calls. Omitting it is allowed only with one attached agent. Never share tokens between agents or put them in notes/artifacts. `agent_detach` releases only your claims; it keeps the shared dashboard and other agents attached. Use `sprint_detach` only when you are the connection's sole agent.
+`sprint_new` and `sprint_resume` return `agent: { id, name, token }`; `info` reports your generated adjective–animal identity. The connection remembers your identity automatically; ordinary calls need no name or token. Tokens are an advanced fallback for clients without automatic caller integration. Codex stdio agents normally have separate connections. The Claude plugin bundles a `PreToolUse` hook that supplies native session/subagent IDs, so shared-connection callers are also identified automatically. Update the installed plugin to get this hook; an MCP-only install does not include it. Other shared clients can use `agent_attach({})` and explicit `agent_token`. Without native caller integration, omitting it is allowed only with one attached agent. Never share tokens between agents or put them in notes/artifacts. `agent_detach` releases only your claims; it keeps the shared dashboard and other agents attached. Use `sprint_detach` only when you are the connection's sole agent.
 
-Before editing an item, call `item_claim({ id, agent_token? })`. Then use the returned claim generation when appropriate: item mutation tools accept `claim_generation` as an explicit stale-write fence. Repeating your own claim is idempotent. `item_release({ id })` hands work back. Item edits, completion, splitting and deprecation require ownership; collaborative notes and artifacts remain available to other agents. A completed item's last owner may correct its recorded metadata and gates. After restarting, resume with your existing `agent_token` to recover identity and ownership generations.
+Before editing an item, call `item_claim({ id, agent_token? })`. Then use the returned claim generation when appropriate: item mutation tools accept `claim_generation` as an explicit stale-write fence. Repeating your own claim is idempotent. `item_release({ id })` hands work back. Item edits, completion, splitting and deprecation require ownership; collaborative notes and artifacts remain available to other agents. A completed item's last owner may correct its recorded metadata and gates. Native caller mappings recover identity and claim generations after an MCP restart. Codex can supply `CODEX_THREAD_ID`, or a launcher can set `SPRINTY_SESSION_ID`; without a stable native ID, a new MCP process gets a new identity. For manual recovery, resume with your existing `agent_token`. Never invent native caller IDs in tool arguments.
 
 For long tasks, call `agent_heartbeat({})` at least every five minutes and `item_progress({ id, message })` when meaningful progress occurs. Progress messages are trimmed and limited to 500 characters. Generic server uptime and dashboard polling do not count as agent activity. Repeated calls within one second coalesce their durable heartbeat, while mutations retain their own attributed timestamps.
 

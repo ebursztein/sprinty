@@ -1,7 +1,7 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "sprinty",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Disciplined sprint MCP with dashboard, artifacts, gates, Git-backed change maps, and changelogs for Claude Code, Codex, and Gemini",
   "author": {
     "name": "Elie Bursztein",
