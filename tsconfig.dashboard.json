@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "noEmit": true,
+    "rootDir": ".",
+    "exactOptionalPropertyTypes": false,
+    "allowSyntheticDefaultImports": true
+  },
+  "include": ["src/dashboard/ui/src/**/*.ts", "src/dashboard/ui/src/**/*.tsx"],
+  "exclude": ["src/**/*.test.ts", "src/**/*.test.tsx"]
+}

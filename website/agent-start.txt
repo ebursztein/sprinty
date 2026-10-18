@@ -1,0 +1,14 @@
+Set up Sprinty for this project so our implementation plan, item ownership, verification evidence, and changelog survive context compaction and session restarts.
+
+1. Inspect the current repository and identify my coding client. Preserve existing settings and sprint data.
+2. Install the two official Sprinty skills from https://github.com/ebursztein/sprinty using:
+   npx skills add ebursztein/sprinty --skill how-to-run-a-sprint --skill using-sprinty
+   Choose this client's project-local skill installation. Do not install globally unless I ask.
+3. Connect the Sprinty MCP server using my client's supported configuration. The server command is npx with arguments ["-y", "sprinty-mcp@latest"]. For Codex CLI use `codex mcp add sprinty -- npx -y sprinty-mcp@latest`; for Claude Code use `claude mcp add sprinty -- npx -y sprinty-mcp@latest`. For another MCP client, use its documented configuration rather than guessing. Avoid duplicating an existing server entry. Skills installation and MCP server connection are separate steps.
+4. If my client needs a restart to discover the server or skills, explain the next action and stop until it is available. Do not claim the server is connected before verifying its tools.
+5. Read the installed Sprinty skills. Call info({ git_dir: <canonical repository> }) first. Resume a suitable existing sprint with sprint_resume({ git_dir, data_dir }); create a sprint only when I provide work to track and no suitable sprint exists. Use a gitignored data directory, normally <repository>/.sprinty.
+6. Share the dashboard URL. Create dedicated items before implementation, claim each item before working on it, record meaningful progress, and resolve it with a real commit plus executable verification evidence. Keep credentials and local sprint state out of git.
+7. Each collaborating session must use the same canonical repository and data directory, with its own identity. Sprinty identifies ordinary MCP connections automatically. Claude subagents that share a connection need the official Claude plugin's identity hook, or explicit per-agent tokens as a fallback; the skills CLI alone does not install plugin hooks. Separate worktrees use separate bindings.
+8. After compaction or a restart, call info and sprint_resume, then inspect next(), agent_list(), and items_claimed({ mine: true }). Recover the recorded plan and evidence rather than reconstructing progress from conversation memory. Stable native caller IDs recover an existing identity when the client supplies them; otherwise a restarted process may receive a new identity. Never assume it owns another agent's claims.
+
+Finish setup by reporting what is installed, which tools are available, and whether I need to restart my client. Do not publish packages, deploy a website, or start unrelated work as part of setup.

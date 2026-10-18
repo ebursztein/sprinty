@@ -1,0 +1,1 @@
+MIT components from https://github.com/untitleduico/react at 1d410cb8facde8d50869e7bbb5f3d048e2267466. Button and utility source retained with relative imports adjusted. theme.css comes from the same revision. See LICENSE.

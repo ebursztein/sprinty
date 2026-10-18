@@ -1,0 +1,29 @@
+# Sprinty
+
+> Sprinty is an open-source MCP server and pair of agent skills for durable coding sprints. It records the plan, dependencies, item claims, progress, gate evidence, artifacts, and changelog in a local append-only ledger.
+
+## Get started
+- [Copyable setup prompt](https://ebursztein.github.io/sprinty/agent-start.txt): instructions a user can paste into a coding agent to install skills and configure the MCP server.
+- [Source and install guide](https://github.com/ebursztein/sprinty): supported client integrations and tool reference.
+- [Sprint workflow skill](https://github.com/ebursztein/sprinty/blob/main/skills/how-to-run-a-sprint/SKILL.md): item-driven planning, claims, evidence, and closure.
+- [Tool contract skill](https://github.com/ebursztein/sprinty/blob/main/skills/using-sprinty/SKILL.md): exact inputs, bounded responses, ownership, timing, and recovery.
+- [npm server package](https://www.npmjs.com/package/sprinty-mcp): stdio MCP server.
+
+## Install
+Skills: npx skills add ebursztein/sprinty
+Server: npx -y sprinty-mcp@latest
+These are separate installations. Skills supply guidance; the MCP server supplies tools. The skills CLI does not install Claude plugin hooks.
+
+## Start or resume
+Call info({ git_dir }) first. Pass the canonical repository explicitly. Use a gitignored data_dir, normally <repository>/.sprinty. Resume existing work with sprint_resume({ git_dir, data_dir }). Start a new sprint only when the user has work to track and no suitable sprint exists. Follow next_tools and bounded list/get tools.
+
+## Work
+Create a feature subsprint and dedicated items before coding. Claim an item before editing or completing it. Record item_progress for meaningful updates, and agent_heartbeat during active work between calls. Complete items with a real resolving commit and gate evidence. sprint_close rechecks gates and writes the canonical changelog.
+
+## Collaboration and recovery
+Independent local MCP processes coordinate through one shared canonical repository/data directory. Sessions have distinct named identities and exclusive claims. Use agent_list() and items_claimed({ mine:true }) to inspect ownership. Normal connections remember identity automatically; the Claude plugin's hook supplies native subagent IDs for shared connections. Other shared clients can use explicit agent tokens. Native identity recovery requires a stable caller ID; do not assume a new process owns old claims. Worktrees keep separate bindings. Potential stalls are warnings; explicit takeover requires an explanation and eligible stalled work.
+
+Compaction does not erase the disk ledger. It is the work record, not a backup of the entire conversation. After context loss, call info and sprint_resume to recover the plan, current work, and evidence. Keep secrets and local sprint data out of git.
+
+## ETA
+The dashboard and tools share an activity-aware estimate. It separates queue wait, claim duration, and estimated active effort; sleep contributes at most five minutes per observed activity event. It learns from at least three eligible completions. Paused or inactive-owner states suppress calendar finish forecasts. Ranges are effort estimates, not statistical confidence intervals.

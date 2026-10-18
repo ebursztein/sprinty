@@ -1,5 +1,7 @@
 # Sprinty
 
+[![skills.sh](https://skills.sh/b/ebursztein/sprinty)](https://skills.sh/ebursztein/sprinty)
+
 [![npm version](https://img.shields.io/npm/v/sprinty-mcp.svg)](https://www.npmjs.com/package/sprinty-mcp)
 
 Sprinty is an MCP server for running disciplined coding sprints with AI agents. It gives agents
@@ -26,6 +28,18 @@ Use `npx -y sprinty-mcp@0.2.1` and restart your MCP connection. Update the Claud
 To upgrade, use `npx -y sprinty-mcp@0.2.0` as your MCP server command and restart the connection. Resume your existing sprint, retain the returned agent token, and call `item_claim` before editing or completing work. Concurrent agents must share the same canonical repository and data directory, with a separate token per agent. Existing ledgers remain readable; the new ETA shows “learning” until it has three eligible completed items.
 
 See the [0.2.0 release notes](https://github.com/ebursztein/sprinty/releases/tag/v0.2.0) and [concurrent-agent workflow](#concurrent-agents-and-timing).
+
+## Agent skills via `npx skills`
+
+Discover and install the workflow and tool-reference skills for Codex, Claude Code, and other supported agents:
+
+```bash
+npx skills add ebursztein/sprinty
+```
+
+List first with `npx skills add ebursztein/sprinty --list`, or choose both explicitly with `--skill how-to-run-a-sprint --skill using-sprinty`. This installs agent guidance; connect the MCP server using the client instructions below to get Sprinty's tools. Claude's automatic shared-subagent identity hook comes with the Claude plugin, not with a skills-only install.
+
+Prefer to have your agent handle setup? Copy the [setup prompt](https://ebursztein.github.io/sprinty/agent-start.txt) into your coding agent. The [website](https://ebursztein.github.io/sprinty/) includes the same prompt and install commands; [llms.txt](https://ebursztein.github.io/sprinty/llms.txt) provides a compact agent reference.
 
 ## Install
 
@@ -183,3 +197,15 @@ npm run typecheck
 ## License
 
 Apache-2.0
+
+## Dashboard development
+
+The next dashboard uses React, MIT Untitled UI components, Tailwind CSS 4, and TanStack Table 9. Its read-only `/state` contract and shared domain ETA remain unchanged.
+
+```bash
+npm run dev:dashboard -- --mode demo
+```
+
+Demo mode uses deterministic synthetic data for screenshots and UI checks. To develop against a real local sprint, set `SPRINTY_DASHBOARD_URL` to the URL returned by Sprinty and run `npm run dev:dashboard`. `npm run build` produces the self-contained MCP dashboard; `npm run typecheck` checks server and UI types.
+
+The static marketing site lives in `website/`. Run `npm run dev:site` for a preview and `npm run build:site` to check local links and build `.site-dist/`. GitHub Pages publishes it through `.github/workflows/site.yml`; it is kept out of the npm server package. Dashboard screenshots use illustrative data and are labelled as the next-dashboard preview until that UI ships to npm.

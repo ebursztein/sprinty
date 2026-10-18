@@ -144,3 +144,5 @@ vite.config.ts.timestamp-*
 
 # sprinty local sprint state (per worktree)
 .sprinty
+
+.site-dist/
