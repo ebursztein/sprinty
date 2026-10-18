@@ -10,6 +10,14 @@ change maps; SemVer changelogs; and a local dashboard so humans can watch the wo
 
 ![Sprinty dashboard](/docs/sprinty-dashboard.png)
 
+## What's new in 0.2.2
+
+- **Direct claim recovery.** Use `item_claim({ id, force: "Previous agent terminated" })` to reassign work immediately. `force` is the explanation string (1–500 characters); no inactivity or stall threshold is required. `item_takeover` accepts the same option.
+- **Clearer claim rejections.** Errors explain the unmet ownership or stall condition and show the explicit override option. Handover history and stale-owner protection remain intact.
+- **Updated dashboard.** The packaged dashboard now uses React, Untitled UI, and TanStack Table, with a refreshed work table and item detail views.
+
+Upgrade to `npx -y sprinty-mcp@0.2.2` and restart your MCP connection.
+
 ## What's new in 0.2.1
 
 - **Automatic caller identity.** Normal MCP connections remember the agent; the Claude plugin now supplies session/subagent IDs automatically through a bundled hook. Stable native IDs recover identities across MCP restarts without model-managed tokens.

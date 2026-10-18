@@ -1,6 +1,6 @@
 {
   "name": "sprinty",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Disciplined sprint workflow for Codex CLI: dashboard-at-start, feature subsprints, artifacts, dependency graphs, coverage gates, changelogs, and change maps.",
   "author": {
     "name": "Elie Bursztein",
