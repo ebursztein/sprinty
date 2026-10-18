@@ -12,14 +12,30 @@ Prefer compact commands first. Lists are compact and say which `_get()` tool ret
 | Tool | Input | Use |
 |---|---|---|
 | `info` | `{ git_dir?, data_dir?, workspace_dirs?[] }` | First-call orientation before binding. Returns startup workflow, resume/create help, dashboard state, and sprint rows with title, created time, and open/closed/blocked item counts. |
-| `sprint_resume` | `{ git_dir, data_dir? }` | Rebind this MCP process to an existing sprint. Returns a bounded `briefing` (counts, current item, blocked ids, last resolved, recent notes), the `skills` to read, and the dashboard URL - use it instead of re-deriving state with overview+next. `data_dir` defaults to `<git_dir>/.sprinty`. Never call `sprint_new` as a resume trick. |
-| `sprint_detach` | `{}` | Clear this process binding before resuming a different sprint. |
-| `sprint_new` | `{ goal, git_dir, data_dir?, context_notes?[] }` | Start one sprint with explicit `git_dir`; `data_dir` defaults to `<git_dir>/.sprinty`. Returns the dashboard URL. |
+| `sprint_resume` | `{ git_dir, data_dir?, agent_token? }` | Rebind this MCP process to an existing sprint. Returns a bounded `briefing` (counts, current item, blocked ids, last resolved, recent notes), the `skills` to read, and the dashboard URL - use it instead of re-deriving state with overview+next. `data_dir` defaults to `<git_dir>/.sprinty`. Never call `sprint_new` as a resume trick. |
+| `sprint_detach` | `{}` | Clear this process binding before resuming a different sprint; only the sole attached agent may detach the connection. |
+| `sprint_new` | `{ goal, git_dir, data_dir?, context_notes?[], agent_token? }` | Start one sprint with explicit `git_dir`; `data_dir` defaults to `<git_dir>/.sprinty`. Returns the dashboard URL. |
 | `overview` | `{}` | Compact sprint title/details/artifacts/subsprints/items. Use this to orient. |
-| `next` | `{ past?=1, future?, future_per_subsprint?=1, include_high_priority?=true }` | Compact active work window. Returns all available high-priority items first, then normal available items per subsprint. `future` caps the total returned across all subsprints. No full graph. |
+| `next` | `{ past?=1, future?, future_per_subsprint?=1, include_high_priority?=true }` | Compact active work window. Prioritizes your claims, then unclaimed ready work; applies high-priority and per-subsprint window settings. Suggested work still needs an atomic claim. `future` caps the total returned across all subsprints. No full graph. |
 | `search` | `{ pattern, context_size?=512 }` | Regex search. Returns `{ id, type, text, tool_call }`; use `tool_call` for full detail. |
 | `dashboard_info` | `{}` | Current localhost dashboard URL and port, or `running:false` when stopped. |
 | `dashboard_restart` | `{}` | Restart the dashboard server and return the new URL and port. |
+
+## Agent and claim tools
+
+Bound tools accept `agent_token`; omitting it is valid only when exactly one agent is attached to that connection. Use a separate token for every agent, including separate MCP processes sharing the same canonical repository and data directory. Resume with your retained token after a restart.
+
+| Tool | Input | Use |
+|---|---|---|
+| `agent_attach` | `{ agent_token? }` | Attach a new identity or recover an existing one; returns its generated name and token. |
+| `agent_detach` | `{ agent_token? }` | Release only this agent's claims and detach its identity. |
+| `agent_heartbeat` | `{ agent_token? }` | Report owner activity without recording item progress. |
+| `item_claim` | `{ id, agent_token? }` | Atomically acquire an open item; retain the returned claim generation. |
+| `item_release` | `{ id, agent_token?, claim_generation? }` | Release your current claim. |
+| `item_takeover` | `{ id, explanation, agent_token? }` | Acquire potentially stalled work with a nonempty explanation of at most 500 characters; retain the new generation. |
+| `item_progress` | `{ id, message, agent_token?, claim_generation? }` | Record meaningful progress on your claim; message is nonempty and at most 500 characters. |
+
+Include the current `claim_generation` on item mutations as an explicit stale-owner fence. A result from `next` does not reserve work: if a claim fails because another agent owns it, select other ready work or wait. Do not retry edits using a former owner's generation. Subsprint deprecation is rejected if it would resolve another agent's claimed work.
 
 ## Work Tools
 
@@ -69,7 +85,7 @@ Prefer compact commands first. Lists are compact and say which `_get()` tool ret
 
 Before editing an item, call `item_claim({ id, agent_token? })`. Then use the returned claim generation when appropriate: item mutation tools accept `claim_generation` as an explicit stale-write fence. Repeating your own claim is idempotent. `item_release({ id })` hands work back. Item edits, completion, splitting and deprecation require ownership; collaborative notes and artifacts remain available to other agents. A completed item's last owner may correct its recorded metadata and gates. After restarting, resume with your existing `agent_token` to recover identity and ownership generations.
 
-For long tasks, call `agent_heartbeat({})` at least every five minutes and `item_progress({ id, message })` when meaningful progress occurs. Progress messages are trimmed and limited to 500 characters. Generic server uptime and dashboard polling do not count as agent activity. Repeated calls within one second coalesce their durable heartbeat, while mutations retain their own attributed timestamps.
+For long tasks, call `agent_heartbeat({})` every four minutes while actively working and `item_progress({ id, message })` when meaningful progress occurs. Progress messages are trimmed and limited to 500 characters. Generic server uptime and dashboard polling do not count as agent activity. Repeated calls within one second coalesce their durable heartbeat, while mutations retain their own attributed timestamps.
 
 Sprinty tracks claim age, historical ownership, estimated active work and owner inactivity separately. It flags a **potential stall** after either three other distinct items complete without item progress, or one hour without owner activity. Reads/heartbeats do not reset the three-item counter. Notes, item edits and related artifact updates do. No work is automatically reassigned: use `item_takeover({ id, explanation })` on a potentially stalled claim, with a nonempty explanation capped at 500 characters. History preserves both owners and the handover; old owners cannot continue writing.
 
