@@ -19,6 +19,7 @@ One sprint per explicit git/data binding. sprint_new and sprint_resume require g
 Use a worktree-scoped, uncommitted data_dir, usually <git_dir>/.sprinty when it is gitignored; avoid shared temp dirs and committed sprint state.
 The data_dir/current pointer keeps exactly one open sprint for that binding. After an MCP restart, call info({ git_dir }) or info({ workspace_dirs }) to inspect existing ledgers, then sprint_resume(git_dir, data_dir?) to reattach to an existing sprint without creating a new one. Use sprint_detach() to clear the process binding.
 Call overview() after binding for compact sprint shape, or next() for the active work window.
+Resume/create returns a named agent and token; retain it. Shared connections use agent_attach and explicit agent_token on every bound call. Claim items with item_claim before editing or resolving them. Use agent_heartbeat during long tasks, item_progress for meaningful progress, and item_release or agent_detach to hand work back. Potential stalls require explicit item_takeover with a 1–500 character explanation; never assume a stall released ownership. ETA uses observed activity, pauses without active agents, and learns after three claimed completions.
 Build is item-driven: sprint_new(goal, git_dir, data_dir, context_notes?) -> dashboard URL for the human -> subsprint_new(..., dependencies?)
 -> item_add(title + description + code_locations + gates, dependencies?) -> item_done(commit + changelog; Sprinty runs the executable gates itself under a 5s budget, only manual gates take gate_results)
 | item_split(promote to a subsprint) | item_deprecate(reason). item_deprecate also accepts a subsprint id to drop a whole subsprint and its open items. Use item_update(id, ...) to replace open-item gates/timeout, correct a completed item's commit_id, or change dependency edges.
@@ -47,7 +48,7 @@ export async function main(): Promise<void> {
     if (store && (store.dir !== next.dir || store.dataDir !== next.dataDir)) {
       throw new Error(`Sprinty MCP server is already bound to git_dir=${store.dir} data_dir=${store.dataDir}. Start a fresh MCP session for git_dir=${next.dir} data_dir=${next.dataDir}.`);
     }
-    store = next;
+    store ??= next;
     return store;
   };
   const detachStore = (): void => {

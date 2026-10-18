@@ -157,7 +157,8 @@ describe("deriveDashboardModel", () => {
     const model = deriveDashboardModel(sprintView());
     expect(model.activeSubsprint?.id).toBe("S02");
     expect(model.currentItem?.id).toBe("S02-001");
-    expect(model.nextItem?.id).toBe("S02-002");
+    expect(model.nextItem).toBeNull();
+    expect(model.blockedItems.map(item => item.id)).toEqual(["S02-002"]);
     expect(model.progress.items).toEqual({ total: 3, done: 1, open: 2, percent: 33 });
     expect(model.progress.statuses).toEqual({ total: 3, completed: 1, open: 2, split: 0, deprecated: 0 });
     expect(model.progress.gates).toEqual({ total: 4, passed: 2, failed: 0, unverified: 0, pending: 2 });
@@ -167,7 +168,7 @@ describe("deriveDashboardModel", () => {
     expect(model.tree[0]!.defaultOpen).toBe(false);
     expect(model.tree[1]!.tone).toBe("active");
     expect(model.tree[1]!.defaultOpen).toBe(true);
-    expect(model.tree[1]!.items.map((item) => item.tone)).toEqual(["current", "next"]);
+    expect(model.tree[1]!.items.map((item) => item.tone)).toEqual(["current", "blocked"]);
     expect("timeline" in model).toBe(false);
     expect(model.ledger[0]).toMatchObject({ seq: 3, id: "S01-001", entity: "item", verb: "close", targetKind: "item", clickable: true });
   });

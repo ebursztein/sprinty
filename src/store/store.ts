@@ -1,8 +1,12 @@
-import { Ledger } from "../ledger/ledger.js";
+import type { Ledger } from "../ledger/ledger.js";
 import { SprintBook } from "../ledger/book.js";
-import { existsSync, mkdirSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, statSync } from "node:fs";
+import { actors, newIdentity, tokenHash, type Actor } from "../domain/agents.js";
+import { withDataLock, canonicalDirectory, type FileWrite } from "../ledger/transaction.js";
+import { LedgerEvent as EventSchema } from "../domain/events.js";
+import { runGateAsync } from "../gates/run.js";
 import { join } from "node:path";
-import { project, type SprintView } from "../domain/projection.js";
+import { project, refreshTiming, type SprintView } from "../domain/projection.js";
 import { mintSubsprintId, mintItemId, mintNoteId, legacyNoteId } from "../domain/ids.js";
 import { commitNumstat, gitContext, verifyCommit } from "../git/git.js";
 import { DEFAULT_GATE_TIMEOUT_MS, runGate } from "../gates/run.js";
@@ -34,17 +38,24 @@ export class SprintStore {
   private cachedEvents: LedgerEvent[] | null = null;
   private cachedView: SprintView | null | undefined;
   readonly dataDir: string;
+  private pinnedId: string | null = null;
+  private transactionEvents: LedgerEvent[] | null = null;
+  private transactionWrites: FileWrite[] = [];
+  private executedGates: Map<string, GateResult> | null = null;
+  private clock: () => number;
+  private cachedNow: number | null = null;
 
-  constructor(readonly dir: string, dataDir: string = join(dir, ".sprinty")) {
-    this.dataDir = dataDir;
-    this.book = new SprintBook(dataDir);
-  }
 
-  // Resolves the current sprint's ledger via `.sprinty/current`. Throws if no sprint.
-  private get ledger(): Ledger {
-    const id = this.book.currentId();
-    if (!id) throw new StoreError("No sprint. Call sprint_new first.");
-    return this.book.ledger(id);
+  constructor(readonly dir: string, dataDir: string = join(dir, ".sprinty"), clock: () => number = Date.now) {
+    this.clock = clock;
+    this.dataDir = canonicalDirectory(dataDir);
+    this.book = new SprintBook(this.dataDir);
+    this.pinnedId = withDataLock(this.dataDir, () => this.book.currentId());
+    const mutations = ["createSprint", "createSubsprint", "addItem", "updateItem", "done", "split", "deprecate", "addDependencies", "addNote", "addArtifact", "amendArtifact", "deprecateArtifact", "addFollowUp", "updateNote", "closeSprint", "archiveSprint", "attachAgent", "detachAgent", "claimItem", "releaseItem", "progressItem"] as const;
+    for (const name of mutations) {
+      const method = this[name];
+      Reflect.set(this, name, (...args: unknown[]) => this.mutate(() => Reflect.apply(method, this, args)));
+    }
   }
 
   private invalidate(): void {
@@ -55,13 +66,17 @@ export class SprintStore {
   }
 
   private append(event: Parameters<Ledger["append"]>[0]): LedgerEvent {
-    const appended = this.ledger.append(event);
+    if (!this.transactionEvents) throw new StoreError("Mutation requires a transaction.");
+    const actor = actors.getStore();
+    const appended = EventSchema.parse({ ...event, ...(actor ? { agent_id: actor.id } : {}), seq: this.transactionEvents.length, ts: new Date(this.clock()).toISOString() });
+    this.transactionEvents.push(appended);
     this.invalidate();
     return appended;
   }
 
   private currentEvents(): LedgerEvent[] {
-    const id = this.book.currentId();
+    if (this.transactionEvents) return this.transactionEvents;
+    const id = this.pinnedId;
     if (!id) return [];
     const signature = this.ledgerSignature(id);
     if (this.cachedId === id && this.cachedSignature === signature && this.cachedEvents) return this.cachedEvents;
@@ -81,18 +96,35 @@ export class SprintStore {
   }
 
   private state(): SprintView | null {
-    const id = this.book.currentId();
-    if (!id) return null;
-    const signature = this.ledgerSignature(id);
-    if (this.cachedId === id && this.cachedSignature === signature && this.cachedView !== undefined) return this.cachedView;
     const events = this.currentEvents();
-    const view = project(events);
-    this.cachedView = view;
-    return view;
+    const now = this.clock();
+    if (this.cachedView === undefined) { this.cachedView = project(events, now); this.cachedNow = now; }
+    else if (this.cachedView && now !== this.cachedNow) { refreshTiming(this.cachedView, events, now); this.cachedNow = now; }
+    return this.cachedView;
+  }
+  private mutate<T>(run: () => T): T {
+    if (this.transactionEvents) return run();
+    return withDataLock(this.dataDir, () => {
+      const previousId = this.pinnedId;
+      this.invalidate();
+      const base = previousId ? this.book.ledger(previousId).read() : [];
+      this.transactionEvents = [...base];
+      this.transactionWrites = [];
+      try {
+        const result = run();
+        if (!this.pinnedId) throw new StoreError("No sprint is attached.");
+        const start = this.pinnedId === previousId ? base.length : 0;
+        this.book.ledger(this.pinnedId).commit(this.transactionEvents.slice(start), this.transactionWrites);
+        return result;
+      } catch (error) { this.pinnedId = previousId; throw error; }
+      finally { this.transactionEvents = null; this.transactionWrites = []; this.invalidate(); }
+    });
   }
   private requireState(): SprintView {
     const s = this.state();
     if (!s) throw new StoreError("No sprint. Call sprint_new first.");
+    const binding = this.currentEvents().find(e => e.type === "agent_attached" && e.git_dir);
+    if (binding?.type === "agent_attached" && binding.git_dir !== canonicalDirectory(this.dir)) throw new StoreError("This sprint belongs to a different canonical worktree.");
     return s;
   }
   private requireActiveState(): SprintView {
@@ -101,17 +133,20 @@ export class SprintStore {
     return s;
   }
 
-  read(): SprintView { return this.requireState(); }
+  read(): SprintView { return withDataLock(this.dataDir, () => this.requireState()); }
 
   createSprint(goal: string, contextNotes: string[] = []): SprintView {
-    const existing = this.state();
+    const current = this.book.currentId();
+    const existing = current ? project(this.book.ledger(current).read()) : null;
     if (existing && existing.status === "active") throw new StoreError("The current sprint is still open. Close it before starting a new one.");
     if (!goal.trim()) throw new StoreError("Sprint goal is required.");
     const id = this.book.allocateId();   // new ledger file id (001, 002, …)
-    this.book.setCurrent(id);            // `.sprinty/current` -> id : enforces unicity
+    this.pinnedId = id;
+    this.transactionEvents = [];
+    this.transactionWrites.push({ name: "current", contents: id + "\n" });
     this.invalidate();
     const { branch, worktree } = gitContext(this.dir);
-    this.book.ledger(id).append({ type: "sprint_created", goal, worktree, branch, dir: this.dir, data_dir: this.dataDir, context_notes: contextNotes });
+    this.append({ type: "sprint_created", goal, worktree, branch, dir: this.dir, data_dir: this.dataDir, context_notes: contextNotes });
     this.invalidate();
     return this.requireState();
   }
@@ -164,6 +199,7 @@ export class SprintStore {
       }
       throw new StoreError(`Unknown item ${input.target}.`);
     }
+    this.requireOwner(input.target);
     if (updatesExecution && item.status !== "open" && item.status !== "completed") {
       throw new StoreError(`Cannot change gates or gate timeout on ${item.status} item ${input.target}.`);
     }
@@ -205,10 +241,11 @@ export class SprintStore {
   done(input: { item: string; commit_id: string; gate_results?: GateResult[] | undefined; changelog: ChangelogEntry }): { view: SprintView; warning: string | null } {
     const s = this.requireActiveState();
     const item = this.findOpenItem(s, input.item);
+    this.requireOwner(input.item);
     if (!verifyCommit(this.dir, input.commit_id)) throw new StoreError(`Commit ${input.commit_id} not found in repo.`);
     if (!input.changelog?.line.trim()) throw new StoreError("Changelog line is required.");
 
-    const executed = item.gates.filter(isExecutable).map((gate) => runGate(gate, this.dir, item.gate_timeout_ms));
+    const executed = item.gates.filter(isExecutable).map((gate) => this.executeGate(gate, item.gate_timeout_ms));
     const manualGates = item.gates.filter((gate) => !isExecutable(gate));
     const manualResults = (input.gate_results ?? []).filter((result) => !isExecutable(result));
     this.validateGateEvidence(manualGates, manualResults);
@@ -235,6 +272,7 @@ export class SprintStore {
   split(input: { item: string; description: string; goals: string[]; gates: Gate[]; dependencies?: string[] }): SprintView {
     const s = this.requireActiveState();
     this.findOpenItem(s, input.item);
+    this.requireOwner(input.item);
     this.validateGates(input.gates);
     const newId = mintSubsprintId(s.subsprints.length);
     const dependencies = input.dependencies ?? [];
@@ -250,6 +288,7 @@ export class SprintStore {
     const sub = s.subsprints.find((x) => x.id === input.target);
     if (sub) return this.deprecateSubsprint(sub, input.reason);
     this.findOpenItem(s, input.target);
+    this.requireOwner(input.target);
     if (!input.reason.trim()) throw new StoreError("Deprecation requires a reason.");
     this.append({ type: "item_resolved", item_id: input.target, disposition: "deprecated", commit_id: null, gate_results: [], spawned_subsprint: null, reason: input.reason, changelog: null, change_map: emptyChangeMap() });
     return this.requireState();
@@ -259,6 +298,7 @@ export class SprintStore {
     if (sub.status === "deprecated") throw new StoreError(`Subsprint ${sub.id} is already deprecated.`);
     if (sub.status === "closed") throw new StoreError(`Subsprint ${sub.id} is already closed.`);
     if (!reason.trim()) throw new StoreError("Subsprint deprecation requires a reason.");
+    for (const item of sub.items.filter((child) => child.status === "open")) this.requireOwner(item.id);
     for (const item of sub.items.filter((child) => child.status === "open")) {
       this.append({
         type: "item_resolved",
@@ -278,6 +318,7 @@ export class SprintStore {
 
   addDependencies(input: { target: string; dependencies: string[] }): SprintView {
     const s = this.requireActiveState();
+    this.requireOwner(input.target);
     this.validateDependencyAddition(s, input.target, input.dependencies);
     this.append({ type: "dependencies_added", target_id: input.target, dependencies: input.dependencies });
     return this.requireState();
@@ -469,19 +510,19 @@ export class SprintStore {
 
     const results: GateResult[] = [];
     for (const { owners, gate, timeoutMs } of toRun.values()) {
-      const r = runGate(gate, this.dir, timeoutMs);
+      const r = this.executeGate(gate, timeoutMs);
       results.push(r);
       if (!r.passed && !input.force) blockers.push(`Gate failed for ${owners.join(", ")}: ${gate.spec}`);
     }
 
     if (blockers.length > 0) throw new StoreError("Sprint cannot close.", blockers);
     mkdirSync(this.dataDir, { recursive: true });
-    writeFileSync(join(this.dataDir, "CHANGELOG.md"), renderChangelogMarkdown({
+    this.transactionWrites.push({ name: "CHANGELOG.md", contents: renderChangelogMarkdown({
       ...s,
       status: "closed",
       coverage,
       coverage_state: coverageState,
-    }));
+    }) });
     this.append({ type: "sprint_closed", gate_results: results, forced: input.force ?? false, coverage, coverage_state: coverageState });
     return this.requireState();
   }
@@ -491,6 +532,124 @@ export class SprintStore {
     if (!input.reason.trim()) throw new StoreError("Archive requires a reason.");
     this.append({ type: "sprint_archived", reason: input.reason });
     return this.requireState();
+  }
+
+  attachAgent(token?: string, preferred?: { actor: Actor; token: string }): { actor: Actor; token: string } {
+    this.requireState();
+    if (token) {
+      const event = this.currentEvents().find(e => e.type === "agent_attached" && e.token_hash === tokenHash(token));
+      if (!event || event.type !== "agent_attached" || !this.read().agents.find(a => a.id === event.id)?.attached) throw new StoreError("Unknown or detached agent token.");
+      this.append({ type: "agent_activity", id: event.id, agent_id: event.id });
+      return { actor: { id: event.id, name: event.name, generations: new Map(this.read().subsprints.flatMap(s => s.items).filter(i => (i.claim.owner ?? i.claim.history.at(-1)?.owner) === event.id).map(i => [i.id, i.claim.generation])) }, token };
+    }
+    const names = this.read().agents.map(a => a.name);
+    const identity = preferred && !names.includes(preferred.actor.name) ? { token: preferred.token, actor: { ...preferred.actor, generations: new Map<string, number>() } } : newIdentity(names);
+    this.append({ type: "agent_attached", id: identity.actor.id, name: identity.actor.name, token_hash: tokenHash(identity.token), git_dir: canonicalDirectory(this.dir) });
+    return identity;
+  }
+
+  private requireActor(): Actor {
+    const actor = actors.getStore();
+    if (!actor || !this.requireState().agents.find(a => a.id === actor.id)?.attached) throw new StoreError("Attach an agent first.");
+    return actor;
+  }
+  private requireOwner(id: string): void {
+    const actor = actors.getStore();
+    const s = this.requireState();
+    // Direct, unattributed legacy store callers remain supported until sessions exist.
+    if (!actor && !s.agents.length) return;
+    this.requireActor();
+    const item = s.subsprints.flatMap(sub => sub.items).find(i => i.id === id);
+    if (!item) throw new StoreError(`Unknown item ${id}.`);
+    const owner = item.status === "open" ? item.claim.owner : item.claim.history.at(-1)?.owner;
+    if (owner !== actor!.id || actor!.generations.get(id) !== item.claim.generation) throw new StoreError(`Claim ${id} with item_claim first; current owner: ${item.claim.owner_name ?? "unclaimed"}.`);
+  }
+  activity(): void {
+    const actor = actors.getStore();
+    if (!actor) throw new StoreError("Attach an agent first.");
+    const needsHeartbeat = () => {
+      const events = this.currentEvents();
+      const attached = events.find(e => e.type === "agent_attached" && e.id === actor.id);
+      if (!attached || events.some(e => e.type === "agent_detached" && e.id === actor.id)) throw new StoreError("Attach an agent first.");
+      const last = [...events].reverse().find(e => e.agent_id === actor.id || (e.type === "agent_attached" && e.id === actor.id));
+      return !last || this.clock() - Date.parse(last.ts) >= 1000;
+    };
+    if (!needsHeartbeat()) return;
+    this.mutate(() => { if (needsHeartbeat()) this.append({ type: "agent_activity", id: actor.id }); });
+  }
+
+  detachAgent(): SprintView {
+    const actor = this.requireActor();
+    this.append({ type: "agent_detached", id: actor.id });
+    return this.read();
+  }
+  claimItem(id: string, explanation?: string): SprintView {
+    const actor = this.requireActor();
+    const state = this.requireActiveState();
+    const item = this.findOpenItem(state, id);
+    if (explanation !== undefined && (!explanation.trim() || explanation.trim().length > 500)) throw new StoreError("Handover explanation must contain 1–500 characters.");
+    if (item.claim.owner === actor.id) { actor.generations.set(id, item.claim.generation); return this.read(); }
+    if (item.claim.owner && (!explanation?.trim() || !item.claim.stall_reasons.length)) throw new StoreError(`Item ${id} is claimed by ${item.claim.owner_name}; takeover requires a potential stall and explanation.`);
+    const generation = item.claim.generation + 1;
+    this.append({ type: "item_claimed", item_id: id, owner: actor.id, generation, ...(explanation ? { explanation: explanation.trim() } : {}) });
+    actor.generations.set(id, generation);
+    return this.read();
+  }
+  releaseItem(id: string): SprintView {
+    this.requireActiveState(); this.requireOwner(id);
+    const item = this.read().subsprints.flatMap(s => s.items).find(i => i.id === id)!;
+    this.append({ type: "item_released", item_id: id, generation: item.claim.generation });
+    return this.read();
+  }
+  progressItem(id: string, message: string): SprintView {
+    this.requireActiveState(); this.requireOwner(id);
+    this.append({ type: "item_progress", item_id: id, message });
+    return this.read();
+  }
+  private executeGate(gate: Gate, timeout: number | null): GateResult {
+    if (this.executedGates) {
+      const result = this.executedGates.get(gateKey(gate));
+      if (!result) throw new StoreError("Gate settings changed; retry verification.");
+      return result;
+    }
+    return runGate(gate, this.dir, timeout);
+  }
+  async doneAsync(input: Parameters<SprintStore["done"]>[0]): Promise<ReturnType<SprintStore["done"]>> {
+    const prepared = withDataLock(this.dataDir, () => {
+      const snapshot = this.read(); this.requireOwner(input.item);
+      const item = this.findOpenItem(snapshot, input.item);
+      return { revision: this.revision(), gates: item.gates.filter(isExecutable).map(gate => ({ gate, timeout: item.gate_timeout_ms })) };
+    });
+    return this.verifyOutsideLock(prepared.gates, () => this.done(input), prepared.revision);
+  }
+  async closeAsync(input: Parameters<SprintStore["closeSprint"]>[0] = {}): Promise<SprintView> {
+    const prepared = withDataLock(this.dataDir, () => {
+    const snapshot = this.read();
+    const gates = new Map<string, { gate: Gate; timeout: number | null }>();
+    const add = (gate: Gate, timeout: number | null) => {
+      if (!isExecutable(gate)) return;
+      const previous = gates.get(gateKey(gate));
+      gates.set(gateKey(gate), { gate, timeout: previous ? (previous.timeout === null || timeout === null ? null : Math.max(previous.timeout, timeout)) : timeout });
+    };
+    for (const sub of snapshot.subsprints) {
+      for (const gate of sub.gates) add(gate, DEFAULT_GATE_TIMEOUT_MS);
+      for (const item of sub.items) if (item.status === "completed") for (const gate of item.gates) add(gate, item.gate_timeout_ms);
+    }
+    return { revision: this.revision(), gates: [...gates.values()] };
+    });
+    return this.verifyOutsideLock(prepared.gates, () => this.closeSprint(input), prepared.revision);
+  }
+  private revision(): number {
+    return this.currentEvents().filter(event => event.type !== "agent_activity").length;
+  }
+  private async verifyOutsideLock<T>(gates: { gate: Gate; timeout: number | null }[], commit: () => T, revision: number): Promise<T> {
+    const results = new Map<string, GateResult>();
+    for (const { gate, timeout } of gates) results.set(gateKey(gate), await runGateAsync(gate, this.dir, timeout));
+    return this.mutate(() => {
+      if (this.revision() !== revision) throw new StoreError("Sprint changed while gates ran; retry verification.");
+      this.executedGates = results;
+      try { return commit(); } finally { this.executedGates = null; }
+    });
   }
 
   private validateGates(gates: Gate[]): void {

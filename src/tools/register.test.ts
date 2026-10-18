@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { SprintStore } from "../store/store.js";
@@ -8,7 +8,7 @@ import { buildToolHandlers, type DashboardController, type DashboardInfo, type T
 import { ItemUpdateInput, SprintCloseInput } from "./schemas.js";
 
 function initRepo(): { dir: string; sha: string } {
-  const dir = mkdtempSync(join(tmpdir(), "sprinty-tools-"));
+  const dir = realpathSync(mkdtempSync(join(tmpdir(), "sprinty-tools-")));
   const run = (a: string[]) => execFileSync("git", a, { cwd: dir }).toString().trim();
   run(["init", "-b", "main"]);
   run(["config", "user.email", "t@t.dev"]);
@@ -240,7 +240,9 @@ describe("tool handlers", () => {
     const sub = await tools.subsprint_new!.handler({ description: "d", goals: ["go"], gates: [{ kind: "command", spec: "git rev-parse HEAD" }] }) as { subsprint: string };
     expect(sub.subsprint).toBe("S01");
     const item = await tools.item_add!.handler(addInput()) as { item: string };
+    await tools.item_claim!.handler({ id: item.item });
     expect(item.item).toBe("S01-001");
+    await tools.item_claim!.handler({ id: "S01-001" });
     await tools.item_done!.handler({
       id: "S01-001",
       commit_id: sha,
@@ -259,6 +261,7 @@ describe("tool handlers", () => {
     // Executable gates are now run by Sprinty as declared, so supersession only applies to
     // manual gates, where the attestation genuinely comes from a human.
     await tools.item_add!.handler(addInput({ gates: [{ kind: "manual", spec: "reviewer signs off on SPRINTY-123" }] }));
+    await tools.item_claim!.handler({ id: "S01-001" });
     await tools.item_done!.handler({
       id: "S01-001",
       commit_id: sha,
@@ -325,6 +328,7 @@ describe("tool handlers", () => {
     await tools.sprint_new!.handler(sprintInput("g"));
     await tools.subsprint_new!.handler({ description: "d", goals: ["go"], gates: [{ kind: "command", spec: "git rev-parse HEAD" }] });
     await tools.item_add!.handler(addInput());
+    await tools.item_claim!.handler({ id: "S01-001" });
     await tools.item_done!.handler({
       id: "S01-001",
       commit_id: sha,
@@ -355,6 +359,7 @@ describe("tool handlers", () => {
     await tools.item_add!.handler(addInput({ title: "First item", description: "Implement the first dependency graph item." }));
     await tools.item_add!.handler(addInput({ title: "Second item", description: "Implement the second dependency graph item.", code_locations: ["b.ts"] }));
     await tools.item_add!.handler(addInput({ title: "Third item", description: "Implement the third dependency graph item.", code_locations: ["c.ts"] }));
+    await tools.item_claim!.handler({ id: "S01-002" });
     await tools.item_update!.handler({ id: "S01-002", dependencies: ["S01-001"] });
     const item = await tools.item_get!.handler({ id: "S01-002" }) as { dependencies: string[] };
     expect(item.dependencies).toEqual(["S01-001"]);
@@ -372,6 +377,7 @@ describe("tool handlers", () => {
     await tools.item_add!.handler(addInput({ high_priority: true }));
     const added = await tools.item_get!.handler({ id: "S01-001" }) as { high_priority: boolean };
     expect(added.high_priority).toBe(true);
+    await tools.item_claim!.handler({ id: "S01-001" });
     await tools.item_update!.handler({ id: "S01-001", high_priority: false });
     const lowered = await tools.item_get!.handler({ id: "S01-001" }) as { high_priority: boolean };
     expect(lowered.high_priority).toBe(false);
@@ -381,6 +387,7 @@ describe("tool handlers", () => {
     await tools.sprint_new!.handler(sprintInput("g"));
     await tools.subsprint_new!.handler({ description: "d", goals: ["go"], gates: [{ kind: "command", spec: "git rev-parse HEAD" }] });
     await tools.item_add!.handler(addInput({ gate_timeout_ms: 250 }));
+    await tools.item_claim!.handler({ id: "S01-001" });
     await tools.item_update!.handler({
       id: "S01-001",
       gates: [{ kind: "command", spec: "git status --short" }],
@@ -400,6 +407,7 @@ describe("tool handlers", () => {
     await tools.sprint_new!.handler(sprintInput("g"));
     await tools.subsprint_new!.handler({ description: "d", goals: ["go"], gates: [{ kind: "command", spec: "git rev-parse HEAD" }] });
     await tools.item_add!.handler(addInput());
+    await tools.item_claim!.handler({ id: "S01-001" });
     await tools.item_done!.handler({ id: "S01-001", commit_id: sha, changelog: { verb: "changed", line: "Changed commit evidence." } });
 
     writeFileSync(join(dir, "f.txt"), "updated\n");
@@ -443,6 +451,52 @@ describe("tool handlers", () => {
     expect(listed.artifacts[0]).toEqual({ id: "A001", title: "Dashboard design v2", path: "docs/superpowers/specs/dashboard.md", related_items: ["S01-001"] });
     const detail = await tools.artifact_get!.handler({ id: "A001" }) as { artifact: { description: string } };
     expect(detail.artifact.description).toBe("Approved dashboard design");
+  });
+
+  it("pages artifact_list newest-first while artifact_get keeps full detail", async () => {
+    await tools.sprint_new!.handler(sprintInput("g"));
+    await tools.subsprint_new!.handler({ description: "d", goals: ["go"], gates: [{ kind: "command", spec: "git rev-parse HEAD" }] });
+    await tools.item_add!.handler(addInput());
+    for (let index = 1; index <= 7; index += 1) {
+      await tools.artifact_add!.handler({
+        title: `Artifact ${index}`,
+        path: `reports/artifact-${index}.json`,
+        description: `Full detail for artifact ${index}.`,
+        related_items: ["S01-001"],
+      });
+    }
+
+    const first = await tools.artifact_list!.handler({}) as {
+      total_artifacts: number;
+      offset: number;
+      next_offset?: number;
+      artifacts: Array<{ id: string }>;
+    };
+    expect(first).toMatchObject({ total_artifacts: 7, offset: 0, next_offset: 3 });
+    expect(first.artifacts.map((artifact) => artifact.id)).toEqual(["A007", "A006", "A005"]);
+
+    const second = await tools.artifact_list!.handler({ offset: first.next_offset }) as {
+      total_artifacts: number;
+      offset: number;
+      next_offset?: number;
+      artifacts: Array<{ id: string }>;
+    };
+    expect(second).toMatchObject({ total_artifacts: 7, offset: 3, next_offset: 6 });
+    expect(second.artifacts.map((artifact) => artifact.id)).toEqual(["A004", "A003", "A002"]);
+
+    const third = await tools.artifact_list!.handler({ offset: second.next_offset }) as {
+      total_artifacts: number;
+      offset: number;
+      next_offset?: number;
+      artifacts: Array<{ id: string }>;
+    };
+    expect(third).toMatchObject({ total_artifacts: 7, offset: 6 });
+    expect(third.next_offset).toBeUndefined();
+    expect(third.artifacts.map((artifact) => artifact.id)).toEqual(["A001"]);
+
+    const detail = await tools.artifact_get!.handler({ id: "A007" }) as { artifact: { description: string } };
+    expect(detail.artifact.description).toBe("Full detail for artifact 7.");
+    await expect(tools.artifact_list!.handler({ limit: 4 })).rejects.toThrow();
   });
 
   it("next returns a compact active work window without the dependency graph", async () => {

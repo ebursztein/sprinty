@@ -1,3 +1,5 @@
+import { collaboration, emptyClaim, type AgentView, type ClaimState } from "./collaboration.js";
+import { estimateEta, type EtaEstimate } from "./eta.js";
 import type { ArtifactKind, ChangelogEntry, LedgerEvent } from "./events.js";
 import { DEFAULT_ITEM_GATE_TIMEOUT_MS, type Gate, type GateResult } from "./gates.js";
 import type { Disposition, ItemStatus, SubsprintStatus, SprintStatus } from "./enums.js";
@@ -6,6 +8,7 @@ import { aggregateChangeMaps, emptyChangeMap, type ChangeMap } from "./change-ma
 import { buildDependencyGraph, type DependencyGraph } from "./graph.js";
 
 export interface ItemView {
+  claim: ClaimState;
   id: string;
   subsprint_id: string;
   title: string;
@@ -97,6 +100,8 @@ export interface SubsprintView {
 }
 
 export interface SprintView {
+  agents: AgentView[];
+  eta: EtaEstimate;
   goal: string;
   worktree: string;
   branch: string;
@@ -126,7 +131,7 @@ export interface TimelineEntry {
   text: string;
 }
 
-export function project(events: LedgerEvent[]): SprintView | null {
+export function project(events: LedgerEvent[], now: number = Date.now()): SprintView | null {
   // One ledger file = one sprint. Replay its events into a SprintView.
   let sprint: SprintView | null = null;
   const subsprints = new Map<string, SubsprintView>();
@@ -137,8 +142,13 @@ export function project(events: LedgerEvent[]): SprintView | null {
 
   for (const e of events) {
     switch (e.type) {
+      case "agent_attached": case "agent_detached": case "item_claimed": case "item_released": case "item_progress":
+        timeline.push({ seq: e.seq, ts: e.ts, type: e.type, id: "item_id" in e ? e.item_id : e.id, text: e.type === "agent_attached" ? e.name : e.type === "item_progress" ? e.message : e.type === "item_claimed" ? e.explanation ?? `claimed by ${e.owner}` : e.type });
+        break;
+      case "agent_activity": break;
       case "sprint_created":
         sprint = {
+          agents: [], eta: { status: "learning", remaining_work_ms: null, range_ms: null, finish_at: null, finish_range_at: null, sample_count: 0, active_agent_count: 0, estimated_at: new Date(now).toISOString() },
           goal: e.goal, worktree: e.worktree, branch: e.branch, dir: e.dir, data_dir: e.data_dir,
           context_notes: e.context_notes ?? [], created_at: e.ts, closed_at: null, status: "active",
           subsprints: [], timeline, graph: buildDependencyGraph([], []), artifacts: [], follow_ups: [],
@@ -162,6 +172,7 @@ export function project(events: LedgerEvent[]): SprintView | null {
       }
       case "item_added": {
         const item: ItemView = {
+          claim: emptyClaim(),
           id: e.item_id, subsprint_id: e.subsprint_id, title: e.title ?? titleFromDescription(e.description), description: e.description,
           high_priority: e.high_priority,
           created_at: e.ts, resolved_at: null,
@@ -373,9 +384,19 @@ export function project(events: LedgerEvent[]): SprintView | null {
     sprint.changelog = sprint.subsprints
       .flatMap((sub) => sub.changelog.map((entry) => ({ ...entry, subsprint: sub.id })));
     sprint.change_map = aggregateChangeMaps(sprint.subsprints.flatMap((sub) => sub.items.map((item) => item.change_map)));
+    refreshTiming(sprint, events, now);
     sprint.completion = deriveCompletionMetrics(sprint.subsprints.flatMap((sub) => sub.items));
+    sprint.completion.eta_ms = sprint.eta.remaining_work_ms;
+    sprint.completion.eta_at = sprint.eta.finish_at;
   }
   return sprint;
+}
+
+export function refreshTiming(sprint: SprintView, events: LedgerEvent[], now: number): void {
+  collaboration(sprint, events, now);
+  sprint.eta = estimateEta(sprint, now);
+  sprint.completion.eta_ms = sprint.eta.remaining_work_ms;
+  sprint.completion.eta_at = sprint.eta.finish_at;
 }
 
 function legacyCoverageState(coverage: CoverageSummary | null): CoverageState {
@@ -419,7 +440,7 @@ function deriveCompletionMetrics(items: ItemView[]): CompletionMetrics {
   const cadence = validIntervals.length > 0 ? [...validIntervals].sort((a, b) => a - b) : [];
   const median = cadence.length > 0 ? medianOf(cadence) : null;
   const remaining = Math.max(0, total - finished);
-  const etaMs = median == null || completedAt.length === 0 ? null : median * remaining;
+  const etaMs: number | null = null;
 
   return {
     total_items: total,
@@ -430,7 +451,7 @@ function deriveCompletionMetrics(items: ItemView[]): CompletionMetrics {
     median_ms: median,
     slowest_ms: cadence[cadence.length - 1] ?? null,
     eta_ms: etaMs,
-    eta_at: etaMs == null ? null : new Date(new Date(completedAt[completedAt.length - 1]!).getTime() + etaMs).toISOString(),
+    eta_at: null,
   };
 }
 

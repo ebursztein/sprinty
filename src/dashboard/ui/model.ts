@@ -1,3 +1,4 @@
+import { orderOpenItems } from "../../domain/work-order.js";
 import type { ArtifactView, ItemView, SprintView, SubsprintView, TimelineEntry } from "../../domain/projection.js";
 
 export type TreeTone = "done" | "active" | "current" | "next" | "blocked" | "muted" | "normal";
@@ -62,7 +63,7 @@ export interface TimelineRow {
   time: string;
 }
 
-export type LedgerEntity = "artifact" | "dependency" | "follow_up" | "item" | "note" | "sprint" | "subsprint";
+export type LedgerEntity = "artifact" | "dependency" | "follow_up" | "item" | "note" | "sprint" | "subsprint" | "agent";
 export type LedgerVerb = "add" | "amend" | "archive" | "close" | "conclude" | "create" | "deprecate" | "replace" | "update";
 export type LedgerTargetKind = "artifact" | "follow_up" | "item" | "note" | "sprint" | "subsprint" | "unknown";
 
@@ -177,23 +178,6 @@ export function ledgerVerbIcon(verb: LedgerVerb): string {
   }
 }
 
-function orderOpenItems(sprint: SprintView, items: ItemView[]): { available: ItemView[]; blocked: ItemView[] } {
-  const openById = new Map(items.filter((item) => item.status === "open").map((item) => [item.id, item]));
-  const statusById = new Map(sprint.graph.nodes.map((node) => [node.id, node.status]));
-  const ordered = (sprint.graph.topological_order ?? [])
-    .map((id) => openById.get(id))
-    .filter((item): item is ItemView => Boolean(item));
-  const seen = new Set(ordered.map((item) => item.id));
-  const allOpen = [...ordered, ...items.filter((item) => item.status === "open" && !seen.has(item.id))];
-  const available: ItemView[] = [];
-  const blocked: ItemView[] = [];
-  for (const item of allOpen) {
-    const blockers = sprint.graph.blocked_by?.[item.id] ?? item.dependencies;
-    if (blockers.some((id) => statusById.get(id) === "open")) blocked.push(item);
-    else available.push(item);
-  }
-  return { available, blocked };
-}
 
 function treeSubsprint(
   sub: SubsprintView,
@@ -310,6 +294,10 @@ function ledgerRow(entry: TimelineEntry): LedgerRow {
 
 function ledgerMeta(entry: TimelineEntry): { entity: LedgerEntity; verb: LedgerVerb } {
   switch (entry.type) {
+    case "agent_attached": return { entity: "agent", verb: "create" };
+    case "agent_activity": return { entity: "agent", verb: "update" };
+    case "agent_detached": return { entity: "agent", verb: "close" };
+    case "item_claimed": case "item_released": case "item_progress": return { entity: "item", verb: "update" };
     case "sprint_created": return { entity: "sprint", verb: "create" };
     case "sprint_closed": return { entity: "sprint", verb: "close" };
     case "sprint_archived": return { entity: "sprint", verb: "archive" };

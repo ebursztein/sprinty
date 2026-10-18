@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { mkdirSync, mkdtempSync, realpathSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { runGate, isExecutable } from "./run.js";
+import { runGate, runGateAsync, isExecutable } from "./run.js";
 
 describe("runGate", () => {
   it("knows which kinds are executable", () => {
@@ -50,5 +50,22 @@ describe("runGate", () => {
     const result = runGate({ kind: "command", spec: "node -e \"setTimeout(() => {}, 30)\"" }, process.cwd(), null);
     expect(result.passed).toBe(true);
     expect(result.timed_out).toBeUndefined();
+  });
+});
+
+describe("async gate execution", () => {
+  it("keeps the event loop responsive and bounds captured output", async () => {
+    let ticked = false;
+    const result = runGateAsync({ kind: "command", spec: 'node -e "setTimeout(()=>console.log(\'x\'.repeat(5000)),50)"' }, process.cwd());
+    await new Promise(resolve => setTimeout(() => { ticked = true; resolve(undefined); }, 1));
+    expect(ticked).toBe(true);
+    const gate = await result;
+    expect(gate.passed).toBe(true); expect(gate.evidence.length).toBeLessThanOrEqual(2000);
+  });
+  it("reports timeouts and permits disabling them", async () => {
+    const slow = await runGateAsync({ kind: "command", spec: 'node -e "setTimeout(()=>{},5000)"' }, process.cwd(), 50);
+    expect(slow.timed_out).toBe(true); expect(slow.passed).toBe(false);
+    expect((await runGateAsync({ kind: "command", spec: "exit 0" }, process.cwd(), null)).passed).toBe(true);
+    expect((await runGateAsync({ kind: "command", spec: "exit 3" }, process.cwd())).passed).toBe(false);
   });
 });

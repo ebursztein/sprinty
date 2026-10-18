@@ -1,5 +1,6 @@
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { withDataLock, commitTransaction } from "./transaction.js";
 import { Ledger } from "./ledger.js";
 
 export class SprintBook {
@@ -22,7 +23,7 @@ export class SprintBook {
 
   setCurrent(id: string): void {
     mkdirSync(this.root, { recursive: true });
-    writeFileSync(this.pointer, id + "\n", "utf8");
+    withDataLock(this.root, () => commitTransaction(this.root, [{ name: "current", contents: id + "\n" }]));
   }
 
   ledger(id: string): Ledger {

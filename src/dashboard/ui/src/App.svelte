@@ -107,6 +107,7 @@
     nowMs,
     windowMs: chartWindowMs,
     sprintStartedAtMs,
+    estimate: model.sprint.eta,
     movingAverageWindow,
     formatEta: (ts) => new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
   }) : null;
@@ -702,7 +703,7 @@
                   <button class="todo-button" on:click={() => toggleItem(item)} aria-expanded={expandedItemIds.includes(item.id)}>
                     <span class={statusDot(itemDotStatus(item, model))}></span>
                     <span class="todo-id">{item.id}</span>
-                    <span class="todo-title">{itemTitle(item)}</span>
+                    <span class="todo-title">{itemTitle(item)}{#if item.claim?.owner_name}<small> · {item.claim.owner_name} · {formatDuration(item.claim.claim_duration_ms)}</small>{/if}{#if item.claim?.stall_reasons.length}<small class="scope-drift"> · Potential stall</small>{/if}</span>
                     <span class={statusClass(itemDisplayStatus(item, model))}>{itemDisplayStatus(item, model)}</span>
                     <span class:todo-expand-open={expandedItemIds.includes(item.id)} class="todo-expand" aria-hidden="true"></span>
                   </button>
@@ -714,6 +715,13 @@
                         <div><span>Files</span><strong>{item.code_locations.join(", ")}</strong></div>
                         {#if item.undeclared_code_locations?.length}
                           <div><span>Also touched</span><strong class="scope-drift">{item.undeclared_code_locations.join(", ")}</strong></div>
+                        {/if}
+                        {#if item.claim?.history.length}
+                          <div><span>Owner / claimed</span><strong>{item.claim.owner_name ?? "Released"} · {formatDuration(item.claim.total_claimed_ms)} total</strong></div>
+                          <div><span>Time waiting unclaimed</span><strong>{formatDuration(item.claim.queue_wait_ms)}</strong></div>
+                          <div><span>Estimated active work</span><strong>{formatDuration(item.claim.active_work_ms)}</strong></div>
+                          {#if item.claim.stall_reasons.length}<div><span>Potential stall</span><strong>{item.claim.stall_reasons.includes("three_other_items_completed") ? "Three other items completed without progress. " : ""}{item.claim.stall_reasons.includes("owner_inactive_one_hour") ? "Owner inactive for one hour." : ""}</strong></div>{/if}
+                          <div><span>Claim history</span><strong>{#each item.claim.history as interval}<span class="gate-row">{interval.owner_name} · {new Date(interval.claimed_at).toLocaleString()} → {interval.ended_at ? new Date(interval.ended_at).toLocaleString() : "present"}{#if interval.explanation} · {interval.explanation}{/if}</span>{/each}</strong></div>
                         {/if}
                         <div><span>Gates</span><strong>{gateSummary(item)}</strong></div>
                         {#if item.gates.length}

@@ -40,9 +40,20 @@ const readGateFixtures = [
     subsprint: "S02",
     searchPattern: "Fast fix|S01-002|benchmark|response",
   },
+  {
+    name: "capsem nightly cleanup",
+    fixtureDir: nightlyCleanupFixtureDir,
+    item: "S12-024",
+    openItem: "S12-024",
+    writableItem: "S12-032",
+    subsprint: "S12",
+    searchPattern: "S12-024|sandbox socket policy|Linux migration handoff",
+  },
 ];
 
 const publicTools = [
+  "agent_attach", "agent_detach", "agent_heartbeat",
+  "item_claim", "item_release", "item_takeover", "item_progress",
   "artifact_add", "artifact_get", "artifact_list", "artifact_update",
   "changelog", "dashboard_info", "dashboard_restart",
   "info",
@@ -124,6 +135,7 @@ async function seedMiniSprint(tools: ToolHandlers, dataDir: string): Promise<voi
     code_locations: ["src/tools/register.ts"],
     gates: [{ kind: "command", spec: "git rev-parse HEAD" }],
   });
+  await tools.item_claim!.handler({ id: "S01-001" });
 }
 
 function chars(value: unknown): number {
@@ -174,7 +186,7 @@ function collectEmptyFields(value: unknown, path: string[] = []): string[] {
     const childPath = [...path, key];
     const empty = child === null || child === "" || (Array.isArray(child) && child.length === 0) ||
       (typeof child === "object" && child !== null && !Array.isArray(child) && Object.keys(child).length === 0);
-    return [...(empty ? [childPath.join(".")] : []), ...collectEmptyFields(child, childPath)];
+    return [...(empty && !(key === "gate_timeout_ms" && child === null) ? [childPath.join(".")] : []), ...collectEmptyFields(child, childPath)];
   });
 }
 
@@ -183,7 +195,7 @@ function collectTimestampKeys(value: unknown, path: string[] = []): string[] {
   if (!value || typeof value !== "object") return [];
   return Object.entries(value as Record<string, unknown>).flatMap(([key, child]) => {
     const childPath = [...path, key];
-    return [...(key === "ts" || key.endsWith("_at") ? [childPath.join(".")] : []), ...collectTimestampKeys(child, childPath)];
+    return [...((key === "ts" || key.endsWith("_at")) && !["claimed_at", "ended_at", "last_progress_at", "last_activity_at", "estimated_at", "finish_at", "finish_range_at"].includes(key) ? [childPath.join(".")] : []), ...collectTimestampKeys(child, childPath)];
   });
 }
 
@@ -207,7 +219,7 @@ async function measureP95(run: () => Promise<void>): Promise<{ avg: number; p95:
 }
 
 describe("public Sprinty tool responses", () => {
-  it("loads the large capsem nightly cleanup fixture", () => {
+  it("loads the large capsem nightly cleanup fixture with bounded overview windows", async () => {
     const view = new SprintStore(gitDir, nightlyCleanupFixtureDir).read();
     const items = view.subsprints.flatMap((entry) => entry.items);
 
@@ -221,6 +233,35 @@ describe("public Sprinty tool responses", () => {
     expect(items.filter((entry) => entry.status === "open")).toHaveLength(9);
     expect(view.artifacts).toHaveLength(105);
     expect(items.some((entry) => entry.id === "S12-036")).toBe(true);
+
+    await withFixture(async (tools) => {
+      const overview = await tools.overview!.handler({}) as {
+        total_subsprints: number;
+        total_notes: number;
+        total_artifacts: number;
+        truncated: boolean;
+        subsprints: unknown[];
+        notes: unknown[];
+        artifacts: unknown[];
+      };
+      expect(overview).toMatchObject({
+        total_subsprints: 12,
+        total_notes: 81,
+        total_artifacts: 105,
+        truncated: true,
+      });
+      expect(overview.subsprints).toHaveLength(10);
+      expect(overview.notes).toHaveLength(5);
+      expect(overview.artifacts).toHaveLength(5);
+
+      const next = await tools.next!.handler({}) as {
+        artifacts: Array<{ id: string; description?: string }>;
+        recent_artifacts: Array<{ id: string; description?: string }>;
+      };
+      expect(next.artifacts).toHaveLength(3);
+      expect(next.recent_artifacts.length).toBeLessThanOrEqual(3);
+      expect([...next.artifacts, ...next.recent_artifacts].every((artifact) => artifact.description === undefined)).toBe(true);
+    }, nightlyCleanupFixtureDir);
   });
 
   it("exposes only the canonical public tool list", async () => {
@@ -239,6 +280,13 @@ describe("public Sprinty tool responses", () => {
     };
 
     const cases: ToolCase[] = [
+      { tool: "agent_attach", seed: "fixture", maxChars: 900, maxMs: 100, args: () => ({}) },
+      { tool: "agent_detach", seed: "fixture", maxChars: 900, maxMs: 100, args: () => ({}) },
+      { tool: "agent_heartbeat", seed: "fixture", maxChars: 900, maxMs: 100, args: () => ({}) },
+      { tool: "item_claim", seed: "fixture", maxChars: 1_500, maxMs: 100, args: ({ fixture }) => ({ id: fixture!.openItem }) },
+      { tool: "item_release", seed: "fixture", maxChars: 900, maxMs: 100, args: async ({ tools, fixture }) => { await tools.item_claim!.handler({ id: fixture!.openItem }); return { id: fixture!.openItem }; } },
+      { tool: "item_takeover", seed: "fixture", maxChars: 1_500, maxMs: 100, args: ({ fixture }) => ({ id: fixture!.openItem, explanation: "Continuing explicitly released work." }) },
+      { tool: "item_progress", seed: "fixture", maxChars: 900, maxMs: 100, args: async ({ tools, fixture }) => { await tools.item_claim!.handler({ id: fixture!.openItem }); return { id: fixture!.openItem, message: "Implementation ready for verification." }; } },
       { tool: "artifact_add", seed: "fixture", maxChars: 900, maxMs: 300, args: ({ fixture }) => ({ title: "Response stats", path: "reports/response-stats.json", related_items: [fixture!.item] }) },
       { tool: "artifact_get", seed: "fixture", maxChars: 1_000, maxMs: 25, args: async ({ tools, fixture }) => ({ id: ((await tools.artifact_add!.handler({ title: "Response stats", path: "reports/response-stats.json", related_items: [fixture!.item] })) as { artifact: string }).artifact }) },
       { tool: "artifact_list", seed: "fixture", maxChars: 1_200, maxMs: 25, args: async ({ tools, fixture }) => { await tools.artifact_add!.handler({ title: "Response stats", path: "reports/response-stats.json", related_items: [fixture!.item] }); return {}; } },
@@ -264,7 +312,8 @@ describe("public Sprinty tool responses", () => {
       { tool: "sprint_close", seed: "empty", maxChars: 1_000, maxMs: 900, args: async ({ tools, dataDir, rootDir }) => { await seedMiniSprint(tools, dataDir); await tools.item_done!.handler({ id: "S01-001", commit_id: headCommit, gate_results: [{ kind: "command", spec: "git rev-parse HEAD", passed: true, evidence: "ok" }], changelog: { verb: "added", line: "Added response stats item." } }); return { coverage: { path: writeCoverage(rootDir), format: "lcov" } }; } },
       { tool: "sprint_detach", seed: "fixture", maxChars: 900, maxMs: 25, args: () => ({}) },
       { tool: "sprint_new", seed: "empty", maxChars: 2_500, maxMs: 600, args: ({ dataDir }) => ({ goal: "Response stats sprint", git_dir: gitDir, data_dir: dataDir }) },
-      { tool: "sprint_resume", seed: "fixture", maxChars: 2_000, maxMs: 25, args: ({ dataDir }) => ({ git_dir: gitDir, data_dir: dataDir }) },
+      // Resume now durably registers an agent; keep steady-state reads on the separate 3ms p95 gate.
+      { tool: "sprint_resume", seed: "fixture", maxChars: 2_000, maxMs: 100, args: ({ dataDir }) => ({ git_dir: gitDir, data_dir: dataDir }) },
       { tool: "subsprint_get", seed: "fixture", maxChars: 7_500, maxMs: 25, args: ({ fixture }) => ({ id: fixture!.subsprint }) },
       { tool: "subsprint_list", seed: "fixture", maxChars: 6_000, maxMs: 25, args: () => ({}) },
       { tool: "subsprint_new", seed: "fixture", maxChars: 900, maxMs: 300, args: () => ({ description: "Response stats subsprint", goals: ["Measure response sizes"], gates: [{ kind: "command", spec: "git rev-parse HEAD" }] }) },
@@ -285,8 +334,10 @@ describe("public Sprinty tool responses", () => {
                 return { tools: makeTools(dataDir), dataDir };
               })()
             : makeEmptyTools(tempRoot);
+          if (entry.seed === "fixture" && !["sprint_resume", "agent_attach", "info", "sprint_detach"].includes(entry.tool)) await tools.sprint_resume!.handler({ git_dir: gitDir, data_dir: dataDir });
           const args = await entry.args({ tools, dataDir, rootDir: tempRoot, fixture });
           const start = performance.now();
+          if (["item_update", "item_deprecate"].includes(entry.tool)) await tools.item_claim!.handler({ id: args.id });
           const result = await tools[entry.tool]!.handler(args);
           const elapsed = performance.now() - start;
 
@@ -405,6 +456,7 @@ describe("public Sprinty tool responses", () => {
     ];
     for (const [tool, rawArgs, maxChars] of cases) {
       await withFixture(async (tools) => {
+        if (["item_update", "item_deprecate"].includes(tool)) await tools.item_claim!.handler({ id: rawArgs.id });
         const result = await tools[tool]!.handler(rawArgs);
         expect(chars(result), `${tool} response too large`).toBeLessThanOrEqual(maxChars);
         expect(JSON.stringify(result)).not.toContain('"sprint"');

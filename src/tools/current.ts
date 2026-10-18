@@ -1,3 +1,4 @@
+import { orderOpenItems } from "../domain/work-order.js";
 import type { ArtifactView, SprintView, ItemView, SubsprintView, TimelineEntry } from "../domain/projection.js";
 import { notePressure, type NotePressureSummary } from "../domain/note-policy.js";
 
@@ -40,6 +41,7 @@ export interface WorkItemRow {
   high_priority: boolean;
   status: ItemView["status"];
   dependencies: string[];
+  claim?: ItemView["claim"];
 }
 
 export interface CurrentSubsprintRow {
@@ -66,14 +68,15 @@ export interface RelationRow {
 export interface CurrentOptions {
   include_high_priority?: boolean;
   future_total?: number;
+  actor_id?: string;
 }
 
 export function windowCurrent(view: SprintView, past: number, futurePerSubsprint: number, options: CurrentOptions = {}): CurrentWindow {
   const items = view.subsprints.flatMap((s) => s.items);
   const resolved = items.filter((i) => i.status !== "open");
-  const { available, blocked } = orderOpenItems(view, items);
+  const { available, blocked } = orderOpenItems(view, items, options.actor_id);
   const lastResolved = resolved.slice(-past);
-  const next = selectNextItems(available, futurePerSubsprint, options.include_high_priority ?? true, options.future_total);
+  const next = selectNextItems(available, futurePerSubsprint, options.include_high_priority ?? true, options.future_total, options.actor_id);
   const currentItem = next[0] ?? null;
   const current = currentItem
     ? view.subsprints.find((sub) => sub.id === currentItem.subsprint_id) ?? null
@@ -119,6 +122,7 @@ function compactWorkItem(item: ItemView): WorkItemRow {
     high_priority: item.high_priority,
     status: item.status,
     dependencies: item.dependencies,
+    ...(item.claim?.owner ? { claim: item.claim } : {}),
   };
 }
 
@@ -142,33 +146,23 @@ function compactActivity(entry: TimelineEntry): RecentActivityRow {
   };
 }
 
-function orderOpenItems(view: SprintView, items: ItemView[]): { available: ItemView[]; blocked: ItemView[] } {
-  const openById = new Map(items.filter((item) => item.status === "open").map((item) => [item.id, item]));
-  const statusById = new Map(view.graph.nodes.map((node) => [node.id, node.status]));
-  const ordered = (view.graph.topological_order ?? [])
-    .map((id) => openById.get(id))
-    .filter((item): item is ItemView => Boolean(item));
-  const seen = new Set(ordered.map((item) => item.id));
-  const allOpen = [...ordered, ...items.filter((item) => item.status === "open" && !seen.has(item.id))];
-  const available: ItemView[] = [];
-  const blocked: ItemView[] = [];
-  for (const item of allOpen) {
-    const blockers = view.graph.blocked_by?.[item.id] ?? item.dependencies;
-    if (blockers.some((id) => statusById.get(id) === "open")) blocked.push(item);
-    else available.push(item);
-  }
-  return { available, blocked };
-}
 
-function selectNextItems(available: ItemView[], perSubsprint: number, includeHighPriority: boolean, totalLimit?: number): ItemView[] {
+function selectNextItems(available: ItemView[], perSubsprint: number, includeHighPriority: boolean, totalLimit?: number, actorId?: string): ItemView[] {
   const selected: ItemView[] = [];
   const selectedIds = new Set<string>();
   const limitReached = () => totalLimit !== undefined && selected.length >= totalLimit;
 
+  if (actorId) {
+    for (const item of available) {
+      if (limitReached()) break;
+      if (item.claim?.owner !== actorId) continue;
+      selected.push(item); selectedIds.add(item.id);
+    }
+  }
   if (includeHighPriority) {
     for (const item of available) {
       if (limitReached()) break;
-      if (!item.high_priority) continue;
+      if (!item.high_priority || selectedIds.has(item.id)) continue;
       selected.push(item);
       selectedIds.add(item.id);
     }

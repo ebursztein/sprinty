@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { SprintStore, StoreError } from "./store.js";
@@ -61,7 +61,7 @@ describe("SprintStore lifecycle", () => {
     const scoped = new SprintStore(dir, dataDir);
     const s = scoped.createSprint("separate data");
     expect(s.dir).toBe(dir);
-    expect(s.data_dir).toBe(dataDir);
+    expect(s.data_dir).toBe(realpathSync(dataDir));
     expect(existsSync(join(dataDir, "current"))).toBe(true);
     expect(existsSync(join(dataDir, "001.jsonl"))).toBe(true);
     expect(existsSync(join(dir, ".sprinty", "current"))).toBe(false);

@@ -1,3 +1,4 @@
+import type { EtaEstimate } from "../../domain/eta.js";
 import type { TimelineEntry } from "../../domain/projection.js";
 
 export type EventSegment = { category: string; count: number };
@@ -6,6 +7,7 @@ export type CompletionPoint = { time: number; movingAverageMs: number; durationM
 export type CompletionRatePoint = { time: number; percent: number; completed: number };
 
 export interface CompletionSummary {
+  estimate?: EtaEstimate;
   points: CompletionPoint[];
   ratePoints: CompletionRatePoint[];
   rateStart: number | null;
@@ -125,6 +127,7 @@ export function buildCompletionSummary(
     nowMs: number;
     windowMs: number;
     sprintStartedAtMs?: number | null;
+    estimate?: EtaEstimate;
     movingAverageWindow: number;
     formatEta: (ts: number) => string;
   },
@@ -169,7 +172,7 @@ export function buildCompletionSummary(
     chartedResolutionIds.add(entry.id);
     const itemStartedAt = starts.get(entry.id);
     const itemDurationMs = itemStartedAt === undefined ? null : Math.max(0, time - itemStartedAt);
-    if (itemDurationMs !== null) completedItemDurations.push(itemDurationMs);
+    if (itemDurationMs !== null && entry.text === "completed") completedItemDurations.push(itemDurationMs);
 
     if (time < windowStart) {
       starts.delete(entry.id);
@@ -204,14 +207,15 @@ export function buildCompletionSummary(
   }
 
   const stats = durationStats(completedItemDurations);
-  const etaMs = stats.medianMs && stats.medianMs > 0 ? stats.medianMs * remainingItems : null;
-  const projectedAt = etaMs && remainingItems > 0 ? options.nowMs + etaMs : null;
+  const etaMs = options.estimate?.remaining_work_ms ?? null;
+  const projectedAt = options.estimate?.finish_at ? Date.parse(options.estimate.finish_at) : null;
   const etaAt = projectedAt ? options.formatEta(projectedAt) : null;
   const lastRatePoint = ratePoints[ratePoints.length - 1];
   const actualRateEnd = rateTotal > 0 && remainingItems === 0 && lastRatePoint ? lastRatePoint.time : options.nowMs;
   const rateEnd = projectedAt && projectedAt > actualRateEnd ? projectedAt : actualRateEnd;
 
   return {
+    ...(options.estimate ? { estimate: options.estimate } : {}),
     points,
     ratePoints,
     rateStart: windowStart,

@@ -1,3 +1,5 @@
+import { actors } from "../domain/agents.js";
+import { orderOpenItems } from "../domain/work-order.js";
 import type { SprintView } from "../domain/projection.js";
 
 /**
@@ -31,21 +33,18 @@ export function nextTools(view: SprintView | null, context: { id?: string | unde
     return [`sprint_close({ coverage })`];
   }
 
-  const statusById = new Map(view.graph.nodes.map((node) => [node.id, node.status]));
-  const isBlocked = (id: string, deps: string[]) =>
-    (view.graph.blocked_by?.[id] ?? deps).some((dep) => statusById.get(dep) === "open");
-  const available = open.filter((item) => !isBlocked(item.id, item.dependencies));
+  const { available } = orderOpenItems(view, items, actors.getStore()?.id);
 
   if (available.length === 0) {
     const blocked = open[0]!;
-    return [`next({})`, `item_update({ id: "${blocked.id}", dependencies: [] })`];
+    return [`next({})`, `item_get({ id: "${blocked.id}" })`];
   }
 
   // Bias to the item the caller just touched, so the common path costs no extra lookup.
   const focus = available.find((item) => item.id === context.id) ?? available[0]!;
   return [
     `item_get({ id: "${focus.id}" })`,
-    `item_done({ id: "${focus.id}", commit_id, changelog })`,
+    ...(view.agents.length && focus.claim.owner !== actors.getStore()?.id ? [`item_claim({ id: "${focus.id}" })`] : [`item_done({ id: "${focus.id}", commit_id, changelog })`]),
   ];
 }
 
@@ -67,9 +66,9 @@ export interface SprintBriefing {
 const MAX_BLOCKED = 5;
 const MAX_RESOLVED = 3;
 const MAX_NOTES = 3;
-const NOTE_CHARS = 100;
-const GOAL_CHARS = 120;
-const TITLE_CHARS = 60;
+const NOTE_CHARS = 72;
+const GOAL_CHARS = 100;
+const TITLE_CHARS = 48;
 
 function clip(value: string, max: number): string {
   return value.length <= max ? value : `${value.slice(0, max - 3)}...`;
@@ -83,10 +82,7 @@ function clip(value: string, max: number): string {
 export function briefing(view: SprintView, notes: Array<{ id: string; item: string; text: string }>): SprintBriefing {
   const items = view.subsprints.flatMap((sub) => sub.items);
   const open = items.filter((item) => item.status === "open");
-  const statusById = new Map(view.graph.nodes.map((node) => [node.id, node.status]));
-  const blocked = open.filter((item) =>
-    (view.graph.blocked_by?.[item.id] ?? item.dependencies).some((dep) => statusById.get(dep) === "open"));
-  const available = open.filter((item) => !blocked.includes(item));
+  const { available, blocked } = orderOpenItems(view, items, actors.getStore()?.id);
   const current = available[0];
   const resolved = items.filter((item) => item.status !== "open").slice(-MAX_RESOLVED).reverse();
   const itemIds = new Set(items.map((item) => item.id));

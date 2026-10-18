@@ -132,6 +132,8 @@ function renderItem(item){
   head.className="item-head";
   head.append(text("span","id",item.id));
   head.append(text("span","status "+item.status,item.disposition||item.status));
+  if(item.claim&&item.claim.owner_name)head.append(text("span","status",item.claim.owner_name+" / "+fmtDuration(item.claim.claim_duration_ms)));
+  if(item.claim&&item.claim.stall_reasons.length)head.append(text("span","status","Potential stall"));
   if(item.commit_id)head.append(text("span","status","commit "+item.commit_id));
   if(item.changelog)head.append(text("span","status",item.changelog.verb+": "+item.changelog.line));
   head.append(text("span","status",fmt(item.created_at)));
@@ -206,7 +208,7 @@ function render(s){
   byId("metric-completion").textContent=String(summary.completion.percent_complete)+"%";
   byId("metric-finished").textContent=String(summary.completion.finished_items);
   byId("metric-open").textContent=String(summary.open.length);
-  byId("metric-eta").textContent=fmtDuration(summary.completion.eta_ms);
+  byId("metric-eta").textContent=s.eta ? fmtDuration(s.eta.remaining_work_ms)+" ("+s.eta.status.replaceAll("_"," ")+")" : "learning";
   byId("metric-gates").textContent=String(summary.gateResults);
   byId("metric-coverage").textContent=s.coverage&&s.coverage.lines ? String(s.coverage.lines.percent)+"%" : "--";
   const active=byId("active-items");

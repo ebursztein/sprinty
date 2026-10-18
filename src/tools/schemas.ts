@@ -158,7 +158,11 @@ export const ArtifactAddInput = z.object({
   related_items: z.array(z.string().min(1)).default([]),
 });
 export const ArtifactGetInput = z.object({ id: z.string().min(1) });
-export const ArtifactListInput = z.object({});
+export const ARTIFACT_LIST_LIMIT_MAX = 3;
+export const ArtifactListInput = z.object({
+  offset: z.number().int().nonnegative().default(0),
+  limit: z.number().int().positive().max(ARTIFACT_LIST_LIMIT_MAX).default(ARTIFACT_LIST_LIMIT_MAX),
+});
 export const ArtifactUpdateInput = z.object({
   id: z.string().min(1),
   title: z.string().min(1).optional(),

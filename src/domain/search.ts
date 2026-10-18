@@ -3,13 +3,19 @@ import type { LedgerEvent } from "./events.js";
 
 export interface SearchMatch {
   id: string;
-  type: "sprint" | "subsprint" | "item" | "note" | "artifact" | "update" | "dependency" | "follow_up";
+  type: "sprint" | "subsprint" | "item" | "note" | "artifact" | "update" | "dependency" | "follow_up" | "agent";
   text: string;
   tool_call: string;
 }
 
 export function renderEvent(e: LedgerEvent): string {
   switch (e.type) {
+    case "agent_attached": return `[agent ${e.id}] attached ${e.name}`;
+    case "agent_activity": return `[agent ${e.id}] activity`;
+    case "agent_detached": return `[agent ${e.id}] detached`;
+    case "item_claimed": return `[${e.item_id}] claimed by ${e.owner}${e.explanation ? `: ${e.explanation}` : ""}`;
+    case "item_released": return `[${e.item_id}] released`;
+    case "item_progress": return `[${e.item_id}] progress: ${e.message}`;
     case "sprint_created": return `[sprint] goal: ${e.goal}`;
     case "subsprint_created": return `[${e.subsprint_id}] subsprint: ${e.description} | goals: ${e.goals.join("; ")} | gates: ${e.gates.map((g) => `${g.kind}:${g.spec}`).join(", ")}${e.spawned_from_item ? ` | from ${e.spawned_from_item}` : ""}`;
     case "item_added": return `[${e.item_id}] item: ${e.description} @ ${e.code_locations.join(", ")} | gates: ${e.gates.map((g) => `${g.kind}:${g.spec}`).join(", ")}`;
@@ -60,6 +66,8 @@ function excerpt(text: string, index: number, matchLength: number, contextSize: 
 
 function searchId(e: LedgerEvent): string {
   switch (e.type) {
+    case "agent_attached": case "agent_activity": case "agent_detached": return e.id;
+    case "item_claimed": case "item_released": case "item_progress": return e.item_id;
     case "sprint_created":
     case "sprint_closed":
     case "sprint_archived":
@@ -88,6 +96,8 @@ function searchId(e: LedgerEvent): string {
 
 function searchType(e: LedgerEvent): SearchMatch["type"] {
   switch (e.type) {
+    case "agent_attached": case "agent_activity": case "agent_detached": return "agent";
+    case "item_claimed": case "item_released": case "item_progress": return "item";
     case "sprint_created":
     case "sprint_closed":
     case "sprint_archived":
@@ -117,6 +127,7 @@ function searchType(e: LedgerEvent): SearchMatch["type"] {
 
 function toolCall(e: LedgerEvent): string {
   switch (e.type) {
+    case "agent_attached": case "agent_activity": case "agent_detached":
     case "sprint_created":
     case "sprint_closed":
     case "sprint_archived":

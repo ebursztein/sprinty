@@ -8,6 +8,8 @@ import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 import { resolveBinding, resolveRepoDir, SERVER_VERSION } from "./server.js";
 
 const publicTools = [
+  "agent_attach", "agent_detach", "agent_heartbeat",
+  "item_claim", "item_release", "item_takeover", "item_progress",
   "artifact_add", "artifact_get", "artifact_list", "artifact_update",
   "changelog", "dashboard_info", "dashboard_restart",
   "info",
@@ -19,7 +21,7 @@ const publicTools = [
 ].sort();
 
 function initRepo(): { dir: string; sha: string } {
-  const dir = mkdtempSync(join(tmpdir(), "sprinty-e2e-"));
+  const dir = realpathSync(mkdtempSync(join(tmpdir(), "sprinty-e2e-")));
   const run = (a: string[]) => execFileSync("git", a, { cwd: dir }).toString().trim();
   run(["init", "-b", "main"]);
   run(["config", "user.email", "t@t.dev"]);
@@ -109,6 +111,7 @@ describe("sprinty e2e over MCP", () => {
     await call(client, "sprint_new", sprintInput(dir, { goal: "ship it" }));
     await call(client, "subsprint_new", { description: "core", goals: ["build core"], gates: [{ kind: "command", spec: "git rev-parse HEAD" }] });
     await call(client, "item_add", addInput());
+    await call(client, "item_claim", { id: "S01-001" });
     await call(client, "item_done", { id: "S01-001", commit_id: sha, gate_results: [{ kind: "command", spec: "git rev-parse HEAD", passed: true, evidence: "ok" }], changelog: { verb: "added", line: "Added the thing." } });
     const closed = await call(client, "sprint_close", { coverage: { path: writeCoverage(dir), format: "lcov", command: "npm run test:coverage" } });
     expect(closed.json.status).toBe("closed");
@@ -129,6 +132,7 @@ describe("sprinty e2e over MCP", () => {
       expect(created.json.dashboard.url).toMatch(/^http:\/\/127\.0\.0\.1:\d+$/);
       await call(c, "subsprint_new", { description: "core", goals: ["build core"], gates: [{ kind: "command", spec: "git rev-parse HEAD" }] });
       await call(c, "item_add", addInput());
+      await call(c, "item_claim", { id: "S01-001" });
       const done = await call(c, "item_done", {
         id: "S01-001",
         commit_id: fresh.sha,
@@ -218,6 +222,23 @@ describe("sprinty e2e over MCP", () => {
     expect(() => resolveRepoDir([], { SPRINTY_GIT_DIR: launchDir }, "/")).toThrow(/must be a git worktree/);
   });
 
+  it("coordinates named agents sharing one MCP connection", async () => {
+    const fresh = initRepo(); const c = await connect(fresh.dir);
+    try {
+      const created = await call(c, "sprint_new", sprintInput(fresh.dir, {goal:"Shared connection"}));
+      const token = created.json.agent.token;
+      await call(c,"subsprint_new",{description:"Feature",goals:["Safe collaboration"],gates:[{kind:"manual",spec:"Review"}]});
+      await call(c,"item_add",addInput());
+      const other = await call(c,"agent_attach",{});
+      expect((await call(c,"next",{})).text).toContain("Multiple agents");
+      const first = await call(c,"item_claim",{id:"S01-001",agent_token:token});
+      expect(first.json.claim.generation).toBe(1);
+      expect((await call(c,"item_claim",{id:"S01-001",agent_token:other.json.agent.token})).isError).toBe(true);
+      await call(c,"agent_detach",{agent_token:token});
+      expect((await call(c,"item_claim",{id:"S01-001"})).json.claim.generation).toBe(2);
+    } finally { await c.close(); }
+  });
+
   it("rejects invalid dependency edges and cycles over MCP", async () => {
     const fresh = initRepo();
     const c = await connect(fresh.dir);
@@ -231,6 +252,7 @@ describe("sprinty e2e over MCP", () => {
       expect(unknownTarget.isError).toBe(true);
       expect(unknownTarget.text).toContain("Unknown dependency target");
 
+      await call(c, "item_claim", { id: "S01-002" });
       const unknownDependency = await call(c, "item_update", { id: "S01-002", dependencies: ["S99-001"] });
       expect(unknownDependency.isError).toBe(true);
       expect(unknownDependency.text).toContain("Unknown dependency");
@@ -243,6 +265,7 @@ describe("sprinty e2e over MCP", () => {
       expect(duplicateEdge.isError).toBe(true);
       expect(duplicateEdge.text).toContain("Duplicate dependencies");
 
+      await call(c, "item_claim", { id: "S01-001" });
       const cycle = await call(c, "item_update", { id: "S01-001", dependencies: ["S01-002"] });
       expect(cycle.isError).toBe(true);
       expect(cycle.text).toMatch(/cycle/i);
@@ -282,6 +305,7 @@ describe("sprinty e2e over MCP", () => {
       });
       expect(added.json.item).toBe("S01-001");
 
+      await call(c, "item_claim", { id: "S01-001" });
       await call(c, "item_update", { id: "S01-001", note: "Needs title, author, and shelf availability." });
       const note = await call(c, "note_add", { id: "S01-001", text: "Owner wants cozy neighborhood language, not marketplace language." });
       expect(note.json.note).toMatch(/^N[0-9a-f]{12}$/);
@@ -334,6 +358,7 @@ describe("sprinty e2e over MCP", () => {
       const artifact = await call(c, "artifact_get", { id: "A001" });
       expect(artifact.json.artifact.description).toContain("Fixture generated");
 
+      await call(c, "item_claim", { id: "S02-001" });
       const done = await call(c, "item_done", {
         id: "S02-001",
         commit_id: fresh.sha,
@@ -345,6 +370,7 @@ describe("sprinty e2e over MCP", () => {
       });
       expect(done.json.status).toBe("completed");
 
+      await call(c, "item_claim", { id: "S02-002" });
       await call(c, "item_deprecate", {
         id: "S02-002",
         reason: "Preorders are outside the first bookshop catalog sprint.",

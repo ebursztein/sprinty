@@ -1,3 +1,6 @@
+import { withDataLock, commitTransaction } from "../ledger/transaction.js";
+import { dependencyResolver } from "../domain/work-order.js";
+import { actors, newIdentity, type Actor } from "../domain/agents.js";
 import { z } from "zod";
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -21,6 +24,7 @@ function makeDef(getStore: StoreProvider) {
     schema: Sc,
     description: string,
     run: (input: z.infer<Sc>) => unknown | Promise<unknown>,
+    readNextState = true,
   ): ToolDef {
     return {
       description,
@@ -29,7 +33,7 @@ function makeDef(getStore: StoreProvider) {
         const input = schema.parse(raw);
         const result = await run(input);
         const focus = (input as Record<string, unknown>).id;
-        const withNext = attachNextTools(result, await readViewOrNull(getStore), typeof focus === "string" ? focus : undefined);
+        const withNext = attachNextTools(result, readNextState ? await readViewOrNull(getStore) : null, typeof focus === "string" ? focus : undefined);
         return pruneEmptyResponseFields(stripResponseNoise(withNext)) ?? {};
       },
     };
@@ -73,10 +77,22 @@ export function buildToolHandlers(
   bindStore: StoreBinder = async () => getStore(),
   detachStore: StoreDetacher = () => undefined,
 ): ToolHandlers {
+  let boundStore: SprintStore | undefined;
+  const originalProvider = getStore;
+  const originalBinder = bindStore;
+  getStore = () => boundStore ?? originalProvider();
+  bindStore = async binding => {
+    const next = await originalBinder(binding);
+    if (boundStore && (boundStore.dir !== next.dir || boundStore.dataDir !== next.dataDir)) throw new Error("Detach before binding a different sprint.");
+    boundStore ??= next;
+    return boundStore;
+  };
+  const originalDetach = detachStore;
+  detachStore = async () => { boundStore = undefined; await originalDetach(); };
   const def = makeDef(getStore);
-  return {
+  const handlers: ToolHandlers = {
     info: def(S.InfoInput, "Startup orientation and compact sprint discovery before binding to one sprint.",
-      async (i) => infoPayload(i, getStore, dashboard)),
+      async (i) => infoPayload(i, getStore, dashboard), false),
     sprint_new: def(S.SprintNewInput, "Start a sprint with explicit git_dir and a worktree-scoped, uncommitted data_dir; returns orientation.",
       async (i) => {
         const store = await bindStore({ git_dir: i.git_dir, data_dir: defaultDataDir(i) });
@@ -102,7 +118,7 @@ export function buildToolHandlers(
       }),
     sprint_close: def(S.SprintCloseInput, "Re-check all gates, write the canonical SemVer changelog, and close the sprint; force bypasses only executable gate failures.",
       async (i) => {
-        const view = (await getStore()).closeSprint(i);
+        const view = await (await getStore()).closeAsync(i);
         await dashboard.close();
         return ack("sprint_close", view, { status: view.status, forced: i.force });
       }),
@@ -119,11 +135,16 @@ export function buildToolHandlers(
       }),
     next: def(S.NextInput, "Compact work window for choosing the next item.",
       async (i) => {
-        const view = windowCurrent((await getStore()).read(), i.past, i.future ?? i.future_per_subsprint, {
+        const state = (await getStore()).read();
+        const view = windowCurrent(state, i.past, i.future ?? i.future_per_subsprint, {
           include_high_priority: i.include_high_priority,
+          ...(actors.getStore() ? { actor_id: actors.getStore()!.id } : {}),
           ...(i.future === undefined ? {} : { future_total: i.future }),
         });
-        return renameCurrentWindow(view);
+        const claimed = state.subsprints.flatMap(s => s.items).filter(item => item.claim.owner);
+        const proposed = new Set(view.next.map(item => item.id));
+        return { ...renameCurrentWindow(view), eta: state.eta, claim_count: claimed.length,
+          claims: claimed.filter(item => !proposed.has(item.id)).sort((a,b) => b.claim.stall_reasons.length - a.claim.stall_reasons.length).slice(0, 3).map(item => ({ id: item.id, ...compactClaim(item.claim) })) };
       }),
     subsprint_new: def(S.SubsprintNewInput, "Create a subsprint (description, goals, gates).",
       async (i) => {
@@ -160,7 +181,7 @@ export function buildToolHandlers(
     item_done: def(S.ItemDoneInput, "Resolve an item as completed with a commit id and a semver changelog verb (added/fixed/changed/removed/deprecated/security). Sprinty runs the item's executable gates itself; only manual gates take agent-supplied gate_results.",
       async (i) => {
         const id = requiredId(i, "id", "item");
-        const { view, warning } = (await getStore()).done({ ...i, item: id });
+        const { view, warning } = await (await getStore()).doneAsync({ ...i, item: id });
         return ack("item_done", view, {
           item: id,
           commit_id: i.commit_id,
@@ -199,8 +220,8 @@ export function buildToolHandlers(
       }),
     artifact_get: def(S.ArtifactGetInput, "Read one artifact by id.",
       async (i) => artifactGet((await getStore()).read(), i.id, true)),
-    artifact_list: def(S.ArtifactListInput, "List active sprint artifacts as compact rows.",
-      async () => artifactList((await getStore()).read())),
+    artifact_list: def(S.ArtifactListInput, "Page through active sprint artifacts as compact newest-first rows.",
+      async (i) => artifactList((await getStore()).read(), i.offset, i.limit)),
     artifact_update: def(S.ArtifactUpdateInput, "Update an artifact by id.",
       async (i) => {
         const patch: { artifact: string; title?: string; uri?: string; description?: string; related_items?: string[] } = { artifact: i.id };
@@ -225,8 +246,11 @@ export function buildToolHandlers(
       async (i) => {
         const store = await getStore();
         const path = i.path ?? join(store.dataDir, "CHANGELOG.md");
-        mkdirSync(dirname(path), { recursive: true });
-        writeFileSync(path, store.changelog());
+        withDataLock(store.dataDir, () => {
+          const contents = store.changelog();
+          if (path === join(store.dataDir, "CHANGELOG.md")) commitTransaction(store.dataDir, [{ name: "CHANGELOG.md", contents }]);
+          else { mkdirSync(dirname(path), { recursive: true }); writeFileSync(path, contents); }
+        });
         return { path };
       }),
     dashboard_info: def(S.DashboardInfoInput, "Return the current dashboard URL and port without starting or restarting it.",
@@ -234,14 +258,100 @@ export function buildToolHandlers(
     dashboard_restart: def(S.DashboardRestartInput, "Restart the follow-along dashboard and return its URL and port.",
       async () => dashboard.restart()),
   };
+  const identities = new Map<string, Actor>();
+  const processIdentity = newIdentity([]);
+  const identityView = (actor: Actor, token?: string) => ({ id: actor.id, name: actor.name, ...(token ? { token } : {}) });
+  const resolveActor = async (token?: string): Promise<{ actor: Actor; token: string }> => {
+    if (token) {
+      const local = identities.get(token);
+      if (local) return { actor: local, token };
+      const recovered = (await getStore()).attachAgent(token);
+      identities.set(token, recovered.actor);
+      return recovered;
+    }
+    if (!identities.size) {
+      const identity = (await getStore()).attachAgent(undefined, processIdentity);
+      identities.set(identity.token, identity.actor);
+    }
+    if (identities.size !== 1) throw new Error("Multiple agents attached; pass agent_token explicitly.");
+    const [entry] = identities;
+    return { token: entry![0], actor: entry![1] };
+  };
+  handlers.agent_attach = def(z.object({}), "Attach an independent named agent; retain its returned token for shared connections.", () => ({}));
+  handlers.agent_detach = def(z.object({}), "Detach only this agent and release its claims.", async () => { (await getStore()).detachAgent(); return { detached: true }; });
+  handlers.agent_heartbeat = def(z.object({}), "Report activity during long tasks; does not reset item progress or stall completion counts.", () => ({ active: true }));
+  const claimInput = z.object({ id: z.string().min(1) });
+  handlers.item_claim = def(claimInput, "Exclusively claim an open item before editing it.", async i => {
+    const view = (await getStore()).claimItem(i.id);
+    return { id: i.id, claim: compactClaim(findItem(view, i.id)!.claim) };
+  });
+  handlers.item_release = def(claimInput, "Release your claim for another agent.", async i => { (await getStore()).releaseItem(i.id); return { released: i.id }; });
+  handlers.item_takeover = def(claimInput.extend({ explanation: z.string().trim().min(1).max(500) }), "Take over a potentially stalled claim with a bounded handover explanation.", async i => {
+    const view = (await getStore()).claimItem(i.id, i.explanation);
+    return { id: i.id, claim: compactClaim(findItem(view, i.id)!.claim) };
+  });
+  handlers.item_progress = def(claimInput.extend({ message: z.string().trim().min(1).max(500) }), "Record meaningful progress on your claimed item.", async i => { (await getStore()).progressItem(i.id, i.message); return { progressed: i.id }; });
+  for (const [name, definition] of Object.entries(handlers)) {
+    const original = definition.handler;
+    definition.schema = definition.schema.extend({ agent_token: z.string().min(1).optional(), claim_generation: z.number().int().positive().optional() });
+    definition.handler = async raw => {
+      const parsed = definition.schema.parse(raw);
+      const { agent_token, claim_generation, ...input } = parsed;
+      if (name === "agent_attach") {
+        const identity = (await getStore()).attachAgent(agent_token as string | undefined);
+        identities.set(identity.token, identity.actor);
+        return { agent: identityView(identity.actor, identity.token), next_tools: ["item_claim({ id, agent_token })"] };
+      }
+      if (name === "sprint_new" || name === "sprint_resume") {
+        const continuing = name === "sprint_new" && agent_token ? await resolveActor(agent_token as string) : undefined;
+        const result = await original(input) as Record<string, unknown>;
+        if (name === "sprint_new") identities.clear();
+        if (!identities.size || agent_token) {
+          const identity = (await getStore()).attachAgent(name === "sprint_new" ? undefined : agent_token as string | undefined, name === "sprint_new" ? continuing ?? processIdentity : !agent_token ? processIdentity : undefined);
+          identities.set(identity.token, identity.actor);
+        }
+        const identity = await resolveActor(agent_token as string | undefined);
+        const store = await getStore();
+        const state = store.read();
+        return actors.run(identity.actor, () => ({ ...result, briefing: briefing(state, store.listAllNotes()), next_tools: nextTools(state), agent: identityView(identity.actor, identity.token) }));
+      }
+      if (name === "info") {
+        const result = await original(input) as Record<string, unknown>;
+        if (!identities.size && !agent_token) return { ...result, agent: identityView(processIdentity.actor) };
+        const identity = await resolveActor(agent_token as string | undefined);
+        const store = await getStore();
+        actors.run(identity.actor, () => store.activity());
+        return { ...result, agent: identityView(identity.actor) };
+      }
+      if (!identities.size && ["dashboard_info", "dashboard_restart", "sprint_detach"].includes(name)) return original(input);
+      const identity = await resolveActor(agent_token as string | undefined);
+      // Capture generations per call; an overlapping handoff must not change an in-flight operation's fence.
+      const actor: Actor = { ...identity.actor, generations: new Map(identity.actor.generations) };
+      if (claim_generation !== undefined && typeof input.id === "string") actor.generations.set(input.id, claim_generation as number);
+      return actors.run(actor, async () => {
+        if (name === "sprint_detach") {
+          if (identities.size > 1) throw new Error("Use agent_detach while other agents share this connection.");
+          (await getStore()).detachAgent();
+        } else (await getStore()).activity();
+        const result = await original(input) as Record<string, unknown>;
+        if ((name === "item_claim" || name === "item_takeover") && typeof input.id === "string") {
+          const generation = actor.generations.get(input.id)!;
+          identity.actor.generations.set(input.id, Math.max(identity.actor.generations.get(input.id) ?? 0, generation));
+        }
+        if (name === "agent_detach" || name === "sprint_detach") identities.delete(identity.token);
+        return { ...result, agent: identityView(actor) };
+      });
+    };
+  }
+  return handlers;
 }
 
 function orientation(): { skills: string[]; how: string } {
   return {
     skills: ["how-to-run-a-sprint", "using-sprinty"],
     how:
-      "One sprint per session. Build item-driven: subsprint_new -> item_add -> item_done/item_split/item_deprecate. " +
-      "Start with explicit git_dir and a worktree-scoped, uncommitted data_dir, such as <git_dir>/.sprinty when it is gitignored, so Sprinty cannot bind to a temp MCP cwd or shared state. " +
+      "One sprint per binding. Retain your agent token and claim items before editing. Build item-driven: subsprint_new -> item_add -> item_done/item_split/item_deprecate. " +
+      "Start with explicit git_dir and a worktree-scoped, uncommitted data_dir, such as <git_dir>/.sprinty when it is gitignored, so Sprinty cannot bind to a temp MCP cwd or unrelated state. " +
       "Items need a short title, bounded description, code_locations, and gates; keep them atomic. Each subsprint should represent one feature. " +
       "sprint_new and sprint_resume return a dashboard URL for the human; use dashboard_info to inspect it or dashboard_restart to refresh it. Resolve every item, generate the SemVer Markdown with changelog({path?}), then sprint_close re-runs gates.",
   };
@@ -270,6 +380,8 @@ async function infoPayload(
     tools: [
       "info",
       "sprint_resume",
+      "agent_attach", "agent_detach", "agent_heartbeat",
+      "item_claim", "item_release", "item_takeover", "item_progress",
       "sprint_new",
       "sprint_detach",
       "overview",
@@ -326,16 +438,29 @@ function requiredId(value: Record<string, unknown>, ...keys: string[]): string {
   throw new Error(`Missing id. Pass id instead of ${keys.join("/")}.`);
 }
 
+const OVERVIEW_DETAILS_MAX = 3;
+const OVERVIEW_NOTES_MAX = 5;
+const OVERVIEW_ARTIFACTS_MAX = 5;
+const OVERVIEW_SUBSPRINTS_MAX = 10;
+const RESPONSE_ARTIFACTS_MAX = 3;
+
 function overview(view: SprintView, store: SprintStore) {
+  const notes = overviewNotes(view, store);
+  const artifacts = artifactRows(view).reverse();
+  const subsprints = view.subsprints.slice(-OVERVIEW_SUBSPRINTS_MAX);
   return {
-    info: "Compact overview. Use subsprint_get({ id }) for item rows, item_get({ id }), note_get({ id }), or artifact_get({ id }) for full untruncated detail.",
-    title: view.goal,
-    details: view.context_notes.slice(0, 4).map((note) => truncate(note, 180)),
-    notes: overviewNotes(view, store),
-    artifacts: artifactRows(view).slice(-10).reverse(),
-    subsprints: view.subsprints.map((sub) => ({
+    info: "Bounded recent rows. Use subsprint_get, item_get, note_get, or artifact_get for full detail; subsprint_list and artifact_list expose the rest.",
+    title: truncate(view.goal, 200),
+    details: view.context_notes.slice(0, OVERVIEW_DETAILS_MAX).map((note) => truncate(note, 160)),
+    total_notes: notes.length,
+    total_artifacts: artifacts.length,
+    total_subsprints: view.subsprints.length,
+    truncated: notes.length > OVERVIEW_NOTES_MAX || artifacts.length > OVERVIEW_ARTIFACTS_MAX || view.subsprints.length > OVERVIEW_SUBSPRINTS_MAX,
+    notes: notes.slice(0, OVERVIEW_NOTES_MAX),
+    artifacts: artifacts.slice(0, OVERVIEW_ARTIFACTS_MAX),
+    subsprints: subsprints.map((sub) => ({
       id: sub.id,
-      title: truncate(sub.description, 120),
+      title: truncate(sub.description, 100),
       status: sub.status,
       dependency_count: sub.dependencies.length,
       item_counts: itemCounts(view, sub.items),
@@ -347,7 +472,6 @@ function overviewNotes(view: SprintView, store: SprintStore) {
   const itemIds = new Set(view.subsprints.flatMap((sub) => sub.items.map((item) => item.id)));
   return store.listAllNotes()
     .filter((note) => itemIds.has(note.item))
-    .slice(-10)
     .reverse()
     .map((note) => ({
       id: note.id,
@@ -359,6 +483,13 @@ function overviewNotes(view: SprintView, store: SprintStore) {
 function renameCurrentWindow(view: ReturnType<typeof windowCurrent>) {
   const proposed = view.next.map(compactNextQueueRow);
   const proposedIds = new Set(proposed.map((item) => item.id));
+  const artifacts = view.artifacts.slice(-RESPONSE_ARTIFACTS_MAX).reverse().map(compactArtifactRow);
+  const artifactIds = new Set(artifacts.map((artifact) => artifact.id));
+  const recentArtifacts = view.recent_artifacts
+    .filter((artifact) => !artifactIds.has(artifact.id))
+    .slice(-1)
+    .reverse()
+    .map(compactArtifactRow);
   return {
     info: "Compact work window. Use item_get, subsprint_get, note_get, or artifact_get for full detail.",
     last_resolved: view.last_resolved,
@@ -367,10 +498,10 @@ function renameCurrentWindow(view: ReturnType<typeof windowCurrent>) {
     blocked: view.blocked_open,
     current_subsprint: view.current_subsprint ? compactNextSubsprintRow(view.current_subsprint) : null,
     relations: view.relations,
-    artifacts: view.artifacts,
-    recent_artifacts: view.recent_artifacts,
+    artifacts,
+    recent_artifacts: recentArtifacts,
     items_with_notes: compactNotePressure(view.items_with_notes),
-    recent: view.recent_activity.filter((entry) => !proposedIds.has(entry.id)),
+    recent: view.recent_activity.filter((entry) => !proposedIds.has(entry.id)).slice(-3),
   };
 }
 
@@ -382,7 +513,6 @@ function compactNotePressure(pressure: ReturnType<typeof windowCurrent>["items_w
     ...(pressure.truncated ? { truncated: true } : {}),
     items: pressure.items.map((item) => ({
       id: item.id,
-      title: truncate(item.title, 56),
       notes: item.note_count,
       ...(item.over_item_note_budget ? { over_budget: true } : {}),
     })),
@@ -416,6 +546,7 @@ function compactNextQueueRow(item: ReturnType<typeof windowCurrent>["next"][numb
     high_priority: item.high_priority,
     status: item.status,
     dependencies: item.dependencies,
+    ...(item.claim ? { claim: { owner: item.claim.owner_name, generation: item.claim.generation, claim_duration_ms: item.claim.claim_duration_ms, stall_reasons: item.claim.stall_reasons } } : {}),
   };
 }
 
@@ -444,11 +575,11 @@ function subsprintList(view: SprintView) {
 }
 
 function itemCounts(view: SprintView, items: ItemView[]) {
-  const statusById = new Map(view.graph.nodes.map((node) => [node.id, node.status]));
+  const dependencies = dependencyResolver(view);
   return {
     open: items.filter((item) => item.status === "open").length,
     closed: items.filter((item) => item.status !== "open").length,
-    blocked: items.filter((item) => item.status === "open" && item.dependencies.some((dep) => statusById.get(dep) === "open")).length,
+    blocked: items.filter((item) => item.status === "open" && dependencies(item).length > 0).length,
   };
 }
 
@@ -497,7 +628,12 @@ function itemGet(view: SprintView, id: string) {
     reason: item.reason,
     changelog: item.changelog,
     artifacts: item.artifacts.map(artifactRow),
+    claim: item.claim,
   };
+}
+
+function compactClaim(claim: ItemView["claim"]) {
+  return { owner: claim.owner_name, generation: claim.generation, claimed_at: claim.claimed_at, claim_duration_ms: claim.claim_duration_ms, owner_inactive_ms: claim.owner_inactive_ms, other_completions: claim.other_completions, stall_reasons: claim.stall_reasons };
 }
 
 function compactStrings(values: string[], maxRows: number, maxChars: number): string[] {
@@ -538,14 +674,31 @@ function artifactRow(artifact: SprintView["artifacts"][number]) {
   };
 }
 
-function artifactRows(view: SprintView) {
-  return allArtifacts(view).filter((artifact) => artifact.status === "active").map(artifactRow);
+function compactArtifactRow(artifact: SprintView["artifacts"][number]) {
+  const relatedItems = artifact.related_items.slice(0, 3);
+  return {
+    id: artifact.id,
+    title: truncate(artifact.title, 56),
+    path: truncate(artifact.uri, 80),
+    related_items: relatedItems,
+    ...(relatedItems.length < artifact.related_items.length ? { related_item_count: artifact.related_items.length } : {}),
+  };
 }
 
-function artifactList(view: SprintView) {
+function artifactRows(view: SprintView) {
+  return allArtifacts(view).filter((artifact) => artifact.status === "active").map(compactArtifactRow);
+}
+
+function artifactList(view: SprintView, offset: number, limit: number) {
+  const artifacts = artifactRows(view).reverse();
+  const page = artifacts.slice(offset, offset + limit);
+  const nextOffset = offset + page.length;
   return {
-    info: "Compact view. Use artifact_get({ id }) for full untruncated detail.",
-    artifacts: artifactRows(view),
+    info: "Newest active artifacts. Use artifact_get({ id }) for full detail and pass next_offset as offset to continue.",
+    total_artifacts: artifacts.length,
+    offset,
+    artifacts: page,
+    ...(nextOffset < artifacts.length ? { next_offset: nextOffset } : {}),
   };
 }
 
@@ -574,7 +727,7 @@ function stripResponseNoise(value: unknown): unknown {
   if (!value || typeof value !== "object") return value;
   return Object.fromEntries(
     Object.entries(value as Record<string, unknown>)
-      .filter(([key]) => key !== "ts" && !key.endsWith("_at"))
+      .filter(([key]) => key !== "ts" && (!key.endsWith("_at") || ["claimed_at", "ended_at", "last_progress_at", "last_activity_at", "estimated_at", "finish_at", "finish_range_at"].includes(key)))
       .map(([key, child]) => [key, stripResponseNoise(child)]),
   );
 }
@@ -613,6 +766,11 @@ interface WorkspaceSprintListResult {
 const sprintListCache = new Map<string, { signature: string; result: SprintListResult }>();
 
 function listSprints(dataDir: string): SprintListResult {
+  if (!existsSync(dataDir)) return { data_dir: dataDir, current: null, sprints: [] };
+  return withDataLock(dataDir, () => listSprintsUnlocked(dataDir));
+}
+
+function listSprintsUnlocked(dataDir: string): SprintListResult {
   const current = readCurrent(dataDir);
   if (!existsSync(dataDir)) return { data_dir: dataDir, current, sprints: [] };
   const ledgerIds = readdirSync(dataDir)
@@ -667,12 +825,8 @@ function sprintListSignature(dataDir: string, current: string | null, ledgerIds:
 
 function sprintListRow(id: string, view: SprintView): { id: string; title: string; created: string; status: string; items: { open: number; closed: number; blocked: number } } {
   const items = view.subsprints.flatMap((sub) => sub.items);
-  const statusById = new Map(view.graph.nodes.map((node) => [node.id, node.status]));
-  const blocked = items.filter((item) => {
-    if (item.status !== "open") return false;
-    const blockers = view.graph.blocked_by?.[item.id] ?? item.dependencies;
-    return blockers.some((dep) => statusById.get(dep) === "open");
-  }).length;
+  const dependencies = dependencyResolver(view);
+  const blocked = items.filter(item => item.status === "open" && dependencies(item).length > 0).length;
   return {
     id,
     title: truncate(view.goal, 120),

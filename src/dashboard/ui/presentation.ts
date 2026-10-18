@@ -195,6 +195,12 @@ export function countProgressClass(tone: string): string {
 
 
 export function completionStatsLine(summary: CompletionSummary | null): string {
+  if (summary?.estimate) {
+    const eta = summary.estimate;
+    const range = eta.range_ms ? (eta.range_ms[0] === eta.range_ms[1] ? formatDuration(eta.range_ms[0]) : `${formatDuration(eta.range_ms[0])}–${formatDuration(eta.range_ms[1])}`) : "--";
+    const finish = eta.finish_range_at ? eta.finish_range_at.map(ts => new Date(ts).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })).join("–") : "--";
+    return `Estimated working time ${range} / ${eta.status.replaceAll("_", " ")} / ${eta.active_agent_count} active agent${eta.active_agent_count === 1 ? "" : "s"} / ${eta.sample_count} samples${eta.finish_range_at ? ` / Approx. finish ${finish}` : ""}`;
+  }
   if (!summary) return "Median -- / fastest -- / slowest -- / ETA -- / ETA time --";
   return [
     `Median ${formatDuration(summary.medianMs)}`,

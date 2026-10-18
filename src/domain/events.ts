@@ -5,6 +5,7 @@ import { CoverageState, CoverageSummary } from "./coverage.js";
 import { DEFAULT_ITEM_GATE_TIMEOUT_MS, Gate, GateResult } from "./gates.js";
 
 const base = {
+  agent_id: z.string().optional(),
   seq: z.number().int().nonnegative(),
   ts: z.string().datetime(),
 };
@@ -150,9 +151,16 @@ export const SprintArchived = z.object({
   reason: z.string().min(1),
 });
 
+export const AgentAttached = z.object({ ...base, type: z.literal("agent_attached"), id: z.string(), name: z.string(), token_hash: z.string(), git_dir: z.string().optional() });
+export const AgentActivity = z.object({ ...base, type: z.literal("agent_activity"), id: z.string() });
+export const AgentDetached = z.object({ ...base, type: z.literal("agent_detached"), id: z.string() });
+export const ItemClaimed = z.object({ ...base, type: z.literal("item_claimed"), item_id: z.string(), owner: z.string(), generation: z.number().int().positive(), explanation: z.string().trim().min(1).max(500).optional() });
+export const ItemReleased = z.object({ ...base, type: z.literal("item_released"), item_id: z.string(), generation: z.number().int().positive() });
+export const ItemProgress = z.object({ ...base, type: z.literal("item_progress"), item_id: z.string(), message: z.string().trim().min(1).max(500) });
+
 export const LedgerEvent = z.discriminatedUnion("type", [
   SprintCreated, SubsprintCreated, ItemAdded, ItemUpdated, ItemResolved, NoteAdded, NoteUpdated, DependenciesAdded,
   DependenciesReplaced, ArtifactAdded, ArtifactAmended, ArtifactDeprecated, FollowUpAdded, SubsprintDeprecated,
-  SprintClosed, SprintArchived,
+  SprintClosed, SprintArchived, AgentAttached, AgentActivity, AgentDetached, ItemClaimed, ItemReleased, ItemProgress,
 ]);
 export type LedgerEvent = z.infer<typeof LedgerEvent>;

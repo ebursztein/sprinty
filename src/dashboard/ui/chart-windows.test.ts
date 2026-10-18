@@ -12,7 +12,7 @@ function event(type: TimelineEntry["type"], hoursAgo: number, id = "S01-001"): T
     ts: new Date(now - hoursAgo * hour).toISOString(),
     type,
     id,
-    text: type,
+    text: type === "item_resolved" ? "completed" : type,
   } as TimelineEntry;
 }
 
@@ -61,8 +61,8 @@ describe("dashboard fixed chart windows", () => {
       [now, 2],
     ]);
     expect(summary.avgMs).toBe(hour);
-    expect(summary.projectedAt).toBe(now + hour);
-    expect(summary.rateEnd).toBe(now + hour);
+    expect(summary.projectedAt).toBeNull();
+    expect(summary.rateEnd).toBe(now);
   });
 
   it("anchors chart completion to the current done count when timeline history is incomplete", () => {
@@ -125,8 +125,8 @@ describe("dashboard fixed chart windows", () => {
     expect(summary.medianMs).toBe(3 * hour);
     expect(summary.maxMs).toBe(6 * hour);
     expect(summary.avgMs).toBe(Math.round((11 * hour) / 3));
-    expect(summary.etaMs).toBe(3 * hour);
-    expect(summary.projectedAt).toBe(now + 3 * hour);
+    expect(summary.etaMs).toBeNull();
+    expect(summary.projectedAt).toBeNull();
   });
 
   it("projects ETA from completed item lifetimes instead of idle gaps between resolutions", () => {
@@ -143,8 +143,8 @@ describe("dashboard fixed chart windows", () => {
     });
 
     expect(summary.medianMs).toBe(0.5 * hour);
-    expect(summary.etaMs).toBe(hour);
-    expect(summary.projectedAt).toBe(now + hour);
+    expect(summary.etaMs).toBeNull();
+    expect(summary.projectedAt).toBeNull();
   });
 
   it("does not render chart windows before the sprint started", () => {

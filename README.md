@@ -96,10 +96,29 @@ omitted and `git_dir` is provided, Sprinty uses `<git_dir>/.sprinty`. `sprint_ne
 compact sprint rows. Use `info({ workspace_dirs: [...] })` when you need to inspect multiple Sprinty
 data dirs together, then `sprint_resume({ git_dir, data_dir })`.
 
+## Concurrent agents and timing
+
+`sprint_new` and `sprint_resume` return `agent: { id, name, token }`; `info` reports your generated adjective–animal identity. Retain the opaque token across context recovery. Additional agents sharing a connection call `agent_attach({})`, then pass their own `agent_token` on bound calls. Omitting it is allowed only with one attached agent. Never share tokens between agents or put them in notes/artifacts. `agent_detach` releases only your claims; it keeps the shared dashboard and other agents attached. Use `sprint_detach` only when you are the connection's sole agent.
+
+Before editing an item, call `item_claim({ id, agent_token? })`. Then use the returned claim generation when appropriate: item mutation tools accept `claim_generation` as an explicit stale-write fence. Repeating your own claim is idempotent. `item_release({ id })` hands work back. Item edits, completion, splitting and deprecation require ownership; collaborative notes and artifacts remain available to other agents. A completed item's last owner may correct its recorded metadata and gates. After restarting, resume with your existing `agent_token` to recover identity and ownership generations.
+
+For long tasks, call `agent_heartbeat({})` at least every five minutes and `item_progress({ id, message })` when meaningful progress occurs. Progress messages are trimmed and limited to 500 characters. Generic server uptime and dashboard polling do not count as agent activity. Repeated calls within one second coalesce their durable heartbeat, while mutations retain their own attributed timestamps.
+
+Sprinty tracks claim age, historical ownership, estimated active work and owner inactivity separately. It flags a **potential stall** after either three other distinct items complete without item progress, or one hour without owner activity. Reads/heartbeats do not reset the three-item counter. Notes, item edits and related artifact updates do. No work is automatically reassigned: use `item_takeover({ id, explanation })` on a potentially stalled claim, with a nonempty explanation capped at 500 characters. History preserves both owners and the handover; old owners cannot continue writing.
+
+ETA is one shared activity-aware estimate. It excludes queue age, counts at most five minutes after each observed activity event within claim intervals, and uses the latest 20 eligible completed items (minimum three). Legacy, split and deprecated items do not train it. The median estimates item effort; the 25th–75th percentile range is an estimate range, not a statistical confidence interval. Remaining working time is aggregate estimated effort; the finish range separately accounts for active agents, existing owners and dependencies. With no agents active in five minutes it shows `paused`; work owned by an inactive agent shows `awaiting_handover`. Both suppress calendar finish forecasts. Before sufficient samples it shows `learning`; resolved work shows `complete`.
+
+A shared data directory supports concurrent local processes on one canonical worktree. Separate worktrees retain separate sprint bindings. Gate execution is asynchronous and runs outside the write lock; if state changes during verification, retry the tool rather than treating stale evidence as valid.
+
 ## Tools
 
 | Tool | Purpose |
 | --- | --- |
+| `agent_attach` / `agent_detach` | Create or recover a named agent session / detach it and release its claims. |
+| `agent_heartbeat` | Report agent activity without resetting item progress. |
+| `item_claim` / `item_release` | Exclusively claim an item / release your ownership. |
+| `item_takeover` | Take over potentially stalled work with a handover explanation (1–500 characters). |
+| `item_progress` | Record meaningful progress (1–500 characters). |
 | `info` | Startup orientation before binding, including sprint rows, resume/create help, and dashboard state. |
 | `sprint_new` | Start a sprint with explicit `git_dir` and `data_dir`; returns orientation and dashboard info. |
 | `sprint_resume` | Reattach this MCP session to an existing sprint. |

@@ -218,3 +218,15 @@ describe("windowCurrent", () => {
     expect(w.relations).toEqual([]);
   });
 });
+
+it("prioritizes the caller's claimed item ahead of unclaimed urgent work", () => {
+  const v = view();
+  const base = v.subsprints[0]!.items[1]!;
+  v.subsprints[0]!.items = [
+    { ...base, id: "S01-002", dependencies: [], claim: { owner: "a", owner_name: "curious-otter", generation: 1 } as any },
+    { ...base, id: "S01-003", dependencies: [], high_priority: true },
+  ];
+  const current = windowCurrent(v, 0, 1, { actor_id: "a" });
+  expect(current.current?.id).toBe("S01-002");
+  expect(current.next.map(item => item.id)).toEqual(["S01-002", "S01-003"]);
+});

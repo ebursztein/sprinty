@@ -69,8 +69,9 @@ describe("project", () => {
     expect(s.completion.fastest_ms).toBe(10 * 60 * 1000);
     expect(s.completion.median_ms).toBe(20 * 60 * 1000);
     expect(s.completion.slowest_ms).toBe(30 * 60 * 1000);
-    expect(s.completion.eta_ms).toBe(20 * 60 * 1000);
-    expect(s.completion.eta_at).toBe("2026-06-14T11:00:00.000Z");
+    expect(s.completion.eta_ms).toBeNull();
+    expect(s.eta.status).toBe("learning");
+    expect(s.completion.eta_at).toBeNull();
   });
 
   it("projects context notes, dependency graph, terminal item states, and changelog", () => {
