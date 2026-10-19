@@ -42,6 +42,7 @@ h1 span, h2 span { color: var(--blue); }
 .section { padding-block: 65px; }
 h2 { font-size: clamp(30px, 3.2vw, 42px); line-height: 1.15; letter-spacing: -.045em; font-weight: 650; }
 h3 { font-size: 21px; letter-spacing: -.025em; font-weight: 650; }
+.product-intro { color: var(--muted); font-size: 17px; max-width: 680px; margin-top: 18px; }
 .feature-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; margin-top: 34px; }
 .feature-grid p { color: var(--muted); font-size: 14px; margin: 10px 0 22px; max-width: 460px; }
 .continuity { display: grid; grid-template-columns: .9fr 1.1fr; gap: 56px; align-items: center; border-top: 1px solid var(--line); }
