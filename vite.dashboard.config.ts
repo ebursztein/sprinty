@@ -5,18 +5,19 @@ export default defineConfig(({ mode }) => ({
   plugins: [
     react(),
     tailwindcss(),
-    ...(mode === "demo"
+    ...((mode === "demo" || mode === "marketing-demo")
       ? [
           {
             name: "sprinty-demo",
             configureServer(server: import("vite").ViteDevServer) {
               server.middlewares.use("/state", async (_req, res) => {
                 try {
-                  const { demoSprint } =
-                    await server.ssrLoadModule("/src/fixtures.ts");
+                  const demo = mode === "marketing-demo"
+                    ? (await server.ssrLoadModule("/src/marketing-fixture.ts")).marketingSprint
+                    : (await server.ssrLoadModule("/src/fixtures.ts")).demoSprint;
                   res.setHeader("Content-Type", "application/json");
                   res.setHeader("Cache-Control", "no-store");
-                  res.end(JSON.stringify(demoSprint()));
+                  res.end(JSON.stringify(demo()));
                 } catch (err) {
                   res.statusCode = 500;
                   res.end(String(err));
