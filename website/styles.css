@@ -30,15 +30,15 @@ h1 span, h2 span { color: var(--blue); }
 .install-command { display: flex; align-items: center; gap: 12px; border: 1px solid var(--line); border-radius: 8px; padding: 13px; margin-top: 28px; background: #f8faff; }
 .install-command code { flex: 1; min-width: 0; font-family: ui-monospace, SFMono-Regular, monospace; font-size: 12px; overflow-wrap: anywhere; }
 .install-command button { flex-shrink: 0; background: white; color: var(--ink); border: 1px solid var(--line); border-radius: 5px; padding: 6px 9px; font-size: 11px; }
-.command-note { margin-top: 9px; font-size: 11px; color: var(--muted); }
 .button { display: inline-block; background: var(--blue); color: white; border: 0; border-radius: 24px; padding: 13px 22px; margin-top: 25px; font-size: 13px; font-weight: 600; }
 .button:hover { background: #2847d6; }
 .setup-links { display: flex; flex-wrap: wrap; gap: 16px; font-size: 11px; margin-top: 18px; color: var(--muted); }
 .product-frame { overflow: hidden; border: 1px solid var(--line); border-radius: 12px; background: #f2f5fb; box-shadow: 0 12px 36px #1d345210; }
 .product-frame img { width: 100%; height: auto; display: block; }
 .hero-preview img { height: 420px; object-fit: cover; object-position: top; }
-figcaption { padding: 10px 14px; font-size: 10px; color: var(--muted); }
-.compatibility { display: flex; justify-content: center; flex-wrap: wrap; gap: 36px; border-block: 1px solid var(--line); padding: 23px; color: var(--muted); font-size: 14px; font-weight: 600; }
+.compatibility { border-block: 1px solid var(--line); padding: 26px 22px; text-align: center; color: var(--muted); }
+.compatibility p { margin-bottom: 18px; font-size: 16px; }
+.agent-list { display: flex; justify-content: center; flex-wrap: wrap; gap: 36px; font-size: 14px; font-weight: 600; }
 .section { padding-block: 65px; }
 h2 { font-size: clamp(30px, 3.2vw, 42px); line-height: 1.15; letter-spacing: -.045em; font-weight: 650; }
 h3 { font-size: 21px; letter-spacing: -.025em; font-weight: 650; }
@@ -66,7 +66,7 @@ h3 { font-size: 21px; letter-spacing: -.025em; font-weight: 650; }
   .hero-lede { font-size: 15px; margin-top: 18px; }
   .install-command code { font-size: 11px; }
   .hero-preview img { height: 310px; }
-  .compatibility { gap: 12px 24px; font-size: 12px; }
+  .agent-list { gap: 12px 24px; font-size: 12px; }
   .section { padding-block: 42px; }
   .feature-grid { grid-template-columns: 1fr; gap: 30px; margin-top: 26px; }
   .feature-grid p { margin-bottom: 16px; }
