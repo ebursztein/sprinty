@@ -55,7 +55,7 @@ h3 { font-size: 21px; letter-spacing: -.025em; font-weight: 650; }
   .site-header, .hero, .section, .site-footer { padding-inline: 22px; }
   .site-header { gap: 18px; padding-block: 20px; }
   .site-header nav { gap: 14px; font-size: 11px; }
-  .site-header nav a:nth-child(2) { display: none; }
+  .site-header nav a.optional-nav { display: none; }
   .logo { font-size: 21px; }
   h1 { font-size: clamp(38px, 8.2vw, 49px); }
   .hero-lede { font-size: 15px; margin-top: 18px; }
@@ -85,3 +85,13 @@ h3 { font-size: 21px; letter-spacing: -.025em; font-weight: 650; }
   .story-section.reverse .story-copy, .story-section.reverse figure { grid-column: auto; grid-row: auto; }
   .story-copy p { max-width: 600px; }
 }
+
+.demo-link { display: inline-block; color: var(--blue); font-size: 13px; font-weight: 600; margin: 16px 0 0 16px; }
+.demo-page { max-width: 1120px; margin: 36px auto 70px; padding-inline: 24px; }
+.demo-page > p { color: var(--muted); margin-top: 18px; }
+.demo-page video { display: block; width: 100%; aspect-ratio: 16 / 9; border-radius: 12px; background: #10213e; margin-top: 28px; }
+.demo-page .demo-note { font-size: 12px; }
+.demo-transcript { margin-top: 32px; padding-top: 20px; border-top: 1px solid var(--line); color: var(--muted); }
+.demo-transcript summary { cursor: pointer; color: var(--ink); }
+.demo-transcript li { margin-top: 12px; }
+@media (max-width: 600px) { .hero-copy > .demo-link { display: block; margin-left: 0; } }

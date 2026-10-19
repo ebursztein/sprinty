@@ -3,6 +3,8 @@
 > Agentic sprints done right. Sprinty is an open-source MCP server and pair of agent skills that help coding agents plan work, coordinate ownership, and finish with verified results. It records the plan, dependencies, item claims, progress, gate evidence, artifacts, and changelog in a local append-only ledger.
 
 ## Get started
+- [Project examples](https://github.com/ebursztein/sprinty/tree/main/docs/examples): website, research, and parallel-agent starting prompts.
+- [Captioned demo](https://ebursztein.github.io/sprinty/demo.html): 45-second visual walkthrough using illustrative project data.
 - [Copyable setup prompt](https://ebursztein.github.io/sprinty/agent-start.txt): instructions a user can paste into a coding agent to install skills and configure the MCP server.
 - [Source and install guide](https://github.com/ebursztein/sprinty): supported client integrations and tool reference.
 - [Sprint workflow skill](https://github.com/ebursztein/sprinty/blob/main/skills/how-to-run-a-sprint/SKILL.md): item-driven planning, claims, evidence, and closure.

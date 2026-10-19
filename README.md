@@ -1,14 +1,18 @@
 # Sprinty
 
+[Website](https://ebursztein.github.io/sprinty/) · [45-second demo](https://ebursztein.github.io/sprinty/demo.html) · [Try a project](docs/examples/README.md)
+
 [![skills.sh](https://skills.sh/b/ebursztein/sprinty)](https://skills.sh/ebursztein/sprinty)
 
 [![npm version](https://img.shields.io/npm/v/sprinty-mcp.svg)](https://www.npmjs.com/package/sprinty-mcp)
 
-Sprinty is an MCP server for running disciplined coding sprints with AI agents. It gives agents
-server-minted sprint, subsprint, and item IDs; explicit dependencies; gate evidence; Git-backed
-change maps; SemVer changelogs; and a local dashboard so humans can watch the work while it happens.
+**Agentic sprints done right.** Plan, coordinate, and scale high-quality agent work.
 
-![Sprinty dashboard](/docs/sprinty-dashboard.png)
+Sprinty turns ideas into organized tasks, coordinates agents on one shared plan, and keeps progress across sessions. Use it for websites, research, design, software, and other Git-backed projects. The local dashboard shows the work; resolving commits, check evidence, and artifacts make the results inspectable.
+
+Start with a [website launch](docs/examples/website-launch.md), a [research brief](docs/examples/research-brief.md), or a [small agent team](docs/examples/parallel-agents.md). Each walkthrough includes a copyable starting prompt.
+
+![A website project organized into subsprints and tasks](https://ebursztein.github.io/sprinty/assets/launch-plan.png)
 
 ## What's new in 0.2.2
 

@@ -6,6 +6,9 @@ const source = join(root, "website");
 const out = join(root, ".site-dist");
 for (const file of [
   "index.html",
+  "demo.html",
+  "assets/sprinty-demo.mp4",
+  "assets/sprinty-demo.vtt",
   "styles.css",
   "site.js",
   "llms.txt",
@@ -18,12 +21,14 @@ for (const file of [
   "assets/launch-checks.png",
 ])
   assert(existsSync(join(source, file)), `Website asset missing: ${file}`);
-const html = readFileSync(join(source, "index.html"), "utf8");
+for (const page of ["index.html", "demo.html"]) {
+const html = readFileSync(join(source, page), "utf8");
 for (const match of html.matchAll(/(?:href|src)="([^"]+)"/g)) {
   const value = match[1];
   if (value.startsWith("http") || value.startsWith("#") || value === "./")
     continue;
   assert(existsSync(join(source, value.split(/[?#]/)[0])), `Broken local link: ${value}`);
+}
 }
 rmSync(out, { recursive: true, force: true });
 mkdirSync(out);
