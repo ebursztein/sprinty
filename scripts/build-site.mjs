@@ -11,10 +11,11 @@ for (const file of [
   "llms.txt",
   "agent-start.txt",
   "install.sh",
-  "assets/workspace.jpg",
-  "assets/agents.jpg",
-  "assets/activity.jpg",
-  "assets/verification.jpg",
+  "assets/launch-overview.png",
+  "assets/launch-plan.png",
+  "assets/launch-agents.png",
+  "assets/launch-history.png",
+  "assets/launch-checks.png",
 ])
   assert(existsSync(join(source, file)), `Website asset missing: ${file}`);
 const html = readFileSync(join(source, "index.html"), "utf8");

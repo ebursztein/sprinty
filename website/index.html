@@ -6,7 +6,7 @@
     <title>Sprinty — Agentic sprints done right</title>
     <meta
       name="description"
-      content="Plan, coordinate, and scale high-quality agent work. Open-source sprint tools for coding agents."
+      content="Plan, coordinate, and scale high-quality agent work. Organize projects and coordinate AI agents."
     />
     <meta
       property="og:title"
@@ -19,12 +19,12 @@
     <meta property="og:type" content="website" />
     <meta
       property="og:image"
-      content="https://ebursztein.github.io/sprinty/assets/workspace.jpg"
+      content="https://ebursztein.github.io/sprinty/assets/launch-overview.png"
     />
     <meta name="theme-color" content="#2563eb" />
     <link rel="canonical" href="https://ebursztein.github.io/sprinty/" />
     <link rel="icon" href="assets/mark.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="styles.css?v=6" />
+    <link rel="stylesheet" href="styles.css?v=7" />
     <link
       rel="alternate"
       type="text/plain"
@@ -61,45 +61,67 @@
           </div>
         </div>
         <figure class="product-frame hero-preview">
-          <img src="assets/workspace.jpg" alt="Sprinty work table with agent owners, claim ages, verification gates, and a potential stall warning" width="1425" height="1735" fetchpriority="high" />
+          <a class="screenshot-link" href="assets/launch-overview.png" target="_blank" rel="noopener noreferrer" aria-label="View website project overview full size (opens in a new tab)">
+            <img src="assets/launch-overview.png" alt="Launch a product website sprint with research, design, content, build and review tasks" width="1265" height="1436" fetchpriority="high" />
+            <span class="expand-image" aria-hidden="true">↗</span>
+          </a>
         </figure>
       </section>
-      <div class="compatibility" aria-label="Compatible coding agents">
+      <div class="compatibility" aria-label="Compatible agents">
         <p>Works with your favorite agent</p>
         <div class="agent-list"><span>Codex</span><span>Claude Code</span><span>Gemini CLI</span><span>Cursor</span><span>Any MCP client</span></div>
       </div>
-      <section id="product" class="product section">
-        <h2>Code fast. <span>Finish strong.</span></h2>
-        <p class="product-intro">Spend less time directing agents and piecing together results. Turn a goal into an ordered plan, run work in parallel, and see which results have passed their checks.</p>
-        <div class="feature-grid">
-          <article>
-            <h3>Turn big projects into doable tasks</h3>
-            <p>Give your agents a clear next step, even on a complex project. Split the goal into subsprints and focused tasks, order them by dependencies, and define what each task needs to pass.</p>
-            <figure class="product-frame">
-              <img src="assets/verification.jpg" alt="A focused task with its own recorded test and typecheck evidence" width="1440" height="1000" loading="lazy" />
-            </figure>
-          </article>
-          <article>
-            <h3>Get more done with a swarm</h3>
-            <p>Run subagents and separate sessions in parallel without assigning the same task twice. Keep progress and handovers in one shared plan, so you can scale the team without tracking every agent yourself.</p>
-            <figure class="product-frame">
-              <img src="assets/agents.jpg" alt="Agent roster showing named agents, claims, and recent activity" width="1440" height="1000" loading="lazy" />
-            </figure>
-          </article>
-        </div>
-      </section>
-      <section id="how-it-works" class="continuity section">
-        <div>
-          <h2>Give your agents<br />a plan <span>that lasts.</span></h2>
-          <p>Stop re-explaining the project after compaction or a session restart. Your next agent can recover the plan, decisions, and unfinished work, so you can continue instead of starting over.</p>
+      <section id="product" class="story-section planning section">
+        <div class="story-copy">
+          <h2>Turn ideas into<br /><span>well-organized work</span></h2>
+          <p>Shape a rough idea into a clear plan your agents can follow. Group related tasks, set dependencies, and define what each step needs to deliver.</p>
         </div>
         <figure class="product-frame">
-          <img src="assets/activity.jpg" alt="Persistent sprint activity record with claims, progress, and gate outcomes" width="1440" height="1000" loading="lazy" />
+          <a class="screenshot-link" href="assets/launch-plan.png" target="_blank" rel="noopener noreferrer" aria-label="View sprint and task breakdown full size (opens in a new tab)">
+            <img src="assets/launch-plan.png" alt="The Design & content subsprint selected beside its page layouts, homepage content and dependent review tasks" width="1265" height="1044" loading="lazy" />
+            <span class="expand-image" aria-hidden="true">↗</span>
+          </a>
+        </figure>
+      </section>
+      <section id="collaboration" class="story-section collaboration reverse section">
+        <div class="story-copy">
+          <h2>Get more done with<br /><span>agents working together</span></h2>
+          <p>Bring subagents and separate sessions onto the same plan. Divide the work, avoid overlapping assignments, and keep handovers clear as your team grows.</p>
+        </div>
+        <figure class="product-frame">
+          <a class="screenshot-link" href="assets/launch-agents.png" target="_blank" rel="noopener noreferrer" aria-label="View agent assignments full size (opens in a new tab)">
+            <img src="assets/launch-agents.png" alt="Three active agents assigned to page layouts, homepage content and accessibility review in the same website sprint" width="1265" height="822" loading="lazy" />
+            <span class="expand-image" aria-hidden="true">↗</span>
+          </a>
+        </figure>
+      </section>
+      <section id="how-it-works" class="story-section continuity section">
+        <div class="story-copy">
+          <h2>Give your agents<br />a plan <span>that lasts.</span></h2>
+          <p>Pick up where you left off after compaction, a restart, or a new session. Your plan, decisions, and progress stay attached to the work.</p>
+        </div>
+        <figure class="product-frame">
+          <a class="screenshot-link" href="assets/launch-history.png" target="_blank" rel="noopener noreferrer" aria-label="View saved decisions and recovery notes full size (opens in a new tab)">
+            <img src="assets/launch-history.png" alt="Saved design direction and a resume note describing the next step after compaction in the website project" width="1265" height="824" loading="lazy" />
+            <span class="expand-image" aria-hidden="true">↗</span>
+          </a>
+        </figure>
+      </section>
+      <section id="completion" class="story-section completion reverse section">
+        <div class="story-copy">
+          <h2>Move fast.<br /><span>Finish strong.</span></h2>
+          <p>Review what your agents delivered and which checks passed. Keep results, evidence, and change history together so you can judge what is ready.</p>
+        </div>
+        <figure class="product-frame">
+          <a class="screenshot-link" href="assets/launch-checks.png" target="_blank" rel="noopener noreferrer" aria-label="View completed website task and checks full size (opens in a new tab)">
+            <img src="assets/launch-checks.png" alt="Completed responsive website task showing passed site build and setup tests with recorded output" width="1280" height="720" loading="lazy" />
+            <span class="expand-image" aria-hidden="true">↗</span>
+          </a>
         </figure>
       </section>
     </main>
     <footer class="site-footer">
-      <p>Open source · Runs locally · By <a href="https://elie.net/">Elie Bursztein</a></p>
+      <p>Open source · Runs locally · By <a href="https://elie.net/">Elie Bursztein</a><small>Screenshots show an illustrative website project.</small></p>
       <nav aria-label="Resources">
         <a href="https://www.npmjs.com/package/sprinty-mcp">npm</a>
         <a href="https://skills.sh/ebursztein/sprinty">Skills</a>
